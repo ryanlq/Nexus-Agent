@@ -5,7 +5,7 @@ import { Tip } from '@/components/ui/tooltip'
 import { getHermesConfigDefaults, getHermesConfigRecord, saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
-import { Archive, Globe, Info, KeyRound, Settings2, Sparkles, Wrench, Zap } from '@/lib/icons'
+import { Archive, Globe, Info } from '@/lib/icons'
 import { notifyError } from '@/store/notifications'
 
 import { useRouteEnumParam } from '../hooks/use-route-enum-param'
@@ -16,20 +16,14 @@ import { OverlayView } from '../overlays/overlay-view'
 import { AboutSettings } from './about-settings'
 import { AppearanceSettings } from './appearance-settings'
 import { ConfigSettings } from './config-settings'
-import { SECTIONS } from './constants'
+import { AGENT_GATEWAY_SECTIONS } from './constants'
 import { GatewaySettings } from './gateway-settings'
-import { KEYS_VIEWS, KeysSettings, type KeysView } from './keys-settings'
-import { McpSettings } from './mcp-settings'
-import { PROVIDER_VIEWS, ProvidersSettings, type ProviderView } from './providers-settings'
 import { SessionsSettings } from './sessions-settings'
 import type { SettingsPageProps, SettingsView as SettingsViewId } from './types'
 
 const SETTINGS_VIEWS: readonly SettingsViewId[] = [
-  ...SECTIONS.map(s => `config:${s.id}` as SettingsViewId),
-  'providers',
+  ...AGENT_GATEWAY_SECTIONS.map(s => `config:${s.id}` as SettingsViewId),
   'gateway',
-  'keys',
-  'mcp',
   'sessions',
   'about'
 ]
@@ -37,20 +31,6 @@ const SETTINGS_VIEWS: readonly SettingsViewId[] = [
 export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChanged }: SettingsPageProps) {
   const { t } = useI18n()
   const [activeView, setActiveView] = useRouteEnumParam('tab', SETTINGS_VIEWS, 'config:model' as SettingsViewId)
-  // Providers subnav (Accounts vs API keys) lives in its own param so each
-  // sub-view is deep-linkable and survives a refresh.
-  const [providerView, setProviderView] = useRouteEnumParam<ProviderView>('pview', PROVIDER_VIEWS, 'accounts')
-  const [keysView, setKeysView] = useRouteEnumParam<KeysView>('kview', KEYS_VIEWS, 'tools')
-
-  const openProviderView = (view: ProviderView) => {
-    setActiveView('providers')
-    setProviderView(view)
-  }
-
-  const openKeysView = (view: KeysView) => {
-    setActiveView('keys')
-    setKeysView(view)
-  }
 
   const importInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -88,7 +68,7 @@ export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChang
     <OverlayView closeLabel={t.settings.closeSettings} onClose={onClose}>
       <OverlaySplitLayout>
         <OverlaySidebar>
-          {SECTIONS.map(s => {
+          {AGENT_GATEWAY_SECTIONS.map(s => {
             const view = `config:${s.id}` as SettingsViewId
 
             return (
@@ -103,64 +83,10 @@ export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChang
           })}
           <div className="my-2 h-px bg-border/30" />
           <OverlayNavItem
-            active={activeView === 'providers'}
-            icon={Zap}
-            label="Providers"
-            onClick={() => setActiveView('providers')}
-          />
-          {activeView === 'providers' && (
-            <div className="ml-3.5 flex flex-col gap-0.5 pl-1.5">
-              <OverlayNavItem
-                active={providerView === 'accounts'}
-                icon={Sparkles}
-                label="Accounts"
-                nested
-                onClick={() => openProviderView('accounts')}
-              />
-              <OverlayNavItem
-                active={providerView === 'keys'}
-                icon={KeyRound}
-                label="API keys"
-                nested
-                onClick={() => openProviderView('keys')}
-              />
-            </div>
-          )}
-          <OverlayNavItem
             active={activeView === 'gateway'}
             icon={Globe}
             label={t.settings.nav.gateway}
             onClick={() => setActiveView('gateway')}
-          />
-          <OverlayNavItem
-            active={activeView === 'keys'}
-            icon={KeyRound}
-            label={t.settings.nav.apiKeys}
-            onClick={() => setActiveView('keys')}
-          />
-          {activeView === 'keys' && (
-            <div className="ml-3.5 flex flex-col gap-0.5 pl-1.5">
-              <OverlayNavItem
-                active={keysView === 'tools'}
-                icon={Wrench}
-                label="Tools"
-                nested
-                onClick={() => openKeysView('tools')}
-              />
-              <OverlayNavItem
-                active={keysView === 'settings'}
-                icon={Settings2}
-                label="Settings"
-                nested
-                onClick={() => openKeysView('settings')}
-              />
-            </div>
-          )}
-          <OverlayNavItem
-            active={activeView === 'mcp'}
-            icon={Wrench}
-            label={t.settings.nav.mcp}
-            onClick={() => setActiveView('mcp')}
           />
           <OverlayNavItem
             active={activeView === 'sessions'}
@@ -219,12 +145,6 @@ export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChang
               onConfigSaved={onConfigSaved}
               onMainModelChanged={onMainModelChanged}
             />
-          ) : activeView === 'providers' ? (
-            <ProvidersSettings onViewChange={setProviderView} view={providerView} />
-          ) : activeView === 'keys' ? (
-            <KeysSettings view={keysView} />
-          ) : activeView === 'mcp' ? (
-            <McpSettings gateway={gateway} onConfigSaved={onConfigSaved} />
           ) : (
             <SessionsSettings />
           )}

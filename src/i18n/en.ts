@@ -126,7 +126,7 @@ export const en: Translations = {
       about: 'About'
     },
     sections: {
-      model: 'Model',
+      model: 'Agent',
       chat: 'Chat',
       appearance: 'Appearance',
       workspace: 'Workspace',

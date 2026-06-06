@@ -4441,6 +4441,7 @@ async function startHermes() {
         HERMES_HOME,
         ...backend.env,
         HERMES_DASHBOARD_SESSION_TOKEN: token,
+        AGENT_GATEWAY_SESSION_TOKEN: token,
         HERMES_WEB_DIST: webDist
       },
       shell: backend.shell,
@@ -4939,18 +4940,22 @@ ipcMain.handle('hermes:api', async (_event, request) => {
   // the OAuth partition — route through Electron's net stack bound to that
   // session so the cookie attaches automatically. Token/local modes keep using
   // the static session-token header.
+  const logApiError = (err) => {
+    rememberLog(`API ${request?.method || 'GET'} ${request.path} → ${err.message}`)
+    throw err
+  }
   if (connection.authMode === 'oauth') {
     return fetchJsonViaOauthSession(url, {
       method: request?.method,
       body: request?.body,
       timeoutMs
-    })
+    }).catch(logApiError)
   }
   return fetchJson(url, connection.token, {
     method: request?.method,
     body: request?.body,
     timeoutMs
-  })
+  }).catch(logApiError)
 })
 
 ipcMain.handle('hermes:notify', (_event, payload) => {

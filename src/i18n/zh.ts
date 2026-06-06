@@ -120,7 +120,7 @@ export const zh: Translations = {
       about: '关于'
     },
     sections: {
-      model: '模型',
+      model: 'Agent',
       chat: '对话',
       appearance: '外观',
       workspace: '工作区',

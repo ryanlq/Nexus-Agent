@@ -208,6 +208,8 @@ export interface ModelPricing {
 
 export interface ModelOptionProvider {
   is_current?: boolean
+  /** agent-gateway: whether the agent CLI is installed locally */
+  installed?: boolean
   models?: string[]
   name: string
   slug: string

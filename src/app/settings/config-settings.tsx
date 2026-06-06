@@ -18,9 +18,9 @@ import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
 import type { ConfigFieldSchema, HermesConfigRecord } from '@/types/hermes'
 
-import { CONTROL_TEXT, EMPTY_SELECT_VALUE, FIELD_DESCRIPTIONS, FIELD_LABELS, SECTIONS } from './constants'
+import { CONTROL_TEXT, EMPTY_SELECT_VALUE, FIELD_DESCRIPTIONS, FIELD_LABELS, AGENT_GATEWAY_SECTIONS as SECTIONS } from './constants'
 import { enumOptionsFor, getNested, prettyName, setNested } from './helpers'
-import { ModelSettings } from './model-settings'
+import { AgentSettings } from './agent-settings'
 import { EmptyState, ListRow, LoadingState, SettingsContent } from './primitives'
 
 function ConfigField({
@@ -204,9 +204,15 @@ export function ConfigSettings({
 
         setConfig(c)
         setDefaults(d)
-        setSchema(s.fields)
+        setSchema(s?.fields ?? {})
       })
-      .catch(err => notifyError(err, 'Settings failed to load'))
+      .catch(err => {
+        notifyError(err, 'Settings failed to load')
+        // Allow rendering even if config endpoints fail — agent-gateway mode
+        // may not provide full config/schema, but AgentSettings still works.
+        setConfig(config ?? {})
+        setSchema(schema ?? {})
+      })
 
     return () => void (cancelled = true)
   }, [])
@@ -341,7 +347,7 @@ export function ConfigSettings({
     <SettingsContent>
       {activeSectionId === 'model' && (
         <div className="mb-6">
-          <ModelSettings onMainModelChanged={onMainModelChanged} />
+          <AgentSettings onAgentChanged={agent => onMainModelChanged?.(agent, 'default')} />
         </div>
       )}
       {fields.length === 0 ? (

@@ -49,26 +49,25 @@ export function useModelControls({ activeSessionId, queryClient, requestGateway 
   }, [])
 
   // Returns whether the switch succeeded so callers can await it before
-  // applying follow-up changes (e.g. editing a model's reasoning/fast must land
-  // on the right active model — bail rather than write to the previous one).
+  // applying follow-up changes.
   const selectModel = useCallback(
     async (selection: ModelSelection): Promise<boolean> => {
       const includeGlobal = selection.persistGlobal || !activeSessionId
-      // Snapshot for rollback: the switch is applied optimistically, so a
-      // failure must restore the prior model/provider (store + query cache)
-      // rather than leave the UI showing a model the backend never selected.
       const prevModel = $currentModel.get()
       const prevProvider = $currentProvider.get()
 
+      // Optimistic update
       setCurrentModel(selection.model)
       setCurrentProvider(selection.provider)
       updateModelOptionsCache(selection.provider, selection.model, includeGlobal)
 
       try {
+        // agent-gateway: use config.set to switch agent
         if (activeSessionId) {
-          await requestGateway('slash.exec', {
+          await requestGateway('config.set', {
+            key: 'agent',
+            value: selection.provider,
             session_id: activeSessionId,
-            command: `/model ${selection.model} --provider ${selection.provider}${selection.persistGlobal ? ' --global' : ''}`
           })
 
           if (selection.persistGlobal) {
@@ -82,6 +81,7 @@ export function useModelControls({ activeSessionId, queryClient, requestGateway 
           return true
         }
 
+        // No active session — switch global default via REST
         await setGlobalModel(selection.provider, selection.model)
         void refreshCurrentModel()
         void queryClient.invalidateQueries({ queryKey: ['model-options'] })
@@ -91,7 +91,7 @@ export function useModelControls({ activeSessionId, queryClient, requestGateway 
         setCurrentModel(prevModel)
         setCurrentProvider(prevProvider)
         updateModelOptionsCache(prevProvider, prevModel, includeGlobal)
-        notifyError(err, 'Model switch failed')
+        notifyError(err, 'Agent switch failed')
 
         return false
       }

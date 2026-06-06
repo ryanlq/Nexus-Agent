@@ -14,8 +14,7 @@ import {
   getStatus,
   getUsageAnalytics,
   restartGateway,
-  searchSessions,
-  updateHermes
+  searchSessions
 } from '@/hermes'
 import type {
   ActionStatusResponse,
@@ -351,11 +350,11 @@ export function CommandCenterView({
   const sessionListHasResults = filteredSessions.length > 0
 
   const runSystemAction = useCallback(
-    async (kind: 'restart' | 'update') => {
+    async (kind: 'restart') => {
       setSystemError('')
 
       try {
-        const started = kind === 'restart' ? await restartGateway() : await updateHermes()
+        const started = await restartGateway()
         let nextStatus: ActionStatusResponse | null = null
 
         for (let attempt = 0; attempt < 18; attempt += 1) {
@@ -634,9 +633,7 @@ export function CommandCenterView({
                         <OverlayActionButton className="h-7 px-2.5" onClick={() => void runSystemAction('restart')}>
                           {cc.restartMessaging}
                         </OverlayActionButton>
-                        <OverlayActionButton className="h-7 px-2.5" onClick={() => void runSystemAction('update')}>
-                          {cc.updateHermes}
-                        </OverlayActionButton>
+                        {/* agent-gateway: "Update Hermes" hidden — agent-gateway is not Hermes */}
                       </div>
                     </div>
                     {systemAction && (

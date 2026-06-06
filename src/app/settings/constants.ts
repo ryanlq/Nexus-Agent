@@ -343,7 +343,38 @@ export const FIELD_DESCRIPTIONS: Record<string, string> = {
     'When Hermes updates itself from the app (no terminal prompt), keep local source edits (stash) or throw them away (discard). Terminal updates always ask.'
 }
 
-// Curated desktop config surface: only fields a user might tune from the app.
+// agent-gateway mode: reduced set of settings sections.
+// Only Model (agent selection), Appearance, and Voice are applicable.
+// Workspace/Safety/Memory/Advanced are removed because agent CLIs manage these internally.
+export const AGENT_GATEWAY_SECTIONS: DesktopConfigSection[] = [
+  {
+    id: 'model',
+    label: 'Agent',
+    icon: Sparkles,
+    keys: []
+  },
+  {
+    id: 'appearance',
+    label: 'Appearance',
+    icon: Palette,
+    keys: []
+  },
+  {
+    id: 'voice',
+    label: 'Voice',
+    icon: Mic,
+    keys: [
+      'tts.provider',
+      'stt.enabled',
+      'stt.provider',
+      'voice.auto_tts',
+      'voice.record_key',
+      'voice.max_recording_seconds'
+    ]
+  }
+]
+
+// Full sections for original Hermes backend — used by ConfigSettings for schema-driven rendering.
 export const SECTIONS: DesktopConfigSection[] = [
   {
     id: 'model',

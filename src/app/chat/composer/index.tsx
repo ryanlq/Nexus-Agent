@@ -40,7 +40,7 @@ import {
   shouldAutoDrainOnSettle,
   updateQueuedPrompt
 } from '@/store/composer-queue'
-import { $gatewayState, $messages } from '@/store/session'
+import { $agentAvailable, $agentUnavailableReason, $gatewayState, $messages } from '@/store/session'
 import { $threadScrolledUp } from '@/store/thread-scroll'
 
 import { extractDroppedFiles, HERMES_PATHS_MIME } from '../hooks/use-composer-actions'
@@ -214,11 +214,19 @@ export function ChatBar({
   // When the bar is disabled it's because the gateway isn't open. Distinguish a
   // cold start ("Starting Hermes...") from a dropped connection we're trying to
   // restore (e.g. after the Mac slept) so the stuck state reads as recoverable.
-  const placeholder = disabled
-    ? gatewayState === 'closed' || gatewayState === 'error'
+  // Also show a specific message when the selected agent is not installed.
+  const agentAvailable = useStore($agentAvailable)
+  const agentUnavailableReason = useStore($agentUnavailableReason)
+  const gatewayStateVal = useStore($gatewayState)
+  const gatewayOpen = gatewayStateVal === 'open'
+
+  const placeholder = !gatewayOpen
+    ? gatewayStateVal === 'closed' || gatewayStateVal === 'error'
       ? t.composer.placeholderReconnecting
       : t.composer.placeholderStarting
-    : restingPlaceholder
+    : agentAvailable === false
+      ? (agentUnavailableReason || 'No agent installed')
+      : restingPlaceholder
 
   const focusInput = useCallback(() => {
     focusComposerInput(editorRef.current)

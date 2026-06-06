@@ -115,6 +115,11 @@ export const $introSeed = atom(0)
 export const $contextSuggestions = atom<ContextSuggestion[]>([])
 export const $modelPickerOpen = atom(false)
 
+/** Whether the currently selected agent CLI is installed and available. */
+export const $agentAvailable = atom<boolean | null>(null) // null = unknown (not yet checked)
+/** Human-readable reason when agent is not available (e.g. "claude-code is not installed"). */
+export const $agentUnavailableReason = atom('')
+
 export const setConnection = (next: Updater<HermesConnection | null>) => updateAtom($connection, next)
 export const setGatewayState = (next: Updater<string>) => updateAtom($gatewayState, next)
 export const setSessions = (next: Updater<SessionInfo[]>) => updateAtom($sessions, next)

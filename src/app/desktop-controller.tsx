@@ -77,6 +77,7 @@ import { useCwdActions } from './session/hooks/use-cwd-actions'
 import { useHermesConfig } from './session/hooks/use-hermes-config'
 import { useMessageStream } from './session/hooks/use-message-stream'
 import { useModelControls } from './session/hooks/use-model-controls'
+import { useAgentAvailability } from './session/hooks/use-agent-availability'
 import { usePreviewRouting } from './session/hooks/use-preview-routing'
 import { usePromptActions } from './session/hooks/use-prompt-actions'
 import { useRouteResume } from './session/hooks/use-route-resume'
@@ -350,6 +351,8 @@ export function DesktopController() {
     queryClient,
     requestGateway
   })
+
+  useAgentAvailability()
 
   const openProviderSettings = useCallback(() => {
     navigate(`${SETTINGS_ROUTE}?tab=providers`)

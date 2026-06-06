@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useStore } from '@nanostores/react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { notifyError } from '@/store/notifications'
+import { $agentAvailable, $currentProvider, setCurrentProvider } from '@/store/session'
 
 import { CONTROL_TEXT } from './constants'
 import { ListRow, LoadingState } from './primitives'
@@ -27,7 +29,7 @@ interface AgentSettingsProps {
 export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
   const [loading, setLoading] = useState(true)
   const [agents, setAgents] = useState<AgentInfo[]>(DEFAULT_AGENTS)
-  const [current, setCurrent] = useState('')
+  const currentProvider = useStore($currentProvider)
   const [switching, setSwitching] = useState(false)
   const [error, setError] = useState('')
 
@@ -41,7 +43,10 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
         current: string
       }>({ path: '/api/agents/status', timeoutMs: 5000 })
       setAgents(result.agents || DEFAULT_AGENTS)
-      setCurrent(result.current || '')
+      // Sync shared atom with server truth
+      if (result.current) {
+        setCurrentProvider(result.current)
+      }
     } catch {
       // Fallback: get current agent from /api/model/info and use defaults
       try {
@@ -49,12 +54,12 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
           model: string
           provider: string
         }>({ path: '/api/model/info', timeoutMs: 5000 })
-        setCurrent(info.provider || 'claude-code')
+        setCurrentProvider(info.provider || 'claude-code')
         setAgents(DEFAULT_AGENTS)
       } catch (err) {
         setError('Could not reach agent-gateway backend. Make sure it is running.')
         setAgents(DEFAULT_AGENTS)
-        setCurrent('claude-code')
+        setCurrentProvider('claude-code')
       }
     } finally {
       setLoading(false)
@@ -66,7 +71,7 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
   }, [])
 
   const switchAgent = async (slug: string) => {
-    if (slug === current || switching) return
+    if (slug === currentProvider || switching) return
     setSwitching(true)
     try {
       // Try dedicated switch endpoint first
@@ -86,7 +91,9 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
           timeoutMs: 5000,
         })
       }
-      setCurrent(slug)
+      setCurrentProvider(slug)
+      // Mark agent availability as unknown so it gets re-checked
+      $agentAvailable.set(null)
       onAgentChanged?.(slug)
     } catch (err) {
       notifyError(err, 'Failed to switch agent')
@@ -112,7 +119,7 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
       {agents.map(agent => (
         <AgentRow
           agent={agent}
-          current={agent.slug === current}
+          current={agent.slug === currentProvider}
           key={agent.slug}
           onSwitch={() => void switchAgent(agent.slug)}
           switching={switching}

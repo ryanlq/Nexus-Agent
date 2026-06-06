@@ -46,6 +46,7 @@ import { routeSessionId } from '../routes'
 import { titlebarHeaderBaseClass, titlebarHeaderShadowClass } from '../shell/titlebar'
 
 import { ChatDropOverlay } from './chat-drop-overlay'
+import { AgentUnavailableBanner } from './agent-unavailable-banner'
 import { ChatSwapOverlay } from './chat-swap-overlay'
 import { ChatBar, ChatBarFallback } from './composer'
 import { requestComposerInsert, requestComposerInsertRefs } from './composer/focus'
@@ -336,6 +337,7 @@ export function ChatView({
       />
 
       <PromptOverlays />
+      <AgentUnavailableBanner />
 
       <div
         className="relative min-h-0 max-w-full flex-1 overflow-hidden bg-(--ui-chat-surface-background) contain-[layout_paint]"

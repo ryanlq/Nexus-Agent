@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// set-exe-identity.cjs — stamp the Hermes icon + version metadata onto the
+// set-exe-identity.cjs — stamp the Nexus Agent icon + version metadata onto the
 // built Hermes.exe using rcedit, completely decoupled from electron-builder's
 // signing path.
 //
@@ -38,7 +38,7 @@
 const path = require('node:path')
 const fs = require('node:fs')
 
-// Stamp the Hermes icon + identity onto `exe`. Resolves on success, throws on
+// Stamp the Nexus Agent icon + identity onto `exe`. Resolves on success, throws on
 // failure. `desktopRoot` defaults to this script's package root so the icon and
 // the rcedit dependency resolve regardless of cwd.
 async function stampExeIdentity(exe, desktopRoot = path.resolve(__dirname, '..')) {
@@ -68,14 +68,14 @@ async function stampExeIdentity(exe, desktopRoot = path.resolve(__dirname, '..')
   await rcedit(exe, {
     icon,
     'version-string': {
-      ProductName: 'Hermes',
-      FileDescription: 'Hermes',
+      ProductName: 'Nexus Agent',
+      FileDescription: 'Nexus Agent',
       CompanyName: 'Nous Research',
       LegalCopyright: 'Copyright (c) 2026 Nous Research'
     }
   })
 
-  console.log('[set-exe-identity] done — Hermes icon + identity stamped')
+  console.log('[set-exe-identity] done — Nexus Agent icon + identity stamped')
 }
 
 module.exports = { stampExeIdentity }

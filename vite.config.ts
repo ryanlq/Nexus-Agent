@@ -17,7 +17,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@hermes/desktop-shared': path.resolve(__dirname, './shared/src')
+      '@nexus-agent/desktop-shared': path.resolve(__dirname, './shared/src')
     },
     dedupe: ['react', 'react-dom']
   },

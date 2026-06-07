@@ -121,7 +121,7 @@ export function GatewaySettings() {
 
   useEffect(() => {
     let cancelled = false
-    const desktop = window.hermesDesktop
+    const desktop = window.nexusAgent
 
     if (!desktop?.getConnectionConfig) {
       setLoading(false)
@@ -167,7 +167,7 @@ export function GatewaySettings() {
       return
     }
 
-    const desktop = window.hermesDesktop
+    const desktop = window.nexusAgent
 
     if (!desktop?.probeConnectionConfig) {
       return
@@ -302,8 +302,8 @@ export function GatewaySettings() {
 
     try {
       const next = apply
-        ? await window.hermesDesktop.applyConnectionConfig(payload())
-        : await window.hermesDesktop.saveConnectionConfig(payload())
+        ? await window.nexusAgent.applyConnectionConfig(payload())
+        : await window.nexusAgent.saveConnectionConfig(payload())
 
       setState(next)
       setRemoteToken('')
@@ -334,7 +334,7 @@ export function GatewaySettings() {
     try {
       // Save (don't apply/restart) so the login window has a URL to use and the
       // oauth mode is persisted, without yet flipping the live connection.
-      const saved = await window.hermesDesktop.saveConnectionConfig({
+      const saved = await window.nexusAgent.saveConnectionConfig({
         mode: state.mode,
         profile: scope ?? undefined,
         remoteAuthMode: 'oauth',
@@ -343,10 +343,10 @@ export function GatewaySettings() {
 
       setState(saved)
 
-      const result = await window.hermesDesktop.oauthLoginConnectionConfig(trimmedUrl)
+      const result = await window.nexusAgent.oauthLoginConnectionConfig(trimmedUrl)
 
       if (result.connected) {
-        const refreshed = await window.hermesDesktop.getConnectionConfig(scope)
+        const refreshed = await window.nexusAgent.getConnectionConfig(scope)
         setState(refreshed)
         notify({ kind: 'success', title: 'Signed in', message: `Connected to ${providerLabel}.` })
       } else {
@@ -367,8 +367,8 @@ export function GatewaySettings() {
     setSigningIn(true)
 
     try {
-      await window.hermesDesktop.oauthLogoutConnectionConfig(trimmedUrl || undefined)
-      const refreshed = await window.hermesDesktop.getConnectionConfig(scope)
+      await window.nexusAgent.oauthLogoutConnectionConfig(trimmedUrl || undefined)
+      const refreshed = await window.nexusAgent.getConnectionConfig(scope)
       setState(refreshed)
       notify({ kind: 'success', title: 'Signed out', message: 'Cleared the remote gateway session.' })
     } catch (err) {
@@ -396,7 +396,7 @@ export function GatewaySettings() {
     setLastTest(null)
 
     try {
-      const result = await window.hermesDesktop.testConnectionConfig({
+      const result = await window.nexusAgent.testConnectionConfig({
         mode: 'remote',
         profile: scope ?? undefined,
         remoteAuthMode: authMode,
@@ -418,7 +418,7 @@ export function GatewaySettings() {
     return <LoadingState label="Loading gateway settings..." />
   }
 
-  if (!window.hermesDesktop?.getConnectionConfig) {
+  if (!window.nexusAgent?.getConnectionConfig) {
     return (
       <EmptyState
         description="The desktop IPC bridge does not expose gateway settings."
@@ -505,7 +505,7 @@ export function GatewaySettings() {
               className={cn('h-8', CONTROL_TEXT)}
               disabled={state.envOverride}
               onChange={event => setState(current => ({ ...current, remoteUrl: event.target.value }))}
-              placeholder="https://gateway.example.com/hermes"
+              placeholder="https://gateway.example.com/nexus"
               value={state.remoteUrl}
             />
           }
@@ -608,7 +608,7 @@ export function GatewaySettings() {
       <div className="mt-6 grid gap-1">
         <ListRow
           action={
-            <Button onClick={() => void window.hermesDesktop?.revealLogs()} size="sm" variant="textStrong">
+            <Button onClick={() => void window.nexusAgent?.revealLogs()} size="sm" variant="textStrong">
               <FileText className="size-4" />
               Open logs
             </Button>

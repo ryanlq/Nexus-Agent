@@ -88,7 +88,7 @@ function PreviewLoadError({
             href={error.url}
             onClick={event => {
               event.preventDefault()
-              void window.hermesDesktop?.openExternal(error.url)
+              void window.nexusAgent?.openExternal(error.url)
             }}
           >
             {compactUrl(error.url)}
@@ -405,8 +405,8 @@ export function PreviewPane({
   useEffect(() => {
     if (
       target.kind !== 'file' ||
-      !window.hermesDesktop?.watchPreviewFile ||
-      !window.hermesDesktop?.onPreviewFileChanged
+      !window.nexusAgent?.watchPreviewFile ||
+      !window.nexusAgent?.onPreviewFileChanged
     ) {
       return
     }
@@ -439,7 +439,7 @@ export function PreviewPane({
       reloadPreview()
     }
 
-    const unsubscribe = window.hermesDesktop.onPreviewFileChanged(payload => {
+    const unsubscribe = window.nexusAgent.onPreviewFileChanged(payload => {
       if (!active || payload.id !== watchId) {
         return
       }
@@ -457,11 +457,11 @@ export function PreviewPane({
       }, FILE_RELOAD_DEBOUNCE_MS)
     })
 
-    void window.hermesDesktop
+    void window.nexusAgent
       .watchPreviewFile(target.url)
       .then(watch => {
         if (!active) {
-          void window.hermesDesktop?.stopPreviewFileWatch?.(watch.id)
+          void window.nexusAgent?.stopPreviewFileWatch?.(watch.id)
 
           return
         }
@@ -484,7 +484,7 @@ export function PreviewPane({
       }
 
       if (watchId) {
-        void window.hermesDesktop?.stopPreviewFileWatch?.(watchId)
+        void window.nexusAgent?.stopPreviewFileWatch?.(watchId)
       }
     }
   }, [appendConsoleEntry, reloadPreview, target.kind, target.url])
@@ -512,7 +512,7 @@ export function PreviewPane({
 
     const webview = document.createElement('webview') as PreviewWebview
     webview.className = 'flex h-full w-full flex-1 bg-transparent'
-    webview.setAttribute('partition', 'persist:hermes-preview')
+    webview.setAttribute('partition', 'persist:nexus-preview')
     webview.setAttribute('src', target.url)
     webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no,sandbox=yes')
 

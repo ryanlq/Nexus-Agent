@@ -6,7 +6,7 @@ import { ModelPickerDialog } from '@/components/model-picker'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { Input } from '@/components/ui/input'
-import { getGlobalModelOptions } from '@/hermes'
+import { getGlobalModelOptions } from '@/nexus'
 import {
   Check,
   ChevronDown,
@@ -42,7 +42,7 @@ import {
   startProviderOAuth,
   submitOnboardingCode
 } from '@/store/onboarding'
-import type { OAuthProvider } from '@/types/hermes'
+import type { OAuthProvider } from '@/types/nexus'
 
 interface DesktopOnboardingOverlayProps {
   enabled: boolean

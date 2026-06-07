@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { getHermesConfigRecord, listSessions } from '@/hermes'
+import { getHermesConfigRecord, listSessions } from '@/nexus'
 import { sessionTitle } from '@/lib/chat-runtime'
 import {
   Activity,

@@ -66,7 +66,7 @@ export function extractDroppedFiles(transfer: DataTransfer): DroppedFile[] {
   const result: DroppedFile[] = []
   const seenPaths = new Set<string>()
   const seenFiles = new Set<File>()
-  const getPath = window.hermesDesktop?.getPathForFile
+  const getPath = window.nexusAgent?.getPathForFile
 
   // In-app drags first — they carry richer metadata (isDirectory) than the
   // File-based fallback can provide, and produce no overlapping native files.
@@ -228,7 +228,7 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
 
   const pickContextPaths = useCallback(
     async (kind: 'file' | 'folder') => {
-      const paths = await window.hermesDesktop?.selectPaths({
+      const paths = await window.nexusAgent?.selectPaths({
         title: kind === 'file' ? 'Add files as context' : 'Add folders as context',
         defaultPath: currentCwd || undefined,
         directories: kind === 'folder'
@@ -292,7 +292,7 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
     attachToMain(baseAttachment)
 
     try {
-      const previewUrl = await window.hermesDesktop?.readFileDataUrl(filePath)
+      const previewUrl = await window.nexusAgent?.readFileDataUrl(filePath)
 
       if (previewUrl) {
         addComposerAttachment({ ...baseAttachment, previewUrl })
@@ -319,7 +319,7 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
       try {
         const buffer = await blob.arrayBuffer()
         const data = new Uint8Array(buffer)
-        const savedPath = await window.hermesDesktop?.saveImageBuffer(data, blobExtension(blob))
+        const savedPath = await window.nexusAgent?.saveImageBuffer(data, blobExtension(blob))
 
         if (!savedPath) {
           notify({ kind: 'error', title: 'Image attach', message: 'Failed to write image to disk.' })
@@ -338,7 +338,7 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
   )
 
   const pickImages = useCallback(async () => {
-    const paths = await window.hermesDesktop?.selectPaths({
+    const paths = await window.nexusAgent?.selectPaths({
       title: 'Attach images',
       defaultPath: currentCwd || undefined,
       filters: [
@@ -360,7 +360,7 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
 
   const pasteClipboardImage = useCallback(async () => {
     try {
-      const path = await window.hermesDesktop?.saveClipboardImage()
+      const path = await window.nexusAgent?.saveClipboardImage()
 
       if (!path) {
         notify({
@@ -450,7 +450,7 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
         }
 
         const fallbackPath =
-          !knownPath && window.hermesDesktop?.getPathForFile ? window.hermesDesktop.getPathForFile(file) : ''
+          !knownPath && window.nexusAgent?.getPathForFile ? window.nexusAgent.getPathForFile(file) : ''
 
         const filePath = knownPath || fallbackPath || ''
         const isImage = file.type.startsWith('image/') || isImagePath(file.name) || (filePath && isImagePath(filePath))

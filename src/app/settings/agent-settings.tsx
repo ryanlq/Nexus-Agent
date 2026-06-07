@@ -65,7 +65,7 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
     setError('')
     try {
       // Try the dedicated agent-status endpoint first (short timeout)
-      const result = await window.hermesDesktop.api<{
+      const result = await window.nexusAgent.api<{
         agents: AgentInfo[]
         current: string
       }>({ path: '/api/agents/status', timeoutMs: 5000 })
@@ -77,7 +77,7 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
     } catch {
       // Fallback: get current agent from /api/model/info and use defaults
       try {
-        const info = await window.hermesDesktop.api<{
+        const info = await window.nexusAgent.api<{
           model: string
           provider: string
         }>({ path: '/api/model/info', timeoutMs: 5000 })
@@ -104,7 +104,7 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
     try {
       // Try dedicated switch endpoint first, pass params
       try {
-        await window.hermesDesktop.api<{ ok: boolean }>({
+        await window.nexusAgent.api<{ ok: boolean }>({
           path: '/api/agents/switch',
           method: 'POST',
           body: { agent: slug, agent_params: agentParams },
@@ -112,7 +112,7 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
         })
       } catch {
         // Fallback to model/set
-        await window.hermesDesktop.api<{ ok: boolean }>({
+        await window.nexusAgent.api<{ ok: boolean }>({
           path: '/api/model/set',
           method: 'POST',
           body: { provider: slug, model: 'default', scope: 'main' },

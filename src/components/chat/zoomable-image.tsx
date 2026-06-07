@@ -63,8 +63,8 @@ export function ZoomableImage({ className, containerClassName, src, alt, slot, .
     setSaving(true)
 
     try {
-      if (window.hermesDesktop?.saveImageFromUrl) {
-        const saved = await window.hermesDesktop.saveImageFromUrl(src)
+      if (window.nexusAgent?.saveImageFromUrl) {
+        const saved = await window.nexusAgent.saveImageFromUrl(src)
 
         if (saved) {
           notify({ kind: 'success', title: 'Image saved', message: imageFilename(src) })

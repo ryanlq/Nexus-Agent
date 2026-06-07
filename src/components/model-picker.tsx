@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 
-import type { ModelOptionProvider, ModelOptionsResponse } from '@/types/hermes'
+import type { ModelOptionProvider, ModelOptionsResponse } from '@/types/nexus'
 
-import type { HermesGateway } from '../hermes'
-import { getGlobalModelOptions } from '../hermes'
+import type { NexusGateway } from '../nexus'
+import { getGlobalModelOptions } from '../nexus'
 import { cn } from '../lib/utils'
 
 import { InlineNotice } from './notifications'
@@ -17,7 +17,7 @@ import { Skeleton } from './ui/skeleton'
 interface ModelPickerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  gw?: HermesGateway
+  gw?: NexusGateway
   sessionId?: string | null
   currentModel: string
   currentProvider: string

@@ -11,7 +11,7 @@ import { Pane, PaneMain } from '@/components/pane-shell'
 import { useSkinCommand } from '@/themes/use-skin-command'
 
 import { formatRefValue } from '../components/assistant-ui/directive-text'
-import { getSessionMessages, listAllProfileSessions, type SessionInfo } from '../hermes'
+import { getSessionMessages, listAllProfileSessions, type SessionInfo } from '../nexus'
 import { preserveLocalAssistantErrors, toChatMessages } from '../lib/chat-messages'
 import { toggleCommandPalette } from '../store/command-palette'
 import {
@@ -189,12 +189,12 @@ export function DesktopController() {
   const { connectionRef, gatewayRef, requestGateway } = useGatewayRequest()
 
   useEffect(() => {
-    window.hermesDesktop?.setPreviewShortcutActive?.(Boolean(chatOpen && (filePreviewTarget || previewTarget)))
+    window.nexusAgent?.setPreviewShortcutActive?.(Boolean(chatOpen && (filePreviewTarget || previewTarget)))
   }, [chatOpen, filePreviewTarget, previewTarget])
 
   useEffect(() => {
     startUpdatePoller()
-    const unsubscribe = window.hermesDesktop?.onOpenUpdatesRequested?.(() => openUpdatesWindow())
+    const unsubscribe = window.nexusAgent?.onOpenUpdatesRequested?.(() => openUpdatesWindow())
 
     return () => {
       unsubscribe?.()
@@ -215,7 +215,7 @@ export function DesktopController() {
       }
     }
 
-    const unsubscribe = window.hermesDesktop?.onClosePreviewRequested?.(closeActiveRightRailTab)
+    const unsubscribe = window.nexusAgent?.onClosePreviewRequested?.(closeActiveRightRailTab)
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
 
@@ -487,7 +487,7 @@ export function DesktopController() {
       event.preventDefault()
       startFreshSessionDraft()
       // Briefly light up the sidebar's ⌘N hint so the shortcut is discoverable.
-      window.dispatchEvent(new CustomEvent('hermes:new-session-shortcut'))
+      window.dispatchEvent(new CustomEvent('nexus:new-session-shortcut'))
     }
 
     window.addEventListener('keydown', onKeyDown)

@@ -4,18 +4,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { getHermesConfigRecord, type HermesGateway, saveHermesConfig } from '@/hermes'
+import { getHermesConfigRecord, type NexusGateway, saveHermesConfig } from '@/nexus'
 import { Wrench } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
 import { $activeSessionId } from '@/store/session'
-import type { HermesConfigRecord } from '@/types/hermes'
+import type { HermesConfigRecord } from '@/types/nexus'
 
 import { EmptyState, LoadingState, Pill, SettingsContent } from './primitives'
 import { useDeepLinkHighlight } from './use-deep-link-highlight'
 
 interface McpSettingsProps {
-  gateway?: HermesGateway | null
+  gateway?: NexusGateway | null
   onConfigSaved?: () => void
 }
 

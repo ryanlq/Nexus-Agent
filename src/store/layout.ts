@@ -19,9 +19,9 @@ export const FILE_BROWSER_MAX_WIDTH = '20rem'
 
 export const SIDEBAR_SESSIONS_PAGE_SIZE = 50
 
-const SIDEBAR_PINNED_STORAGE_KEY = 'hermes.desktop.pinnedSessions'
-const SIDEBAR_AGENTS_GROUPED_STORAGE_KEY = 'hermes.desktop.agentsGroupedByWorkspace'
-const PANES_FLIPPED_STORAGE_KEY = 'hermes.desktop.panesFlipped'
+const SIDEBAR_PINNED_STORAGE_KEY = 'nexus.desktop.pinnedSessions'
+const SIDEBAR_AGENTS_GROUPED_STORAGE_KEY = 'nexus.desktop.agentsGroupedByWorkspace'
+const PANES_FLIPPED_STORAGE_KEY = 'nexus.desktop.panesFlipped'
 
 export const CHAT_SIDEBAR_PANE_ID = 'chat-sidebar'
 export const FILE_BROWSER_PANE_ID = 'file-browser'

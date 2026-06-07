@@ -15,14 +15,14 @@ import {
   getUsageAnalytics,
   restartGateway,
   searchSessions
-} from '@/hermes'
+} from '@/nexus'
 import type {
   ActionStatusResponse,
   AnalyticsResponse,
   SessionInfo,
   SessionSearchResult as SessionSearchApiResult,
   StatusResponse
-} from '@/hermes'
+} from '@/nexus'
 import { useI18n } from '@/i18n'
 import { sessionTitle } from '@/lib/chat-runtime'
 import { Activity, AlertCircle, BarChart3, Pin } from '@/lib/icons'
@@ -626,7 +626,7 @@ export function CommandCenterView({
                           </span>
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">
-                          {cc.hermesActiveSessions(status.version, status.active_sessions)}
+                          {cc.nexusActiveSessions(status.version, status.active_sessions)}
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">

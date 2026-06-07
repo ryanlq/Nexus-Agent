@@ -75,7 +75,7 @@ try {
   }
 }
 
-const USER_DATA_OVERRIDE = process.env.HERMES_DESKTOP_USER_DATA_DIR
+const USER_DATA_OVERRIDE = process.env.NEXUS_AGENT_USER_DATA_DIR
 if (USER_DATA_OVERRIDE) {
   const resolvedUserData = path.resolve(USER_DATA_OVERRIDE)
   fs.mkdirSync(resolvedUserData, { recursive: true })
@@ -84,7 +84,7 @@ if (USER_DATA_OVERRIDE) {
 
 const PORT_FLOOR = 9120
 const PORT_CEILING = 9199
-const DEV_SERVER = process.env.HERMES_DESKTOP_DEV_SERVER
+const DEV_SERVER = process.env.NEXUS_AGENT_DEV_SERVER
 const IS_PACKAGED = app.isPackaged
 const IS_MAC = process.platform === 'darwin'
 const IS_WINDOWS = process.platform === 'win32'
@@ -98,7 +98,7 @@ const APP_ROOT = app.getAppPath()
 // GPU and never see it. Fall back to software rendering when a remote display
 // is detected; it's rock-steady over the wire and the CPU cost is negligible
 // next to the connection's latency. Must run before app `ready` — these
-// switches only apply pre-launch. Override with HERMES_DESKTOP_DISABLE_GPU
+// switches only apply pre-launch. Override with NEXUS_AGENT_DISABLE_GPU
 // (1/true → always disable, 0/false → keep GPU on).
 const REMOTE_DISPLAY_REASON = detectRemoteDisplay()
 if (REMOTE_DISPLAY_REASON) {
@@ -107,7 +107,7 @@ if (REMOTE_DISPLAY_REASON) {
   // with only --disable-gpu: force compositing onto the CPU too.
   app.commandLine.appendSwitch('disable-gpu-compositing')
   console.log(
-    `[hermes] remote display detected (${REMOTE_DISPLAY_REASON}); disabling GPU hardware acceleration to prevent flicker`
+    `[nexus] remote display detected (${REMOTE_DISPLAY_REASON}); disabling GPU hardware acceleration to prevent flicker`
   )
 }
 const SOURCE_REPO_ROOT = path.resolve(APP_ROOT, '../..')
@@ -142,7 +142,7 @@ function loadInstallStamp() {
       if (parsed && typeof parsed === 'object' && typeof parsed.commit === 'string' && parsed.commit.length >= 7) {
         if (parsed.schemaVersion !== INSTALL_STAMP_SCHEMA_VERSION) {
           console.warn(
-            `[hermes] install-stamp.json schemaVersion ${parsed.schemaVersion} != expected ${INSTALL_STAMP_SCHEMA_VERSION}; ignoring`
+            `[nexus] install-stamp.json schemaVersion ${parsed.schemaVersion} != expected ${INSTALL_STAMP_SCHEMA_VERSION}; ignoring`
           )
           continue
         }
@@ -165,18 +165,18 @@ function loadInstallStamp() {
 const INSTALL_STAMP = loadInstallStamp()
 if (INSTALL_STAMP) {
   console.log(
-    `[hermes] install stamp: ${INSTALL_STAMP.commit.slice(0, 12)}${INSTALL_STAMP.branch ? ` (${INSTALL_STAMP.branch})` : ''}${INSTALL_STAMP.dirty ? ' [DIRTY]' : ''} from ${INSTALL_STAMP.source || 'unknown'}`
+    `[nexus] install stamp: ${INSTALL_STAMP.commit.slice(0, 12)}${INSTALL_STAMP.branch ? ` (${INSTALL_STAMP.branch})` : ''}${INSTALL_STAMP.dirty ? ' [DIRTY]' : ''} from ${INSTALL_STAMP.source || 'unknown'}`
   )
 } else if (IS_PACKAGED) {
   // Dev builds without a stamp are normal; packaged builds without one
   // mean the bootstrap won't know what to clone. Surface clearly.
   console.error(
-    '[hermes] WARNING: no install-stamp.json found in packaged build. First-launch bootstrap will not have a pinned ref to install.'
+    '[nexus] WARNING: no install-stamp.json found in packaged build. First-launch bootstrap will not have a pinned ref to install.'
   )
 }
 
-// HERMES_HOME — the user-facing root for everything Hermes-related. Mirrors
-// scripts/install.ps1's $HermesHome and scripts/install.sh's $HERMES_HOME.
+// NEXUS_AGENT_HOME — the user-facing root for everything Hermes-related. Mirrors
+// scripts/install.ps1's $HermesHome and scripts/install.sh's $NEXUS_AGENT_HOME.
 //
 // Defaults:
 //   Windows: %LOCALAPPDATA%\hermes (matches install.ps1)
@@ -187,11 +187,11 @@ if (INSTALL_STAMP) {
 // %LOCALAPPDATA%\hermes yet, prefer the legacy path so we don't orphan their
 // existing config / sessions / .env. New installs go to %LOCALAPPDATA%.
 //
-// HERMES_DESKTOP_USER_DATA_DIR (used by test:desktop:fresh) puts the sandbox
-// HERMES_HOME beneath the throwaway userData dir so a fresh-install run never
+// NEXUS_AGENT_USER_DATA_DIR (used by test:desktop:fresh) puts the sandbox
+// NEXUS_AGENT_HOME beneath the throwaway userData dir so a fresh-install run never
 // touches the user's real ~/.hermes / %LOCALAPPDATA%\hermes.
-function resolveHermesHome() {
-  if (process.env.HERMES_HOME) return path.resolve(process.env.HERMES_HOME)
+function resolveNexusHome() {
+  if (process.env.NEXUS_AGENT_HOME) return path.resolve(process.env.NEXUS_AGENT_HOME)
   if (USER_DATA_OVERRIDE) return path.join(path.resolve(USER_DATA_OVERRIDE), 'hermes-home')
   if (IS_WINDOWS && process.env.LOCALAPPDATA) {
     const localappdata = path.join(process.env.LOCALAPPDATA, 'hermes')
@@ -204,13 +204,13 @@ function resolveHermesHome() {
   return path.join(app.getPath('home'), '.hermes')
 }
 
-const HERMES_HOME = resolveHermesHome()
-// ACTIVE_HERMES_ROOT — the canonical mutable Hermes install. Same path
+const NEXUS_AGENT_HOME = resolveNexusHome()
+// ACTIVE_NEXUS_ROOT — the canonical mutable Hermes install. Same path
 // install.ps1 / install.sh use, so a desktop-only user and a CLI-only user end
 // up with identical layouts and can share one install.
-const ACTIVE_HERMES_ROOT = path.join(HERMES_HOME, 'hermes-agent')
-// VENV_ROOT — venv lives inside the repo, exactly like install.ps1 does it.
-const VENV_ROOT = path.join(ACTIVE_HERMES_ROOT, 'venv')
+const ACTIVE_NEXUS_ROOT = path.join(NEXUS_AGENT_HOME, 'nexus-agent')
+// NEXUS_VENV_ROOT — venv lives inside the repo, exactly like install.ps1 does it.
+const NEXUS_VENV_ROOT = path.join(ACTIVE_NEXUS_ROOT, 'venv')
 // BOOTSTRAP_COMPLETE_MARKER — written by the first-launch bootstrap runner
 // (Phase 1D) after install.ps1 has completed all stages and the user has
 // finished initial configuration. Presence of this marker means the install
@@ -219,17 +219,17 @@ const VENV_ROOT = path.join(ACTIVE_HERMES_ROOT, 'venv')
 // means we re-run the bootstrap; install.ps1's stages are idempotent so a
 // re-run on an already-good install just discovers everything in place.
 //
-// We deliberately put the marker INSIDE ACTIVE_HERMES_ROOT (not alongside)
+// We deliberately put the marker INSIDE ACTIVE_NEXUS_ROOT (not alongside)
 // so that deleting the checkout to start fresh also deletes the marker --
 // avoids the confusing "marker exists but checkout is gone" state.
-const BOOTSTRAP_COMPLETE_MARKER = path.join(ACTIVE_HERMES_ROOT, '.hermes-bootstrap-complete')
+const BOOTSTRAP_COMPLETE_MARKER = path.join(ACTIVE_NEXUS_ROOT, '.nexus-bootstrap-complete')
 const BOOTSTRAP_MARKER_SCHEMA_VERSION = 1
 
 const DESKTOP_CONNECTION_CONFIG_PATH = path.join(app.getPath('userData'), 'connection.json')
 const DESKTOP_UPDATE_CONFIG_PATH = path.join(app.getPath('userData'), 'updates.json')
 // active-profile.json records which Hermes profile the desktop launches its
 // local backend as. When set, startHermes() passes `hermes --profile <name>
-// dashboard …`, which deterministically pins HERMES_HOME (see
+// dashboard …`, which deterministically pins NEXUS_AGENT_HOME (see
 // _apply_profile_override in hermes_cli/main.py) and bypasses the sticky
 // ~/.hermes/active_profile file. Unset (null) preserves the legacy behavior:
 // no --profile flag, so the backend honors active_profile / default.
@@ -241,19 +241,19 @@ const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 // tracks main. User can also override at runtime via
 // hermesDesktop.updates.setBranch().
 const DEFAULT_UPDATE_BRANCH = 'main'
-// desktop.log lives under HERMES_HOME/logs/ so it sits next to agent.log,
+// desktop.log lives under NEXUS_AGENT_HOME/logs/ so it sits next to agent.log,
 // errors.log, gateway.log produced by hermes_logging.setup_logging — one log
 // directory per user, regardless of which UI surface produced the line.
-const DESKTOP_LOG_PATH = path.join(HERMES_HOME, 'logs', 'desktop.log')
+const DESKTOP_LOG_PATH = path.join(NEXUS_AGENT_HOME, 'logs', 'desktop.log')
 const DESKTOP_LOG_FLUSH_MS = 120
 const DESKTOP_LOG_BUFFER_MAX_CHARS = 64 * 1024
-const BOOT_FAKE_MODE = process.env.HERMES_DESKTOP_BOOT_FAKE === '1'
+const BOOT_FAKE_MODE = process.env.NEXUS_AGENT_BOOT_FAKE === '1'
 const BOOT_FAKE_STEP_MS = (() => {
-  const raw = Number.parseInt(String(process.env.HERMES_DESKTOP_BOOT_FAKE_STEP_MS || ''), 10)
+  const raw = Number.parseInt(String(process.env.NEXUS_AGENT_BOOT_FAKE_STEP_MS || ''), 10)
   if (!Number.isFinite(raw) || raw <= 0) return 650
   return Math.max(120, raw)
 })()
-const APP_NAME = 'Hermes'
+const APP_NAME = 'Nexus Agent'
 const TITLEBAR_HEIGHT = 34
 const MACOS_TRAFFIC_LIGHTS_HEIGHT = 14
 const WINDOW_BUTTON_POSITION = {
@@ -419,7 +419,7 @@ app.setAboutPanelOptions({
 // so any non-trivial video silently refused to load. Streaming via a protocol
 // handler removes the size cap and gives the <video> element seekable,
 // range-aware playback. Must be registered before the app is ready.
-const MEDIA_PROTOCOL = 'hermes-media'
+const MEDIA_PROTOCOL = 'nexus-media'
 // Only audio/video may be streamed. Without this the handler would read any
 // non-blocklisted local file (no size cap) for any `fetch(hermes-media://…)`.
 const STREAMABLE_MEDIA_EXTS = new Set([
@@ -486,8 +486,8 @@ const backendPool = new Map() // profile -> { process, port, token, connectionPr
 // Keep the pool light: cap concurrent profile backends (LRU eviction) and reap
 // idle ones. A user idles at exactly the primary backend; pool backends only
 // exist while a non-primary profile is actively being chatted through.
-const POOL_MAX_BACKENDS = Math.max(1, Number(process.env.HERMES_DESKTOP_POOL_MAX) || 3)
-const POOL_IDLE_MS = Math.max(60_000, Number(process.env.HERMES_DESKTOP_POOL_IDLE_MS) || 10 * 60_000)
+const POOL_MAX_BACKENDS = Math.max(1, Number(process.env.NEXUS_AGENT_POOL_MAX) || 3)
+const POOL_IDLE_MS = Math.max(60_000, Number(process.env.NEXUS_AGENT_POOL_IDLE_MS) || 10 * 60_000)
 // A backend touched within this window has a live renderer socket (the keepalive
 // pings every 60s for every open profile). LRU eviction must spare these — a
 // concurrent multi-profile session keeps several backends "fresh" at once, and
@@ -522,7 +522,7 @@ let nativeThemeListenerInstalled = false
 let bootProgressState = {
   error: null,
   fakeMode: BOOT_FAKE_MODE,
-  message: 'Waiting to start Hermes backend',
+  message: 'Waiting to start Nexus Agent backend',
   phase: 'idle',
   progress: 0,
   running: false,
@@ -570,7 +570,7 @@ function scheduleDesktopLogFlush() {
 function rememberLog(chunk) {
   const text = String(chunk || '').trim()
   if (!text) return
-  const lines = text.split(/\r?\n/).map(line => `[hermes] ${line}`)
+  const lines = text.split(/\r?\n/).map(line => `[nexus] ${line}`)
   hermesLog.push(...lines)
   if (hermesLog.length > 300) {
     hermesLog.splice(0, hermesLog.length - 300)
@@ -676,7 +676,7 @@ function ensureWslWindowsFonts() {
 
   try {
     const confDir = path.join(app.getPath('home'), '.config', 'fontconfig', 'conf.d')
-    const confPath = path.join(confDir, '99-hermes-wsl-windows-fonts.conf')
+    const confPath = path.join(confDir, '99-nexus-wsl-windows-fonts.conf')
     let existing = ''
     try {
       existing = fs.readFileSync(confPath, 'utf8')
@@ -714,7 +714,7 @@ function broadcastBootProgress() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const { webContents } = mainWindow
   if (!webContents || webContents.isDestroyed()) return
-  webContents.send('hermes:boot-progress', bootProgressState)
+  webContents.send('nexus:boot-progress', bootProgressState)
 }
 
 // Bootstrap-event broadcast channel + state. The bootstrap runner emits a
@@ -790,7 +790,7 @@ function broadcastBootstrapEvent(ev) {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const { webContents } = mainWindow
   if (!webContents || webContents.isDestroyed()) return
-  webContents.send('hermes:bootstrap:event', ev)
+  webContents.send('nexus:bootstrap:event', ev)
 }
 
 function getBootstrapState() {
@@ -922,7 +922,7 @@ function isHermesSourceRoot(root) {
 }
 
 function findPythonForRoot(root) {
-  const override = process.env.HERMES_DESKTOP_PYTHON
+  const override = process.env.NEXUS_AGENT_PYTHON
   if (override && fileExists(override)) return override
 
   const relativePaths = IS_WINDOWS
@@ -1073,8 +1073,8 @@ function findGitBash() {
   const localAppData = process.env.LOCALAPPDATA || ''
   const candidates = []
   if (localAppData) {
-    candidates.push(path.join(localAppData, 'hermes', 'git', 'bin', 'bash.exe'))
-    candidates.push(path.join(localAppData, 'hermes', 'git', 'usr', 'bin', 'bash.exe'))
+    candidates.push(path.join(localAppData, 'nexus-agent', 'git', 'bin', 'bash.exe'))
+    candidates.push(path.join(localAppData, 'nexus-agent', 'git', 'usr', 'bin', 'bash.exe'))
   }
 
   // Standard Git for Windows install locations.
@@ -1114,8 +1114,8 @@ function resolveGitBinary() {
   const localAppData = process.env.LOCALAPPDATA || ''
   const candidates = []
   if (localAppData) {
-    candidates.push(path.join(localAppData, 'hermes', 'git', 'cmd', 'git.exe'))
-    candidates.push(path.join(localAppData, 'hermes', 'git', 'bin', 'git.exe'))
+    candidates.push(path.join(localAppData, 'nexus-agent', 'git', 'cmd', 'git.exe'))
+    candidates.push(path.join(localAppData, 'nexus-agent', 'git', 'bin', 'git.exe'))
   }
   candidates.push(path.join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Git', 'cmd', 'git.exe'))
   candidates.push(path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Git', 'cmd', 'git.exe'))
@@ -1157,16 +1157,16 @@ function writeDesktopUpdateConfig(config) {
 }
 
 // Match the backend's source resolution but bias toward a real git checkout.
-// Dev → SOURCE_REPO_ROOT. Packaged/CLI install → ACTIVE_HERMES_ROOT.
-// HERMES_DESKTOP_HERMES_ROOT always wins so devs can pin a worktree.
+// Dev → SOURCE_REPO_ROOT. Packaged/CLI install → ACTIVE_NEXUS_ROOT.
+// NEXUS_AGENT_ROOT always wins so devs can pin a worktree.
 function resolveUpdateRoot() {
   const candidates = [
-    process.env.HERMES_DESKTOP_HERMES_ROOT && path.resolve(process.env.HERMES_DESKTOP_HERMES_ROOT),
+    process.env.NEXUS_AGENT_ROOT && path.resolve(process.env.NEXUS_AGENT_ROOT),
     !IS_PACKAGED && isHermesSourceRoot(SOURCE_REPO_ROOT) ? SOURCE_REPO_ROOT : null,
-    isHermesSourceRoot(ACTIVE_HERMES_ROOT) ? ACTIVE_HERMES_ROOT : null
+    isHermesSourceRoot(ACTIVE_NEXUS_ROOT) ? ACTIVE_NEXUS_ROOT : null
   ].filter(Boolean)
 
-  return candidates.find(c => directoryExists(path.join(c, '.git'))) || candidates[0] || ACTIVE_HERMES_ROOT
+  return candidates.find(c => directoryExists(path.join(c, '.git'))) || candidates[0] || ACTIVE_NEXUS_ROOT
 }
 
 function runGit(args, options = {}) {
@@ -1200,7 +1200,7 @@ function emitUpdateProgress(payload) {
   const merged = { stage: 'idle', message: '', percent: null, error: null, ...payload, at: Date.now() }
   rememberLog(`[updates] ${merged.stage}: ${merged.message || merged.error || ''}`)
   for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send('hermes:updates:progress', merged)
+    window.webContents.send('nexus:updates:progress', merged)
   }
 }
 
@@ -1302,7 +1302,7 @@ async function readCommitLog(cwd, branch) {
 let updateInFlight = false
 
 // Resolve the staged updater binary. The Tauri installer copies itself to
-// HERMES_HOME/hermes-setup.exe on a successful install (see
+// NEXUS_AGENT_HOME/hermes-setup.exe on a successful install (see
 // apps/bootstrap-installer paths::copy_self_to_hermes_home). That binary owns
 // ALL repo mutation — running `hermes update` + rebuilding the desktop — so
 // the desktop never touches its own bits while running. Returns null when the
@@ -1310,7 +1310,7 @@ let updateInFlight = false
 // installer); callers degrade gracefully.
 function resolveUpdaterBinary() {
   const name = IS_WINDOWS ? 'hermes-setup.exe' : 'hermes-setup'
-  const candidate = path.join(HERMES_HOME, name)
+  const candidate = path.join(NEXUS_AGENT_HOME, name)
   return fileExists(candidate) ? candidate : null
 }
 
@@ -1474,7 +1474,7 @@ async function applyUpdates(opts = {}) {
     if (!updater) {
       // No staged updater binary — this is a CLI-installed user (they ran
       // `hermes desktop`, never the Tauri installer that self-copies
-      // hermes-setup.exe into HERMES_HOME). They DO have a working `hermes`
+      // hermes-setup.exe into NEXUS_AGENT_HOME). They DO have a working `hermes`
       // on PATH / in the venv, so the correct path is the one-liner in their
       // native medium. We show the EXACT command, branch-pinned to the
       // checkout they're on — bare `hermes update` defaults to main and would
@@ -1498,7 +1498,7 @@ async function applyUpdates(opts = {}) {
       return { ok: true, manual: true, command, hermesRoot: updateRoot }
     }
 
-    emitUpdateProgress({ stage: 'restart', message: 'Handing off to the Hermes updater…', percent: 100 })
+    emitUpdateProgress({ stage: 'restart', message: 'Handing off to the Nexus Agent updater…', percent: 100 })
     repairMacUpdaterHelper(updater)
 
     const updateRoot = resolveUpdateRoot()
@@ -1520,11 +1520,11 @@ async function applyUpdates(opts = {}) {
     // Detached so the updater outlives this process — it needs us GONE before
     // `hermes update` will run (the venv shim is locked while we live).
     const child = spawn(updater, updaterArgs, {
-      cwd: HERMES_HOME,
+      cwd: NEXUS_AGENT_HOME,
       env: {
         ...process.env,
-        HERMES_HOME,
-        PATH: [path.join(HERMES_HOME, 'node', 'bin'), venvBin, process.env.PATH].filter(Boolean).join(path.delimiter)
+        NEXUS_AGENT_HOME,
+        PATH: [path.join(NEXUS_AGENT_HOME, 'node', 'bin'), venvBin, process.env.PATH].filter(Boolean).join(path.delimiter)
       },
       detached: true,
       stdio: 'ignore',
@@ -1608,11 +1608,11 @@ async function applyUpdatesPosixInApp() {
 
   // Put the Hermes-managed Node and the venv on PATH so `hermes desktop`'s
   // npm build can find them on a machine with no system Node.
-  const extraPath = [path.join(HERMES_HOME, 'node', 'bin'), path.join(updateRoot, 'venv', 'bin')]
+  const extraPath = [path.join(NEXUS_AGENT_HOME, 'node', 'bin'), path.join(updateRoot, 'venv', 'bin')]
     .filter(Boolean)
     .join(path.delimiter)
   const env = {
-    HERMES_HOME,
+    NEXUS_AGENT_HOME,
     PATH: [extraPath, process.env.PATH].filter(Boolean).join(path.delimiter)
   }
 
@@ -1622,7 +1622,7 @@ async function applyUpdatesPosixInApp() {
   // mid-update produces the boot→kill→crash loop in #37532 — the desktop
   // already restarts its own backend via the rebuild+relaunch below, so the
   // reap must spare it. Hand the live backend's PID to the update process;
-  // _kill_stale_dashboard_processes reads HERMES_DESKTOP_CHILD_PID and excludes
+  // _kill_stale_dashboard_processes reads NEXUS_AGENT_CHILD_PID and excludes
   // it while still reaping any genuinely-orphaned dashboards. (#37532)
   // Exclude every desktop-managed backend (primary + all pool profiles) from
   // the update reaper. _kill_stale_dashboard_processes accepts a comma-separated
@@ -1637,7 +1637,7 @@ async function applyUpdatesPosixInApp() {
     }
   }
   if (desktopChildPids.length) {
-    env.HERMES_DESKTOP_CHILD_PID = desktopChildPids.join(',')
+    env.NEXUS_AGENT_CHILD_PID = desktopChildPids.join(',')
   }
 
   // Branch-pin so a non-main checkout doesn't get switched to main (and self-heal
@@ -1653,7 +1653,7 @@ async function applyUpdatesPosixInApp() {
     // best effort
   }
 
-  emitUpdateProgress({ stage: 'update', message: 'Updating Hermes (git + dependencies)…', percent: 10 })
+  emitUpdateProgress({ stage: 'update', message: 'Updating Nexus Agent (git + dependencies)…', percent: 10 })
   const updated = await runStreamedUpdate(hermes, ['update', '--yes', ...branchArgs], {
     cwd: updateRoot,
     env,
@@ -1673,15 +1673,15 @@ async function applyUpdatesPosixInApp() {
   if (rebuilt.code !== 0) {
     emitUpdateProgress({
       stage: 'error',
-      message: 'Backend updated, but the desktop rebuild failed. Restart Hermes to retry.',
+      message: 'Backend updated, but the desktop rebuild failed. Restart Nexus Agent to retry.',
       error: rebuilt.error || 'rebuild-failed'
     })
     return { ok: false, backendUpdated: true, error: 'desktop rebuild failed' }
   }
 
   const rebuiltApp = [
-    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac-arm64', 'Hermes.app'),
-    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac', 'Hermes.app')
+    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac-arm64', 'Nexus Agent.app'),
+    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac', 'Nexus Agent.app')
   ].find(directoryExists)
   const targetApp = runningAppBundle()
 
@@ -1690,7 +1690,7 @@ async function applyUpdatesPosixInApp() {
   if (!rebuiltApp || !targetApp) {
     emitUpdateProgress({
       stage: 'done',
-      message: 'Backend updated. Restart Hermes to load the new version.',
+      message: 'Backend updated. Restart Nexus Agent to load the new version.',
       percent: 100
     })
     return { ok: true, backendUpdated: true, rebuiltApp: rebuiltApp || null }
@@ -1720,13 +1720,13 @@ fi
 /usr/bin/xattr -dr com.apple.quarantine "$DST" 2>/dev/null || true
 /usr/bin/open "$DST"
 `
-  const scriptPath = path.join(app.getPath('temp'), `hermes-desktop-update-${Date.now()}.sh`)
+  const scriptPath = path.join(app.getPath('temp'), `nexus-desktop-update-${Date.now()}.sh`)
   try {
     fs.writeFileSync(scriptPath, swapScript, { mode: 0o755 })
   } catch (err) {
     emitUpdateProgress({
       stage: 'done',
-      message: 'Backend + app updated. Restart Hermes to load the new version.',
+      message: 'Backend + app updated. Restart Nexus Agent to load the new version.',
       percent: 100
     })
     rememberLog(`[updates] could not write swap script: ${err.message}; rebuilt app at ${rebuiltApp}`)
@@ -1779,7 +1779,7 @@ function isBootstrapComplete() {
   // a runnable venv: an interrupted or split-home install can leave the marker
   // + checkout without a venv, and trusting that spawns a dead backend
   // ("gateway offline") instead of re-running bootstrap to repair it.
-  return isHermesSourceRoot(ACTIVE_HERMES_ROOT) && fileExists(getVenvPython(VENV_ROOT))
+  return isHermesSourceRoot(ACTIVE_NEXUS_ROOT) && fileExists(getVenvPython(NEXUS_VENV_ROOT))
 }
 
 function writeBootstrapMarker(payload) {
@@ -1796,7 +1796,7 @@ function writeBootstrapMarker(payload) {
 }
 
 function resolveWebDist() {
-  const override = process.env.HERMES_DESKTOP_WEB_DIST
+  const override = process.env.NEXUS_AGENT_WEB_DIST
   if (override && directoryExists(path.resolve(override))) return path.resolve(override)
 
   const unpackedDist = path.join(unpackedPathFor(APP_ROOT), 'dist')
@@ -1812,7 +1812,7 @@ function resolveRendererIndex() {
 
 function resolveHermesCwd() {
   // In a packaged build, `process.cwd()` resolves to the install root (e.g.
-  // `…/win-unpacked` on Windows or `/Applications/Hermes.app/Contents/...`
+  // `…/win-unpacked` on Windows or `/Applications/Nexus Agent.app/Contents/...`
   // on macOS). Sessions spawned there leave files inside the app bundle
   // and bewilder users when "where did my files go?" is the install dir.
   // The user-configurable default project directory wins over everything,
@@ -1820,7 +1820,7 @@ function resolveHermesCwd() {
   // real directory), then the home dir.
   const candidates = [
     readDefaultProjectDir(),
-    process.env.HERMES_DESKTOP_CWD,
+    process.env.NEXUS_AGENT_CWD,
     process.env.INIT_CWD,
     IS_PACKAGED ? null : process.cwd(),
     !IS_PACKAGED ? SOURCE_REPO_ROOT : null,
@@ -1896,42 +1896,42 @@ function createPythonBackend(root, label, dashboardArgs, options = {}) {
   }
 }
 
-// createActiveBackend — build a backend pointing at ACTIVE_HERMES_ROOT, the
+// createActiveBackend — build a backend pointing at ACTIVE_NEXUS_ROOT, the
 // canonical install location shared with the CLI installer. The venv at
-// VENV_ROOT may not exist yet on first run; bootstrap=true tells
+// NEXUS_VENV_ROOT may not exist yet on first run; bootstrap=true tells
 // ensureRuntime() to create / refresh it before launch.
 function createActiveBackend(dashboardArgs) {
-  const venvPython = getVenvPython(VENV_ROOT)
+  const venvPython = getVenvPython(NEXUS_VENV_ROOT)
 
   return {
     kind: 'python',
-    label: `Hermes at ${ACTIVE_HERMES_ROOT}`,
+    label: `Hermes at ${ACTIVE_NEXUS_ROOT}`,
     command: fileExists(venvPython) ? venvPython : findSystemPython(),
     args: ['-m', 'hermes_cli.main', ...dashboardArgs],
     env: {
-      PYTHONPATH: [ACTIVE_HERMES_ROOT, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
+      PYTHONPATH: [ACTIVE_NEXUS_ROOT, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
     },
-    root: ACTIVE_HERMES_ROOT,
+    root: ACTIVE_NEXUS_ROOT,
     bootstrap: true,
     shell: false
   }
 }
 
 function resolveHermesBackend(dashboardArgs) {
-  // 1. Explicit override -- HERMES_DESKTOP_HERMES_ROOT points at a developer
+  // 1. Explicit override -- NEXUS_AGENT_ROOT points at a developer
   //    checkout. Honour it as-is (no bootstrap; the user is driving).
-  const overrideRoot = process.env.HERMES_DESKTOP_HERMES_ROOT && path.resolve(process.env.HERMES_DESKTOP_HERMES_ROOT)
+  const overrideRoot = process.env.NEXUS_AGENT_ROOT && path.resolve(process.env.NEXUS_AGENT_ROOT)
   if (overrideRoot && isHermesSourceRoot(overrideRoot)) {
     const backend = createPythonBackend(overrideRoot, `Hermes source at ${overrideRoot}`, dashboardArgs)
     if (backend) return backend
   }
 
-  // 1.5. External agent-gateway server — HERMES_DESKTOP_AGENT_GATEWAY_ROOT points
+  // 1.5. External agent-gateway server — NEXUS_AGENT_AGENT_GATEWAY_ROOT points
   //      at the standalone agent-gateway checkout. Spawns `python -m agent_gateway`
   //      which starts a FastAPI + WebSocket JSON-RPC server compatible with this
   //      desktop's expected gateway protocol.
-  const agRoot = process.env.HERMES_DESKTOP_AGENT_GATEWAY_ROOT
-    && path.resolve(process.env.HERMES_DESKTOP_AGENT_GATEWAY_ROOT)
+  const agRoot = process.env.NEXUS_AGENT_AGENT_GATEWAY_ROOT
+    && path.resolve(process.env.NEXUS_AGENT_AGENT_GATEWAY_ROOT)
   if (agRoot && directoryExists(path.join(agRoot, 'src', 'agent_gateway'))) {
     const python = findPythonForRoot(agRoot) || findOnPath('python3')
     if (python) {
@@ -1966,8 +1966,8 @@ function resolveHermesBackend(dashboardArgs) {
     if (backend) return backend
   }
 
-  // 3. Bootstrap-complete ACTIVE_HERMES_ROOT -- the canonical install at
-  //    %LOCALAPPDATA%\hermes\hermes-agent (Windows) or ~/.hermes/hermes-agent.
+  // 3. Bootstrap-complete ACTIVE_NEXUS_ROOT -- the canonical install at
+  //    %LOCALAPPDATA%\hermes\nexus-agent (Windows) or ~/.hermes/nexus-agent.
   //    The bootstrap marker means install.ps1 stages finished and the user
   //    completed initial configuration; we trust the install and go straight
   //    to spawning hermes. Updates flow through the in-app update path
@@ -1980,10 +1980,10 @@ function resolveHermesBackend(dashboardArgs) {
   //    a previous tool-only setup, or pip-installed system-wide. Use it but
   //    do NOT write a bootstrap marker; the user did this themselves and we
   //    don't want to take ownership of an install we didn't perform.
-  //    HERMES_DESKTOP_IGNORE_EXISTING=1 forces the bootstrap path for testing.
-  if (process.env.HERMES_DESKTOP_IGNORE_EXISTING !== '1') {
+  //    NEXUS_AGENT_IGNORE_EXISTING=1 forces the bootstrap path for testing.
+  if (process.env.NEXUS_AGENT_IGNORE_EXISTING !== '1') {
     let hermesCommand = null
-    const hermesOverride = process.env.HERMES_DESKTOP_HERMES
+    const hermesOverride = process.env.NEXUS_AGENT_CLI
 
     if (hermesOverride) {
       const resolvedOverride = findOnPath(hermesOverride)
@@ -2043,7 +2043,7 @@ function resolveHermesBackend(dashboardArgs) {
     // backend hands the spawn step a guaranteed ModuleNotFoundError.
     // Verify the import works before trusting the candidate; on
     // failure, fall through to step 6 so the bootstrap runner pulls
-    // a uv-managed 3.11 into %LOCALAPPDATA%\hermes\hermes-agent\venv.
+    // a uv-managed 3.11 into %LOCALAPPDATA%\hermes\nexus-agent\venv.
     if (canImportHermesCli(python)) {
       return {
         kind: 'python',
@@ -2077,7 +2077,7 @@ function resolveHermesBackend(dashboardArgs) {
     env: {},
     shell: false,
     // Hints for the bootstrap runner / UI layer:
-    activeRoot: ACTIVE_HERMES_ROOT,
+    activeRoot: ACTIVE_NEXUS_ROOT,
     installStamp: INSTALL_STAMP, // may be null in dev
     isPackaged: IS_PACKAGED,
     platform: process.platform
@@ -2124,8 +2124,8 @@ async function ensureRuntime(backend) {
       installStamp: backend.installStamp,
       activeRoot: backend.activeRoot,
       sourceRepoRoot: SOURCE_REPO_ROOT,
-      hermesHome: HERMES_HOME,
-      logRoot: path.join(HERMES_HOME, 'logs'),
+      nexusHome: NEXUS_AGENT_HOME,
+      logRoot: path.join(NEXUS_AGENT_HOME, 'logs'),
       abortSignal: bootstrapAbortController.signal,
       onEvent: ev => {
         // Tee every bootstrap event to (a) the desktop log for forensics
@@ -2160,7 +2160,7 @@ async function ensureRuntime(backend) {
       const bootstrapError = new Error(
         `Hermes bootstrap failed${bootstrapResult.failedStage ? ` at stage '${bootstrapResult.failedStage}'` : ''}: ` +
           `${bootstrapResult.error || 'unknown error'}. ` +
-          `Check ${path.join(HERMES_HOME, 'logs', 'desktop.log')} for the full transcript.`
+          `Check ${path.join(NEXUS_AGENT_HOME, 'logs', 'desktop.log')} for the full transcript.`
       )
       bootstrapError.isBootstrapFailure = true
       bootstrapError.failedStage = bootstrapResult.failedStage || null
@@ -2183,9 +2183,9 @@ async function ensureRuntime(backend) {
   // sync flow exited through, minus all the factory/pip/marker machinery
   // (install.ps1 owns those concerns now and the bootstrap-complete marker
   // attests they ran successfully).
-  if (!isHermesSourceRoot(ACTIVE_HERMES_ROOT)) {
+  if (!isHermesSourceRoot(ACTIVE_NEXUS_ROOT)) {
     throw new Error(
-      `Hermes install at ${ACTIVE_HERMES_ROOT} is missing or incomplete. ` +
+      `Hermes install at ${ACTIVE_NEXUS_ROOT} is missing or incomplete. ` +
         'Reinstall via the desktop installer or scripts/install.ps1.'
     )
   }
@@ -2205,7 +2205,7 @@ async function ensureRuntime(backend) {
     )
   }
 
-  const venvPython = getVenvPython(VENV_ROOT)
+  const venvPython = getVenvPython(NEXUS_VENV_ROOT)
   if (!fileExists(venvPython)) {
     // No venv at the expected location AND no bootstrap-needed sentinel
     // means we have a half-installed checkout: .git exists, source files
@@ -2215,12 +2215,12 @@ async function ensureRuntime(backend) {
     // install.ps1 succeeds. If we hit this, the user (or a deleted venv)
     // broke the invariant; tell them to re-run the install.
     throw new Error(
-      `Hermes venv missing at ${VENV_ROOT}. Re-run the desktop installer or ` + '`scripts/install.ps1` to rebuild it.'
+      `Hermes venv missing at ${NEXUS_VENV_ROOT}. Re-run the desktop installer or ` + '`scripts/install.ps1` to rebuild it.'
     )
   }
 
   backend.command = venvPython
-  backend.label = `Hermes at ${ACTIVE_HERMES_ROOT} (venv: ${VENV_ROOT})`
+  backend.label = `Hermes at ${ACTIVE_NEXUS_ROOT} (venv: ${NEXUS_VENV_ROOT})`
   updateBootProgress({
     phase: 'runtime.ready',
     message: 'Hermes runtime is ready',
@@ -2257,7 +2257,7 @@ function fetchJson(url, token, options = {}) {
     const timeoutMs = resolveTimeoutMs(options.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
 
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      reject(new Error(`Unsupported Hermes backend URL protocol: ${parsed.protocol}`))
+      reject(new Error(`Unsupported Nexus Agent backend URL protocol: ${parsed.protocol}`))
       return
     }
 
@@ -2267,7 +2267,7 @@ function fetchJson(url, token, options = {}) {
         method: options.method || 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'X-Hermes-Session-Token': token,
+          'X-Nexus-Agent-Session-Token': token,
           ...(body ? { 'Content-Length': String(body.length) } : {})
         }
       },
@@ -2295,7 +2295,7 @@ function fetchJson(url, token, options = {}) {
             reject(
               new Error(
                 `Expected JSON from ${url} but got HTML (status ${res.statusCode}). ` +
-                  'The endpoint is likely missing on the Hermes backend.'
+                  'The endpoint is likely missing on the Nexus Agent backend.'
               )
             )
             return
@@ -2311,7 +2311,7 @@ function fetchJson(url, token, options = {}) {
 
     req.on('error', reject)
     req.setTimeout(timeoutMs, () => {
-      req.destroy(new Error(`Timed out connecting to Hermes backend after ${timeoutMs}ms`))
+      req.destroy(new Error(`Timed out connecting to Nexus Agent backend after ${timeoutMs}ms`))
     })
     if (body) req.write(body)
     req.end()
@@ -2337,7 +2337,7 @@ function fetchPublicJson(url, options = {}) {
     const timeoutMs = resolveTimeoutMs(options.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
 
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      reject(new Error(`Unsupported Hermes backend URL protocol: ${parsed.protocol}`))
+      reject(new Error(`Unsupported Nexus Agent backend URL protocol: ${parsed.protocol}`))
       return
     }
 
@@ -2369,7 +2369,7 @@ function fetchPublicJson(url, options = {}) {
             reject(
               new Error(
                 `Expected JSON from ${url} but got HTML (status ${res.statusCode}). ` +
-                  'The endpoint is likely missing on the Hermes backend.'
+                  'The endpoint is likely missing on the Nexus Agent backend.'
               )
             )
             return
@@ -2385,7 +2385,7 @@ function fetchPublicJson(url, options = {}) {
 
     req.on('error', reject)
     req.setTimeout(timeoutMs, () => {
-      req.destroy(new Error(`Timed out connecting to Hermes backend after ${timeoutMs}ms`))
+      req.destroy(new Error(`Timed out connecting to Nexus Agent backend after ${timeoutMs}ms`))
     })
     if (body) req.write(body)
     req.end()
@@ -2540,7 +2540,7 @@ function fetchHtmlTitleWithCurl(rawUrl) {
 
 function getLinkTitleSession() {
   if (linkTitleSession || !app.isReady()) return linkTitleSession
-  linkTitleSession = session.fromPartition('hermes:link-titles', { cache: false })
+  linkTitleSession = session.fromPartition('nexus:link-titles', { cache: false })
   linkTitleSession.webRequest.onBeforeRequest((details, callback) => {
     callback({ cancel: RENDER_TITLE_BLOCKED_RESOURCES.has(details.resourceType) })
   })
@@ -2845,7 +2845,7 @@ function sendPreviewFileChanged(payload) {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const { webContents } = mainWindow
   if (!webContents || webContents.isDestroyed()) return
-  webContents.send('hermes:preview-file-changed', payload)
+  webContents.send('nexus:preview-file-changed', payload)
 }
 
 function watchPreviewFile(rawUrl) {
@@ -2912,7 +2912,7 @@ async function waitForHermes(baseUrl, token) {
     }
   }
 
-  throw new Error(`Hermes backend did not become ready: ${lastError?.message || 'timeout'}`)
+  throw new Error(`Nexus Agent backend did not become ready: ${lastError?.message || 'timeout'}`)
 }
 
 function getWindowButtonPosition() {
@@ -2940,14 +2940,14 @@ function sendBackendExit(payload) {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const { webContents } = mainWindow
   if (!webContents || webContents.isDestroyed()) return
-  webContents.send('hermes:backend-exit', payload)
+  webContents.send('nexus:backend-exit', payload)
 }
 
 function sendClosePreviewRequested() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const { webContents } = mainWindow
   if (!webContents || webContents.isDestroyed()) return
-  webContents.send('hermes:close-preview-requested')
+  webContents.send('nexus:close-preview-requested')
 }
 
 // Tell the renderer the machine just woke. Sleep silently drops the
@@ -2957,7 +2957,7 @@ function sendPowerResume() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const { webContents } = mainWindow
   if (!webContents || webContents.isDestroyed()) return
-  webContents.send('hermes:power-resume')
+  webContents.send('nexus:power-resume')
 }
 
 let powerResumeRegistered = false
@@ -2984,7 +2984,7 @@ function sendOpenUpdatesRequested() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const { webContents } = mainWindow
   if (!webContents || webContents.isDestroyed()) return
-  webContents.send('hermes:open-updates')
+  webContents.send('nexus:open-updates')
   if (!mainWindow.isVisible()) mainWindow.show()
   mainWindow.focus()
 }
@@ -2999,7 +2999,7 @@ function sendWindowStateChanged(nextIsFullscreen) {
     state.isFullscreen = nextIsFullscreen
   }
 
-  webContents.send('hermes:window-state-changed', state)
+  webContents.send('nexus:window-state-changed', state)
 }
 
 function buildApplicationMenu() {
@@ -3522,7 +3522,7 @@ function fetchJsonViaOauthSession(url, options = {}) {
       return
     }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      reject(new Error(`Unsupported Hermes backend URL protocol: ${parsed.protocol}`))
+      reject(new Error(`Unsupported Nexus Agent backend URL protocol: ${parsed.protocol}`))
       return
     }
     const body = serializeJsonBody(options.body)
@@ -3545,7 +3545,7 @@ function fetchJsonViaOauthSession(url, options = {}) {
       } catch {
         // already finished
       }
-      reject(new Error(`Timed out connecting to Hermes backend after ${timeoutMs}ms`))
+      reject(new Error(`Timed out connecting to Nexus Agent backend after ${timeoutMs}ms`))
     }, timeoutMs)
 
     request.on('response', res => {
@@ -3738,7 +3738,7 @@ function writeDesktopConnectionConfig(config) {
 }
 
 // Returns the desktop's chosen profile name, or null when unset. "default" is
-// a valid stored value (pins the root HERMES_HOME explicitly); null means "no
+// a valid stored value (pins the root NEXUS_AGENT_HOME explicitly); null means "no
 // preference" and preserves the legacy launch (no --profile flag).
 function readActiveDesktopProfile() {
   try {
@@ -3806,8 +3806,8 @@ async function sanitizeDesktopConnectionConfig(config = readDesktopConnectionCon
     remoteTokenPreview: tokenPreview(remoteToken),
     remoteTokenSet: Boolean(remoteToken),
     // The env override only forces the global/primary connection; a per-profile
-    // scope is never overridden by HERMES_DESKTOP_REMOTE_URL.
-    envOverride: key ? false : Boolean(process.env.HERMES_DESKTOP_REMOTE_URL)
+    // scope is never overridden by NEXUS_AGENT_REMOTE_URL.
+    envOverride: key ? false : Boolean(process.env.NEXUS_AGENT_REMOTE_URL)
   }
 }
 
@@ -3928,7 +3928,7 @@ async function buildRemoteConnection(rawUrl, authMode, token, source) {
 // Resolve the remote backend for a given profile, or null when that profile
 // should run a LOCAL backend. Precedence:
 //   1. explicit per-profile remote override (connection.json `profiles[name]`)
-//   2. env override (HERMES_DESKTOP_REMOTE_URL/_TOKEN) — applies app-wide
+//   2. env override (NEXUS_AGENT_REMOTE_URL/_TOKEN) — applies app-wide
 //   3. global remote (connection.json `mode: 'remote'`)
 // A null/empty profile resolves the env/global remote, so legacy callers and
 // the connection test (which pass no profile) are unchanged.
@@ -3945,13 +3945,13 @@ async function resolveRemoteBackend(profile) {
   }
 
   // 2. Env override (global, token-auth only).
-  const rawEnvUrl = process.env.HERMES_DESKTOP_REMOTE_URL
-  const rawEnvToken = process.env.HERMES_DESKTOP_REMOTE_TOKEN
+  const rawEnvUrl = process.env.NEXUS_AGENT_REMOTE_URL
+  const rawEnvToken = process.env.NEXUS_AGENT_REMOTE_TOKEN
   if (rawEnvUrl) {
     if (!rawEnvToken) {
       throw new Error(
-        'HERMES_DESKTOP_REMOTE_URL is set but HERMES_DESKTOP_REMOTE_TOKEN is not. ' +
-          'Both must be provided to connect to a remote Hermes backend.'
+        'NEXUS_AGENT_REMOTE_URL is set but NEXUS_AGENT_REMOTE_TOKEN is not. ' +
+          'Both must be provided to connect to a remote Nexus Agent backend.'
       )
     }
     return buildRemoteConnection(rawEnvUrl, 'token', rawEnvToken, 'env')
@@ -3983,7 +3983,7 @@ function configuredRemoteProfileNames() {
 // Remote, or the env override): a SINGLE remote backend serves every profile via
 // ?profile=. Distinct from per-profile overrides — here there's one host for all.
 function globalRemoteActive() {
-  if (process.env.HERMES_DESKTOP_REMOTE_URL) {
+  if (process.env.NEXUS_AGENT_REMOTE_URL) {
     return true
   }
   return readDesktopConnectionConfig().mode === 'remote'
@@ -4284,20 +4284,20 @@ async function spawnPoolBackend(profile, entry) {
 
   const port = await pickPort()
   const token = crypto.randomBytes(32).toString('base64url')
-  // --profile wins over the inherited HERMES_HOME env (see _apply_profile_override
+  // --profile wins over the inherited NEXUS_AGENT_HOME env (see _apply_profile_override
   // step 3 in hermes_cli/main.py), so the child re-homes to this profile.
   const dashboardArgs = ['--profile', profile, 'dashboard', '--no-open', '--host', '127.0.0.1', '--port', String(port)]
   const backend = await ensureRuntime(resolveHermesBackend(dashboardArgs))
   const hermesCwd = resolveHermesCwd()
   const webDist = resolveWebDist()
 
-  rememberLog(`Starting Hermes backend for profile "${profile}" via ${backend.label}`)
+  rememberLog(`Starting Nexus Agent backend for profile "${profile}" via ${backend.label}`)
 
   const child = spawn(backend.command, backend.args, {
     cwd: backend.cwd || hermesCwd,
     env: {
       ...process.env,
-      HERMES_HOME,
+      NEXUS_AGENT_HOME,
       ...backend.env,
       HERMES_DASHBOARD_SESSION_TOKEN: token,
       HERMES_WEB_DIST: webDist
@@ -4318,15 +4318,15 @@ async function spawnPoolBackend(profile, entry) {
     rejectStart = reject
   })
   child.once('error', error => {
-    rememberLog(`Hermes backend for profile "${profile}" failed to start: ${error.message}`)
+    rememberLog(`Nexus Agent backend for profile "${profile}" failed to start: ${error.message}`)
     backendPool.delete(profile)
     rejectStart?.(error)
   })
   child.once('exit', (code, signal) => {
-    rememberLog(`Hermes backend for profile "${profile}" exited (${signal || code})`)
+    rememberLog(`Nexus Agent backend for profile "${profile}" exited (${signal || code})`)
     backendPool.delete(profile)
     if (!ready) {
-      rejectStart?.(new Error(`Hermes backend for profile "${profile}" exited before it became ready (${signal || code}).`))
+      rejectStart?.(new Error(`Nexus Agent backend for profile "${profile}" exited before it became ready (${signal || code}).`))
     }
   })
 
@@ -4379,16 +4379,16 @@ async function startHermes() {
   if (connectionPromise) return connectionPromise
 
   connectionPromise = (async () => {
-    await advanceBootProgress('backend.resolve', 'Resolving Hermes backend', 8)
+    await advanceBootProgress('backend.resolve', 'Resolving Nexus Agent backend', 8)
     // Resolve for the desktop's primary profile so a per-profile remote
     // override on the active profile is honored (falls back to env / global).
     const remote = await resolveRemoteBackend(primaryProfileKey())
     if (remote) {
-      await advanceBootProgress('backend.remote', `Connecting to remote Hermes backend at ${remote.baseUrl}`, 24)
+      await advanceBootProgress('backend.remote', `Connecting to remote Nexus Agent backend at ${remote.baseUrl}`, 24)
       await waitForHermes(remote.baseUrl, remote.token)
       updateBootProgress({
         phase: 'backend.ready',
-        message: 'Remote Hermes backend is ready',
+        message: 'Remote Nexus Agent backend is ready',
         progress: 94,
         running: true,
         error: null
@@ -4411,7 +4411,7 @@ async function startHermes() {
     const dashboardArgs = ['dashboard', '--no-open', '--host', '127.0.0.1', '--port', String(port)]
     // Pin the desktop's chosen profile via the global --profile flag. This is
     // deterministic (it wins over the sticky ~/.hermes/active_profile file) and
-    // resolves HERMES_HOME the same way `hermes -p <name>` does on the CLI. An
+    // resolves NEXUS_AGENT_HOME the same way `hermes -p <name>` does on the CLI. An
     // unset preference keeps the legacy launch so existing installs are
     // unaffected.
     const activeProfile = readActiveDesktopProfile()
@@ -4423,22 +4423,22 @@ async function startHermes() {
     const hermesCwd = resolveHermesCwd()
     const webDist = resolveWebDist()
 
-    await advanceBootProgress('backend.spawn', `Starting Hermes backend via ${backend.label}`, 84)
-    rememberLog(`Starting Hermes backend via ${backend.label}`)
+    await advanceBootProgress('backend.spawn', `Starting Nexus Agent backend via ${backend.label}`, 84)
+    rememberLog(`Starting Nexus Agent backend via ${backend.label}`)
 
     hermesProcess = spawn(backend.command, backend.args, {
       cwd: backend.cwd || hermesCwd,
       env: {
         ...process.env,
-        // Explicitly pin HERMES_HOME for the child so Python's get_hermes_home()
-        // resolves to the SAME location our resolveHermesHome() picked. Without
+        // Explicitly pin NEXUS_AGENT_HOME for the child so Python's get_hermes_home()
+        // resolves to the SAME location our resolveNexusHome() picked. Without
         // this pin, Python falls back to ~/.hermes on every platform — fine on
         // mac/linux (where our default matches), but on Windows our default is
         // %LOCALAPPDATA%\hermes, which differs from C:\Users\<u>\.hermes.
         // Mismatch would split config / sessions / .env / logs across two
-        // directories. install.ps1 sets HERMES_HOME via setx; the desktop
+        // directories. install.ps1 sets NEXUS_AGENT_HOME via setx; the desktop
         // can't reliably do that, so we set it inline for every spawn.
-        HERMES_HOME,
+        NEXUS_AGENT_HOME,
         ...backend.env,
         HERMES_DASHBOARD_SESSION_TOKEN: token,
         AGENT_GATEWAY_SESSION_TOKEN: token,
@@ -4456,11 +4456,11 @@ async function startHermes() {
       rejectBackendStart = reject
     })
     hermesProcess.once('error', error => {
-      rememberLog(`Hermes backend failed to start: ${error.message}`)
+      rememberLog(`Nexus Agent backend failed to start: ${error.message}`)
       updateBootProgress(
         {
           error: error.message,
-          message: `Hermes backend failed to start: ${error.message}`,
+          message: `Nexus Agent backend failed to start: ${error.message}`,
           phase: 'backend.error',
           running: false
         },
@@ -4472,12 +4472,12 @@ async function startHermes() {
       rejectBackendStart?.(error)
     })
     hermesProcess.once('exit', (code, signal) => {
-      rememberLog(`Hermes backend exited (${signal || code})`)
+      rememberLog(`Nexus Agent backend exited (${signal || code})`)
       hermesProcess = null
       connectionPromise = null
       sendBackendExit({ code, signal })
       if (!backendReady) {
-        const message = `Hermes backend exited before it became ready (${signal || code}).`
+        const message = `Nexus Agent backend exited before it became ready (${signal || code}).`
         updateBootProgress(
           {
             error: message,
@@ -4489,19 +4489,19 @@ async function startHermes() {
         )
         rejectBackendStart?.(
           new Error(
-            `Hermes backend exited before it became ready (${signal || code}). Log: ${DESKTOP_LOG_PATH}\n${recentHermesLog()}`
+            `Nexus Agent backend exited before it became ready (${signal || code}). Log: ${DESKTOP_LOG_PATH}\n${recentHermesLog()}`
           )
         )
       }
     })
 
     const baseUrl = `http://127.0.0.1:${port}`
-    await advanceBootProgress('backend.wait', 'Waiting for Hermes backend to become ready', 90)
+    await advanceBootProgress('backend.wait', 'Waiting for Nexus Agent backend to become ready', 90)
     await Promise.race([waitForHermes(baseUrl, token), backendStartFailed])
     backendReady = true
     updateBootProgress({
       phase: 'backend.ready',
-      message: 'Hermes backend is ready. Finalizing desktop startup',
+      message: 'Nexus Agent backend is ready. Finalizing desktop startup',
       progress: 94,
       running: true,
       error: null
@@ -4662,13 +4662,13 @@ function createWindow() {
   })
 }
 
-ipcMain.handle('hermes:connection', async (_event, profile) => ensureBackend(profile))
-ipcMain.handle('hermes:backend:touch', async (_event, profile) => {
+ipcMain.handle('nexus:connection', async (_event, profile) => ensureBackend(profile))
+ipcMain.handle('nexus:backend:touch', async (_event, profile) => {
   touchPoolBackend(profile)
   return { ok: true }
 })
-ipcMain.handle('hermes:gateway:ws-url', async (_event, profile) => freshGatewayWsUrl(profile))
-ipcMain.handle('hermes:bootstrap:reset', async () => {
+ipcMain.handle('nexus:gateway:ws-url', async (_event, profile) => freshGatewayWsUrl(profile))
+ipcMain.handle('nexus:bootstrap:reset', async () => {
   // Renderer's "Reload and retry" path. Clear the latched failure and
   // reset connection state so the next startHermes() call restarts the
   // full backend flow (including a fresh runBootstrap pass).
@@ -4687,7 +4687,7 @@ ipcMain.handle('hermes:bootstrap:reset', async () => {
   }
   return { ok: true }
 })
-ipcMain.handle('hermes:bootstrap:repair', async () => {
+ipcMain.handle('nexus:bootstrap:repair', async () => {
   // Forceful repair: drop the bootstrap-complete marker so the next
   // startHermes() re-runs the full installer (refreshing a broken/partial
   // venv), and clear any latched failure + live connection. The renderer
@@ -4704,7 +4704,7 @@ ipcMain.handle('hermes:bootstrap:repair', async () => {
   resetHermesConnection()
   return { ok: true }
 })
-ipcMain.handle('hermes:bootstrap:cancel', async () => {
+ipcMain.handle('nexus:bootstrap:cancel', async () => {
   // Renderer's Cancel button during first-launch install. Abort the running
   // install script (SIGTERM via the runner's abortSignal). runBootstrap
   // resolves with { cancelled: true }, which surfaces the recovery overlay.
@@ -4718,14 +4718,14 @@ ipcMain.handle('hermes:bootstrap:cancel', async () => {
   }
   return { ok: false, cancelled: false }
 })
-ipcMain.handle('hermes:boot-progress:get', async () => bootProgressState)
-ipcMain.handle('hermes:bootstrap:get', async () => getBootstrapState())
-ipcMain.handle('hermes:connection-config:get', async (_event, profile) =>
+ipcMain.handle('nexus:boot-progress:get', async () => bootProgressState)
+ipcMain.handle('nexus:bootstrap:get', async () => getBootstrapState())
+ipcMain.handle('nexus:connection-config:get', async (_event, profile) =>
   sanitizeDesktopConnectionConfig(readDesktopConnectionConfig(), profile)
 )
-ipcMain.handle('hermes:connection-config:test', async (_event, payload) => testDesktopConnectionConfig(payload))
-ipcMain.handle('hermes:connection-config:probe', async (_event, rawUrl) => probeRemoteAuthMode(rawUrl))
-ipcMain.handle('hermes:connection-config:oauth-login', async (_event, rawUrl) => {
+ipcMain.handle('nexus:connection-config:test', async (_event, payload) => testDesktopConnectionConfig(payload))
+ipcMain.handle('nexus:connection-config:probe', async (_event, rawUrl) => probeRemoteAuthMode(rawUrl))
+ipcMain.handle('nexus:connection-config:oauth-login', async (_event, rawUrl) => {
   // Open the gateway's OAuth login window and wait for the session cookie to
   // land in the OAuth partition. The caller (settings UI) typically saves the
   // remote config with authMode='oauth' first, then calls this. We normalize
@@ -4734,7 +4734,7 @@ ipcMain.handle('hermes:connection-config:oauth-login', async (_event, rawUrl) =>
   await openOauthLoginWindow(baseUrl)
   return { ok: true, baseUrl, connected: await hasOauthSessionCookie(baseUrl) }
 })
-ipcMain.handle('hermes:connection-config:oauth-logout', async (_event, rawUrl) => {
+ipcMain.handle('nexus:connection-config:oauth-logout', async (_event, rawUrl) => {
   const baseUrl = rawUrl ? normalizeRemoteBaseUrl(rawUrl) : ''
   await clearOauthSession(baseUrl || undefined)
   // Report against the SAME liveness notion the Settings indicator uses
@@ -4742,13 +4742,13 @@ ipcMain.handle('hermes:connection-config:oauth-logout', async (_event, rawUrl) =
   // as still-connected rather than silently signed-out.
   return { ok: true, connected: baseUrl ? await hasLiveOauthSession(baseUrl) : false }
 })
-ipcMain.handle('hermes:connection-config:save', async (_event, payload) => {
+ipcMain.handle('nexus:connection-config:save', async (_event, payload) => {
   const config = coerceDesktopConnectionConfig(payload)
   writeDesktopConnectionConfig(config)
 
   return sanitizeDesktopConnectionConfig(config, payload?.profile)
 })
-ipcMain.handle('hermes:connection-config:apply', async (_event, payload) => {
+ipcMain.handle('nexus:connection-config:apply', async (_event, payload) => {
   const config = coerceDesktopConnectionConfig(payload)
   writeDesktopConnectionConfig(config)
 
@@ -4769,12 +4769,12 @@ ipcMain.handle('hermes:connection-config:apply', async (_event, payload) => {
   return sanitizeDesktopConnectionConfig(config, payload?.profile)
 })
 
-ipcMain.handle('hermes:profile:get', async () => ({ profile: readActiveDesktopProfile() }))
-ipcMain.handle('hermes:profile:set', async (_event, name) => {
+ipcMain.handle('nexus:profile:get', async () => ({ profile: readActiveDesktopProfile() }))
+ipcMain.handle('nexus:profile:set', async (_event, name) => {
   const next = writeActiveDesktopProfile(name)
 
   // Switching profiles is a backend re-home: relaunch the dashboard under the
-  // new HERMES_HOME. Pool backends keep their own homes, so only the primary
+  // new NEXUS_AGENT_HOME. Pool backends keep their own homes, so only the primary
   // is torn down.
   await teardownPrimaryBackendAndWait()
   mainWindow?.reload()
@@ -4782,11 +4782,11 @@ ipcMain.handle('hermes:profile:set', async (_event, name) => {
   return { profile: next }
 })
 
-ipcMain.on('hermes:previewShortcutActive', (_event, active) => {
+ipcMain.on('nexus:previewShortcutActive', (_event, active) => {
   previewShortcutActive = Boolean(active)
 })
 
-ipcMain.handle('hermes:requestMicrophoneAccess', async () => {
+ipcMain.handle('nexus:requestMicrophoneAccess', async () => {
   if (!IS_MAC || typeof systemPreferences.askForMediaAccess !== 'function') {
     return true
   }
@@ -4923,7 +4923,7 @@ async function mergeRemoteProfileSessions(searchParams, remoteProfiles) {
   return { ...base, sessions: merged.slice(offset, offset + limit), total, profile_totals: profileTotals }
 }
 
-ipcMain.handle('hermes:api', async (_event, request) => {
+ipcMain.handle('nexus:api', async (_event, request) => {
   // Remote-profile session requests would otherwise hit the local primary off
   // each profile's on-disk state.db — fine for local profiles, but a remote
   // profile's sessions live on its remote host, so the UI's IDs 404 (or mutations
@@ -4958,7 +4958,7 @@ ipcMain.handle('hermes:api', async (_event, request) => {
   }).catch(logApiError)
 })
 
-ipcMain.handle('hermes:notify', (_event, payload) => {
+ipcMain.handle('nexus:notify', (_event, payload) => {
   if (!Notification.isSupported()) return false
   new Notification({
     title: payload?.title || 'Hermes',
@@ -4968,7 +4968,7 @@ ipcMain.handle('hermes:notify', (_event, payload) => {
   return true
 })
 
-ipcMain.handle('hermes:readFileDataUrl', async (_event, filePath) => {
+ipcMain.handle('nexus:readFileDataUrl', async (_event, filePath) => {
   const { resolvedPath } = await resolveReadableFileForIpc(filePath, {
     maxBytes: DATA_URL_READ_MAX_BYTES,
     purpose: 'File preview'
@@ -4977,7 +4977,7 @@ ipcMain.handle('hermes:readFileDataUrl', async (_event, filePath) => {
   return `data:${mimeTypeForPath(resolvedPath)};base64,${data.toString('base64')}`
 })
 
-ipcMain.handle('hermes:readFileText', async (_event, filePath) => {
+ipcMain.handle('nexus:readFileText', async (_event, filePath) => {
   const { resolvedPath, stat } = await resolveReadableFileForIpc(filePath, {
     maxBytes: TEXT_PREVIEW_SOURCE_MAX_BYTES,
     purpose: 'Text preview'
@@ -5004,7 +5004,7 @@ ipcMain.handle('hermes:readFileText', async (_event, filePath) => {
   }
 })
 
-ipcMain.handle('hermes:selectPaths', async (_event, options = {}) => {
+ipcMain.handle('nexus:selectPaths', async (_event, options = {}) => {
   const properties = options?.directories ? ['openDirectory'] : ['openFile']
   if (options?.multiple !== false) properties.push('multiSelections')
 
@@ -5028,14 +5028,14 @@ ipcMain.handle('hermes:selectPaths', async (_event, options = {}) => {
   return result.filePaths
 })
 
-ipcMain.handle('hermes:writeClipboard', (_event, text) => {
+ipcMain.handle('nexus:writeClipboard', (_event, text) => {
   clipboard.writeText(String(text || ''))
   return true
 })
 
-ipcMain.handle('hermes:saveImageFromUrl', (_event, url) => saveImageFromUrl(String(url || '')))
+ipcMain.handle('nexus:saveImageFromUrl', (_event, url) => saveImageFromUrl(String(url || '')))
 
-ipcMain.handle('hermes:saveImageBuffer', async (_event, payload) => {
+ipcMain.handle('nexus:saveImageBuffer', async (_event, payload) => {
   const data = payload?.data
   if (!data) throw new Error('saveImageBuffer: missing data')
 
@@ -5043,7 +5043,7 @@ ipcMain.handle('hermes:saveImageBuffer', async (_event, payload) => {
   return writeComposerImage(buffer, payload?.ext || '.png')
 })
 
-ipcMain.handle('hermes:saveClipboardImage', async () => {
+ipcMain.handle('nexus:saveClipboardImage', async () => {
   const image = clipboard.readImage()
   if (!image || image.isEmpty()) {
     return ''
@@ -5052,15 +5052,15 @@ ipcMain.handle('hermes:saveClipboardImage', async () => {
   return writeComposerImage(image.toPNG(), '.png')
 })
 
-ipcMain.handle('hermes:normalizePreviewTarget', (_event, target, baseDir) =>
+ipcMain.handle('nexus:normalizePreviewTarget', (_event, target, baseDir) =>
   normalizePreviewTarget(String(target || ''), baseDir ? String(baseDir) : '')
 )
 
-ipcMain.handle('hermes:watchPreviewFile', (_event, url) => watchPreviewFile(String(url || '')))
+ipcMain.handle('nexus:watchPreviewFile', (_event, url) => watchPreviewFile(String(url || '')))
 
-ipcMain.handle('hermes:stopPreviewFileWatch', (_event, id) => stopPreviewFileWatch(String(id || '')))
+ipcMain.handle('nexus:stopPreviewFileWatch', (_event, id) => stopPreviewFileWatch(String(id || '')))
 
-ipcMain.on('hermes:titlebar-theme', (_event, payload) => {
+ipcMain.on('nexus:titlebar-theme', (_event, payload) => {
   if (!payload || !isHexColor(payload.background) || !isHexColor(payload.foreground)) {
     return
   }
@@ -5072,7 +5072,7 @@ ipcMain.on('hermes:titlebar-theme', (_event, payload) => {
   mainWindow?.setTitleBarOverlay?.(getTitleBarOverlayOptions())
 })
 
-ipcMain.handle('hermes:openExternal', (_event, url) => {
+ipcMain.handle('nexus:openExternal', (_event, url) => {
   if (!openExternalUrl(url)) {
     throw new Error('Invalid external URL')
   }
@@ -5082,12 +5082,12 @@ ipcMain.handle('hermes:openExternal', (_event, url) => {
 // settings mount and seeds the value into the picker; writing back persists
 // it via writeDefaultProjectDir so resolveHermesCwd picks it up on the next
 // session spawn (no app restart needed).
-ipcMain.handle('hermes:setting:defaultProjectDir:get', async () => ({
+ipcMain.handle('nexus:setting:defaultProjectDir:get', async () => ({
   dir: readDefaultProjectDir(),
   defaultLabel: path.join(app.getPath('home'), 'hermes-projects')
 }))
 
-ipcMain.handle('hermes:setting:defaultProjectDir:set', async (_event, dir) => {
+ipcMain.handle('nexus:setting:defaultProjectDir:set', async (_event, dir) => {
   const next = typeof dir === 'string' && dir.trim() ? dir.trim() : null
 
   if (next) {
@@ -5103,7 +5103,7 @@ ipcMain.handle('hermes:setting:defaultProjectDir:set', async (_event, dir) => {
   return { dir: next }
 })
 
-ipcMain.handle('hermes:setting:defaultProjectDir:pick', async () => {
+ipcMain.handle('nexus:setting:defaultProjectDir:pick', async () => {
   const result = await dialog.showOpenDialog({
     title: 'Choose default project directory',
     properties: ['openDirectory', 'createDirectory'],
@@ -5117,9 +5117,9 @@ ipcMain.handle('hermes:setting:defaultProjectDir:pick', async () => {
   return { canceled: false, dir: result.filePaths[0] }
 })
 
-ipcMain.handle('hermes:fetchLinkTitle', (_event, url) => fetchLinkTitle(url))
+ipcMain.handle('nexus:fetchLinkTitle', (_event, url) => fetchLinkTitle(url))
 
-ipcMain.handle('hermes:logs:reveal', async () => {
+ipcMain.handle('nexus:logs:reveal', async () => {
   try {
     await fs.promises.mkdir(path.dirname(DESKTOP_LOG_PATH), { recursive: true })
     if (!fileExists(DESKTOP_LOG_PATH)) {
@@ -5132,7 +5132,7 @@ ipcMain.handle('hermes:logs:reveal', async () => {
   }
 })
 
-ipcMain.handle('hermes:logs:recent', async () => ({ path: DESKTOP_LOG_PATH, lines: hermesLog.slice(-200) }))
+ipcMain.handle('nexus:logs:recent', async () => ({ path: DESKTOP_LOG_PATH, lines: hermesLog.slice(-200) }))
 
 // Always-hidden noise (covers non-git projects too — gitignore would catch
 // these anyway when present, but we want the same hygiene without one).
@@ -5254,7 +5254,7 @@ function disposeTerminalSession(id) {
   return true
 }
 
-ipcMain.handle('hermes:fs:readDir', async (_event, dirPath) => {
+ipcMain.handle('nexus:fs:readDir', async (_event, dirPath) => {
   const resolved = path.resolve(String(dirPath || ''))
 
   if (!resolved) {
@@ -5281,7 +5281,7 @@ ipcMain.handle('hermes:fs:readDir', async (_event, dirPath) => {
   }
 })
 
-ipcMain.handle('hermes:fs:gitRoot', async (_event, startPath) => {
+ipcMain.handle('nexus:fs:gitRoot', async (_event, startPath) => {
   const input = String(startPath || '')
   const resolved = input.startsWith('file:') ? fileURLToPath(input) : path.resolve(input)
 
@@ -5295,7 +5295,7 @@ ipcMain.handle('hermes:fs:gitRoot', async (_event, startPath) => {
   }
 })
 
-ipcMain.handle('hermes:terminal:start', async (event, payload = {}) => {
+ipcMain.handle('nexus:terminal:start', async (event, payload = {}) => {
   if (!nodePty) {
     throw new Error('PTY support is unavailable. Reinstall desktop dependencies and restart Hermes.')
   }
@@ -5333,7 +5333,7 @@ ipcMain.handle('hermes:terminal:start', async (event, payload = {}) => {
   return { cwd, id, shell: name }
 })
 
-ipcMain.handle('hermes:terminal:write', (_event, id, data) => {
+ipcMain.handle('nexus:terminal:write', (_event, id, data) => {
   const sessionInfo = terminalSessions.get(String(id || ''))
 
   if (!sessionInfo) {
@@ -5345,7 +5345,7 @@ ipcMain.handle('hermes:terminal:write', (_event, id, data) => {
   return true
 })
 
-ipcMain.handle('hermes:terminal:resize', (_event, id, size = {}) => {
+ipcMain.handle('nexus:terminal:resize', (_event, id, size = {}) => {
   const sessionInfo = terminalSessions.get(String(id || ''))
 
   if (!sessionInfo) {
@@ -5359,9 +5359,9 @@ ipcMain.handle('hermes:terminal:resize', (_event, id, size = {}) => {
 
   return true
 })
-ipcMain.handle('hermes:terminal:dispose', (_event, id) => disposeTerminalSession(String(id || '')))
+ipcMain.handle('nexus:terminal:dispose', (_event, id) => disposeTerminalSession(String(id || '')))
 
-ipcMain.handle('hermes:updates:check', async () =>
+ipcMain.handle('nexus:updates:check', async () =>
   checkUpdates().catch(error => ({
     supported: true,
     branch: readDesktopUpdateConfig().branch,
@@ -5371,7 +5371,7 @@ ipcMain.handle('hermes:updates:check', async () =>
   }))
 )
 
-ipcMain.handle('hermes:updates:apply', async (_event, payload) =>
+ipcMain.handle('nexus:updates:apply', async (_event, payload) =>
   applyUpdates(payload || {}).catch(error => ({
     ok: false,
     error: 'apply-failed',
@@ -5379,9 +5379,9 @@ ipcMain.handle('hermes:updates:apply', async (_event, payload) =>
   }))
 )
 
-ipcMain.handle('hermes:updates:branch:get', async () => readDesktopUpdateConfig())
+ipcMain.handle('nexus:updates:branch:get', async () => readDesktopUpdateConfig())
 
-ipcMain.handle('hermes:updates:branch:set', async (_event, name) => {
+ipcMain.handle('nexus:updates:branch:set', async (_event, name) => {
   const branch = typeof name === 'string' && name.trim() ? name.trim() : DEFAULT_UPDATE_BRANCH
   writeDesktopUpdateConfig({ branch })
   return { branch }
@@ -5409,7 +5409,7 @@ function resolveHermesVersion() {
   return app.getVersion()
 }
 
-ipcMain.handle('hermes:version', async () => ({
+ipcMain.handle('nexus:version', async () => ({
   appVersion: resolveHermesVersion(),
   electronVersion: process.versions.electron,
   nodeVersion: process.versions.node,

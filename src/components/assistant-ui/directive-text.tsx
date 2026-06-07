@@ -337,7 +337,7 @@ const DirectiveImage: FC<{ id: string; label: string }> = ({ id, label }) => {
     }
 
     let alive = true
-    void window.hermesDesktop
+    void window.nexusAgent
       ?.readFileDataUrl(id)
       .then(url => alive && setSrc(url))
       .catch(() => alive && setFailed(true))

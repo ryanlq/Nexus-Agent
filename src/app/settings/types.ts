@@ -1,14 +1,14 @@
 import type { Dispatch, SetStateAction } from 'react'
 
-import type { HermesGateway } from '@/hermes'
+import type { NexusGateway } from '@/nexus'
 import type { IconComponent } from '@/lib/icons'
-import type { EnvVarInfo } from '@/types/hermes'
+import type { EnvVarInfo } from '@/types/nexus'
 
 export type SettingsView = 'about' | 'gateway' | 'keys' | 'mcp' | 'providers' | 'sessions' | `config:${string}`
 export type EnvPatch = Partial<Pick<EnvVarInfo, 'is_set' | 'redacted_value'>>
 
 export interface SettingsPageProps {
-  gateway?: HermesGateway | null
+  gateway?: NexusGateway | null
   onClose: () => void
   onConfigSaved?: () => void
   onMainModelChanged?: (provider: string, model: string) => void

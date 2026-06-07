@@ -2,7 +2,7 @@ import { IconDownload, IconRefresh, IconUpload } from '@tabler/icons-react'
 import { useRef } from 'react'
 
 import { Tip } from '@/components/ui/tooltip'
-import { getHermesConfigDefaults, getHermesConfigRecord, saveHermesConfig } from '@/hermes'
+import { getHermesConfigDefaults, getHermesConfigRecord, saveHermesConfig } from '@/nexus'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { Archive, Globe, Info } from '@/lib/icons'
@@ -41,7 +41,7 @@ export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChang
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'hermes-config.json'
+      a.download = 'nexus-config.json'
       a.click()
       URL.revokeObjectURL(url)
       triggerHaptic('success')

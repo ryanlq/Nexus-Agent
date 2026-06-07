@@ -179,13 +179,13 @@ function looksBinaryBytes(bytes: Uint8Array) {
 }
 
 async function readTextPreview(filePath: string) {
-  if (window.hermesDesktop.readFileText) {
+  if (window.nexusAgent.readFileText) {
     try {
-      return await window.hermesDesktop.readFileText(filePath)
+      return await window.nexusAgent.readFileText(filePath)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
 
-      if (!message.includes("No handler registered for 'hermes:readFileText'")) {
+      if (!message.includes("No handler registered for 'nexus:readFileText'")) {
         throw error
       }
     }
@@ -193,7 +193,7 @@ async function readTextPreview(filePath: string) {
 
   // Back-compat for a running Electron process whose preload hasn't been
   // restarted since readFileText was added. readFileDataUrl already existed.
-  const dataUrl = await window.hermesDesktop.readFileDataUrl(filePath)
+  const dataUrl = await window.nexusAgent.readFileDataUrl(filePath)
   const [, metadata = '', data = ''] = dataUrl.match(/^data:([^,]*),(.*)$/) || []
   const base64 = metadata.includes(';base64')
   const mimeType = metadata.replace(/;base64$/, '') || undefined
@@ -441,7 +441,7 @@ export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; tar
 
       try {
         if (isImage) {
-          const dataUrl = await window.hermesDesktop.readFileDataUrl(filePath)
+          const dataUrl = await window.nexusAgent.readFileDataUrl(filePath)
 
           if (active) {
             setState({ dataUrl, loading: false })

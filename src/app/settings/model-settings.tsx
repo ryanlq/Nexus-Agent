@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { getAuxiliaryModels, getGlobalModelInfo, getGlobalModelOptions, setModelAssignment } from '@/hermes'
-import type { AuxiliaryModelsResponse, ModelOptionProvider } from '@/hermes'
+import { getAuxiliaryModels, getGlobalModelInfo, getGlobalModelOptions, setModelAssignment } from '@/nexus'
+import type { AuxiliaryModelsResponse, ModelOptionProvider } from '@/nexus'
 import { Cpu, Loader2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 

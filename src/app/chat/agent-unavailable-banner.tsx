@@ -27,7 +27,7 @@ export function AgentUnavailableBanner() {
       <button
         className="shrink-0 rounded px-2 py-0.5 text-xs font-medium text-warning hover:bg-warning/10"
         onClick={() => {
-          window.hermesDesktop?.api?.({ path: '/api/agents/status', timeoutMs: 5000 }).then(() => {
+          window.nexusAgent?.api?.({ path: '/api/agents/status', timeoutMs: 5000 }).then(() => {
             // Trigger a re-check by cycling the store
             $agentAvailable.set(null)
             setTimeout(() => $agentAvailable.set(false), 100)

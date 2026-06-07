@@ -1,5 +1,5 @@
 {
-  "name": "@hermes/desktop-shared",
+  "name": "@nexus-agent/desktop-shared",
   "private": true,
   "version": "0.0.0",
   "type": "module",

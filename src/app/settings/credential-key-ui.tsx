@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ChevronDown, ExternalLink, Loader2, Save } from '@/lib/icons'
 import { cn } from '@/lib/utils'
-import type { EnvVarInfo } from '@/types/hermes'
+import type { EnvVarInfo } from '@/types/nexus'
 
 import { CONTROL_TEXT } from './constants'
 import { prettyName, withoutKey } from './helpers'

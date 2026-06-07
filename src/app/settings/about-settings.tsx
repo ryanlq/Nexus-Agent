@@ -50,7 +50,7 @@ export function AboutSettings() {
           <Sparkles className="size-8" />
         </span>
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Hermes Desktop + Agent Gateway</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Nexus Agent + Agent Gateway</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {version?.appVersion
               ? `Desktop v${version.appVersion} · Electron ${version.electronVersion}`
@@ -74,7 +74,7 @@ export function AboutSettings() {
               href={PROJECT_URL}
               onClick={event => {
                 event.preventDefault()
-                void window.hermesDesktop?.openExternal?.(PROJECT_URL)
+                void window.nexusAgent?.openExternal?.(PROJECT_URL)
               }}
               rel="noreferrer"
               target="_blank"

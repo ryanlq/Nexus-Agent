@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 import type { HermesConnection } from '@/global'
-import { HermesGateway } from '@/hermes'
+import { NexusGateway } from '@/nexus'
 import { translateNow } from '@/i18n'
 import { isGatewayReauthRequired, resolveGatewayWsUrl } from '@/lib/gateway-ws-url'
 import {
@@ -32,14 +32,14 @@ import {
   setConnection,
   setSessionsLoading
 } from '@/store/session'
-import type { RpcEvent } from '@/types/hermes'
+import type { RpcEvent } from '@/types/nexus'
 
 interface GatewayBootOptions {
   handleGatewayEvent: (event: RpcEvent) => void
   onConnectionReady: (
-    connection: Awaited<ReturnType<NonNullable<typeof window.hermesDesktop>['getConnection']>> | null
+    connection: Awaited<ReturnType<NonNullable<typeof window.nexusAgent>['getConnection']>> | null
   ) => void
-  onGatewayReady: (gateway: HermesGateway | null) => void
+  onGatewayReady: (gateway: NexusGateway | null) => void
   refreshHermesConfig: () => Promise<void>
   refreshSessions: () => Promise<void>
 }
@@ -69,7 +69,7 @@ export function useGatewayBoot({
 
   useEffect(() => {
     let cancelled = false
-    const desktop = window.hermesDesktop
+    const desktop = window.nexusAgent
 
     const publish = (next: HermesConnection | null) => {
       callbacksRef.current.onConnectionReady(next)
@@ -203,7 +203,7 @@ export function useGatewayBoot({
       progress: 6
     })
 
-    const gateway = new HermesGateway()
+    const gateway = new NexusGateway()
     callbacksRef.current.onGatewayReady(gateway)
     setPrimaryGateway(gateway, normalizeProfileKey($activeGatewayProfile.get()))
     // Secondary (background-profile) sockets funnel into the same handler.

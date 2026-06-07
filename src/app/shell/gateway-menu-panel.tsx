@@ -6,7 +6,7 @@ import { Tip } from '@/components/ui/tooltip'
 import { Activity, AlertCircle } from '@/lib/icons'
 import type { RuntimeReadinessResult } from '@/lib/runtime-readiness'
 import { cn } from '@/lib/utils'
-import type { StatusResponse } from '@/types/hermes'
+import type { StatusResponse } from '@/types/nexus'
 
 interface GatewayMenuPanelProps {
   gatewayState: string

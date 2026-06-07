@@ -20,7 +20,7 @@ export function useAgentAvailability() {
 
     async function check() {
       try {
-        const result = await window.hermesDesktop.api<{
+        const result = await window.nexusAgent.api<{
           agents: Array<{ slug: string; installed: boolean }>
           current: string
         }>({ path: '/api/agents/status', timeoutMs: 5000 })

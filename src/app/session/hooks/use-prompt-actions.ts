@@ -1,7 +1,7 @@
 import type { AppendMessage, ThreadMessage } from '@assistant-ui/react'
 import { type MutableRefObject, useCallback } from 'react'
 
-import { getProfiles, transcribeAudio } from '@/hermes'
+import { getProfiles, transcribeAudio } from '@/nexus'
 import { branchGroupForUser, type ChatMessage, chatMessageText, textPart } from '@/lib/chat-messages'
 import {
   attachmentDisplayText,

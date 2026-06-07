@@ -6,7 +6,7 @@ const getGlobalModelOptions = vi.fn()
 const getAuxiliaryModels = vi.fn()
 const setModelAssignment = vi.fn()
 
-vi.mock('@/hermes', () => ({
+vi.mock('@/nexus', () => ({
   getGlobalModelInfo: () => getGlobalModelInfo(),
   getGlobalModelOptions: () => getGlobalModelOptions(),
   getAuxiliaryModels: () => getAuxiliaryModels(),

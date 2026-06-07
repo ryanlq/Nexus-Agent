@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { HermesConfigRecord } from '@/types/hermes'
+import type { HermesConfigRecord } from '@/types/nexus'
 
 import { getNested, providerGroup, setNested, stripToolsetLabel, toolsetDisplayLabel } from './helpers'
 

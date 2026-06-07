@@ -267,7 +267,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
       return
     }
 
-    const desktop = window.hermesDesktop
+    const desktop = window.nexusAgent
 
     if (!desktop || typeof desktop.onBootstrapEvent !== 'function') {
       return
@@ -373,7 +373,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
               </Button>
               <Button
                 onClick={() => {
-                  window.hermesDesktop?.openExternal?.(ups.docsUrl)
+                  window.nexusAgent?.openExternal?.(ups.docsUrl)
                 }}
                 size="sm"
                 variant="ghost"
@@ -531,7 +531,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
                   setCancelling(true)
 
                   try {
-                    await window.hermesDesktop?.cancelBootstrap?.()
+                    await window.nexusAgent?.cancelBootstrap?.()
                   } catch {
                     // ignore -- the failed/cancelled event will surface the result
                   }
@@ -583,7 +583,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
                     // and main short-circuits to the latched error without
                     // re-running install.ps1.
                     try {
-                      await window.hermesDesktop?.resetBootstrap?.()
+                      await window.nexusAgent?.resetBootstrap?.()
                     } catch {
                       // best-effort -- continue with reload regardless
                     }

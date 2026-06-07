@@ -68,7 +68,7 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder, onChangeCwd
   const effectiveTab: RightSidebarTabId = terminalTakeover ? 'files' : activeTab
 
   const chooseFolder = async () => {
-    const selected = await window.hermesDesktop?.selectPaths({
+    const selected = await window.nexusAgent?.selectPaths({
       defaultPath: hasCwd ? currentCwd : undefined,
       directories: true,
       multiple: false,

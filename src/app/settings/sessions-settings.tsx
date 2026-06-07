@@ -2,13 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
-import { deleteSession, listSessions, setSessionArchived } from '@/hermes'
+import { deleteSession, listSessions, setSessionArchived } from '@/nexus'
 import { sessionTitle } from '@/lib/chat-runtime'
 import { triggerHaptic } from '@/lib/haptics'
 import { Archive, ArchiveOff, FolderOpen, Loader2, Trash2 } from '@/lib/icons'
 import { notify, notifyError } from '@/store/notifications'
 import { setSessions } from '@/store/session'
-import type { SessionInfo } from '@/types/hermes'
+import type { SessionInfo } from '@/types/nexus'
 
 import { EmptyState, ListRow, LoadingState, SectionHeading, SettingsContent } from './primitives'
 import { useDeepLinkHighlight } from './use-deep-link-highlight'
@@ -173,11 +173,11 @@ function DefaultProjectDirSetting() {
 
   useEffect(() => {
     // The bridge is only present when running inside Electron. In a Vitest
-    // / Storybook / non-Electron context `window.hermesDesktop` is
+    // / Storybook / non-Electron context `window.nexusAgent` is
     // undefined, so guard the WHOLE call chain rather than chaining
     // `?.settings.getDefaultProjectDir().then(...)` (the latter would
     // short-circuit to `undefined.then(...)` and throw at runtime).
-    const settings = window.hermesDesktop?.settings
+    const settings = window.nexusAgent?.settings
 
     if (!settings) {
       return
@@ -200,7 +200,7 @@ function DefaultProjectDirSetting() {
   }, [])
 
   const choose = useCallback(async () => {
-    const settings = window.hermesDesktop?.settings
+    const settings = window.nexusAgent?.settings
 
     if (!settings) {
       return
@@ -226,7 +226,7 @@ function DefaultProjectDirSetting() {
   }, [])
 
   const clear = useCallback(async () => {
-    const settings = window.hermesDesktop?.settings
+    const settings = window.nexusAgent?.settings
 
     if (!settings) {
       return
@@ -264,7 +264,7 @@ function DefaultProjectDirSetting() {
             )}
           </div>
         }
-        description={dir || `Defaults to ${fallback || '~/hermes-projects'}.`}
+        description={dir || `Defaults to ${fallback || '~/nexus-projects'}.`}
         title={dir ? dir : 'Not set'}
       />
     </div>

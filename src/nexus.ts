@@ -1,4 +1,4 @@
-import { JsonRpcGatewayClient } from '@hermes/desktop-shared'
+import { JsonRpcGatewayClient } from '@nexus-agent/desktop-shared'
 
 import type {
   ActionResponse,
@@ -38,7 +38,7 @@ import type {
   StatusResponse,
   ToolsetConfig,
   ToolsetInfo
-} from '@/types/hermes'
+} from '@/types/nexus'
 
 const DEFAULT_GATEWAY_REQUEST_TIMEOUT_MS = 30_000
 
@@ -97,9 +97,9 @@ export type {
   StatusResponse,
   ToolsetConfig,
   ToolsetInfo
-} from '@/types/hermes'
+} from '@/types/nexus'
 
-export class HermesGateway extends JsonRpcGatewayClient {
+export class NexusGateway extends JsonRpcGatewayClient {
   constructor() {
     super({
       closedErrorMessage: 'Hermes gateway connection closed',
@@ -133,7 +133,7 @@ export async function listSessions(
   archived: 'exclude' | 'include' | 'only' = 'exclude',
   order: 'created' | 'recent' = 'recent'
 ): Promise<PaginatedSessions> {
-  const result = await window.hermesDesktop.api<PaginatedSessions>({
+  const result = await window.nexusAgent.api<PaginatedSessions>({
     path: `/api/sessions?limit=${limit}&offset=0&min_messages=${Math.max(0, minMessages)}&archived=${archived}&order=${order}`
   })
 
@@ -155,7 +155,7 @@ export async function listAllProfileSessions(
   order: 'created' | 'recent' = 'recent',
   profile: 'all' | (string & {}) = 'all'
 ): Promise<PaginatedSessions> {
-  const result = await window.hermesDesktop.api<PaginatedSessions>({
+  const result = await window.nexusAgent.api<PaginatedSessions>({
     path:
       `/api/profiles/sessions?limit=${limit}&offset=0&min_messages=${Math.max(0, minMessages)}` +
       `&archived=${archived}&order=${order}&profile=${encodeURIComponent(profile)}`
@@ -173,7 +173,7 @@ export async function listAllProfileSessions(
 // read path. A remote session's row lives only on its remote host, so a mutation
 // that hit the local primary would no-op or 404. Omit for the current/default.
 export function setSessionArchived(id: string, archived: boolean, profile?: string | null): Promise<{ ok: boolean }> {
-  return window.hermesDesktop.api<{ ok: boolean }>({
+  return window.nexusAgent.api<{ ok: boolean }>({
     ...(profile ? { profile } : {}),
     path: `/api/sessions/${encodeURIComponent(id)}`,
     method: 'PATCH',
@@ -182,7 +182,7 @@ export function setSessionArchived(id: string, archived: boolean, profile?: stri
 }
 
 export function searchSessions(query: string): Promise<SessionSearchResponse> {
-  return window.hermesDesktop.api<SessionSearchResponse>({
+  return window.nexusAgent.api<SessionSearchResponse>({
     path: `/api/sessions/search?q=${encodeURIComponent(query)}`
   })
 }
@@ -194,13 +194,13 @@ export function searchSessions(query: string): Promise<SessionSearchResponse> {
 export function getSessionMessages(id: string, profile?: string | null): Promise<SessionMessagesResponse> {
   const suffix = profile ? `?profile=${encodeURIComponent(profile)}` : ''
 
-  return window.hermesDesktop.api<SessionMessagesResponse>({
+  return window.nexusAgent.api<SessionMessagesResponse>({
     path: `/api/sessions/${encodeURIComponent(id)}/messages${suffix}`
   })
 }
 
 export function deleteSession(id: string, profile?: string | null): Promise<{ ok: boolean }> {
-  return window.hermesDesktop.api<{ ok: boolean }>({
+  return window.nexusAgent.api<{ ok: boolean }>({
     ...(profile ? { profile } : {}),
     path: `/api/sessions/${encodeURIComponent(id)}`,
     method: 'DELETE'
@@ -212,7 +212,7 @@ export function renameSession(
   title: string,
   profile?: string | null
 ): Promise<{ ok: boolean; title: string }> {
-  return window.hermesDesktop.api<{ ok: boolean; title: string }>({
+  return window.nexusAgent.api<{ ok: boolean; title: string }>({
     ...(profile ? { profile } : {}),
     path: `/api/sessions/${encodeURIComponent(id)}`,
     method: 'PATCH',
@@ -221,14 +221,14 @@ export function renameSession(
 }
 
 export function getGlobalModelInfo(): Promise<ModelInfoResponse> {
-  return window.hermesDesktop.api<ModelInfoResponse>({
+  return window.nexusAgent.api<ModelInfoResponse>({
     ...profileScoped(),
     path: '/api/model/info'
   })
 }
 
 export function getStatus(): Promise<StatusResponse> {
-  return window.hermesDesktop.api<StatusResponse>({
+  return window.nexusAgent.api<StatusResponse>({
     path: '/api/status'
   })
 }
@@ -259,42 +259,42 @@ export function getLogs(params: {
 
   const suffix = query.toString()
 
-  return window.hermesDesktop.api<LogsResponse>({
+  return window.nexusAgent.api<LogsResponse>({
     ...profileScoped(),
     path: suffix ? `/api/logs?${suffix}` : '/api/logs'
   })
 }
 
 export function getHermesConfig(): Promise<HermesConfig> {
-  return window.hermesDesktop.api<HermesConfig>({
+  return window.nexusAgent.api<HermesConfig>({
     ...profileScoped(),
     path: '/api/config'
   })
 }
 
 export function getHermesConfigRecord(): Promise<HermesConfigRecord> {
-  return window.hermesDesktop.api<HermesConfigRecord>({
+  return window.nexusAgent.api<HermesConfigRecord>({
     ...profileScoped(),
     path: '/api/config'
   })
 }
 
 export function getHermesConfigDefaults(): Promise<HermesConfigRecord> {
-  return window.hermesDesktop.api<HermesConfigRecord>({
+  return window.nexusAgent.api<HermesConfigRecord>({
     ...profileScoped(),
     path: '/api/config/defaults'
   })
 }
 
 export function getHermesConfigSchema(): Promise<ConfigSchemaResponse> {
-  return window.hermesDesktop.api<ConfigSchemaResponse>({
+  return window.nexusAgent.api<ConfigSchemaResponse>({
     ...profileScoped(),
     path: '/api/config/schema'
   })
 }
 
 export function saveHermesConfig(config: HermesConfigRecord): Promise<{ ok: boolean }> {
-  return window.hermesDesktop.api<{ ok: boolean }>({
+  return window.nexusAgent.api<{ ok: boolean }>({
     ...profileScoped(),
     path: '/api/config',
     method: 'PUT',
@@ -303,14 +303,14 @@ export function saveHermesConfig(config: HermesConfigRecord): Promise<{ ok: bool
 }
 
 export function getEnvVars(): Promise<Record<string, EnvVarInfo>> {
-  return window.hermesDesktop.api<Record<string, EnvVarInfo>>({
+  return window.nexusAgent.api<Record<string, EnvVarInfo>>({
     ...profileScoped(),
     path: '/api/env'
   })
 }
 
 export function setEnvVar(key: string, value: string): Promise<{ ok: boolean }> {
-  return window.hermesDesktop.api<{ ok: boolean }>({
+  return window.nexusAgent.api<{ ok: boolean }>({
     ...profileScoped(),
     path: '/api/env',
     method: 'PUT',
@@ -322,7 +322,7 @@ export function validateProviderCredential(
   key: string,
   value: string
 ): Promise<{ ok: boolean; reachable: boolean; message: string; models?: string[] }> {
-  return window.hermesDesktop.api<{ ok: boolean; reachable: boolean; message: string; models?: string[] }>({
+  return window.nexusAgent.api<{ ok: boolean; reachable: boolean; message: string; models?: string[] }>({
     ...profileScoped(),
     path: '/api/providers/validate',
     method: 'POST',
@@ -331,7 +331,7 @@ export function validateProviderCredential(
 }
 
 export function deleteEnvVar(key: string): Promise<{ ok: boolean }> {
-  return window.hermesDesktop.api<{ ok: boolean }>({
+  return window.nexusAgent.api<{ ok: boolean }>({
     ...profileScoped(),
     path: '/api/env',
     method: 'DELETE',
@@ -340,7 +340,7 @@ export function deleteEnvVar(key: string): Promise<{ ok: boolean }> {
 }
 
 export function revealEnvVar(key: string): Promise<{ key: string; value: string }> {
-  return window.hermesDesktop.api<{ key: string; value: string }>({
+  return window.nexusAgent.api<{ key: string; value: string }>({
     ...profileScoped(),
     path: '/api/env/reveal',
     method: 'POST',
@@ -349,14 +349,14 @@ export function revealEnvVar(key: string): Promise<{ key: string; value: string 
 }
 
 export function listOAuthProviders(): Promise<OAuthProvidersResponse> {
-  return window.hermesDesktop.api<OAuthProvidersResponse>({
+  return window.nexusAgent.api<OAuthProvidersResponse>({
     ...profileScoped(),
     path: '/api/providers/oauth'
   })
 }
 
 export function startOAuthLogin(providerId: string): Promise<OAuthStartResponse> {
-  return window.hermesDesktop.api<OAuthStartResponse>({
+  return window.nexusAgent.api<OAuthStartResponse>({
     ...profileScoped(),
     path: `/api/providers/oauth/${encodeURIComponent(providerId)}/start`,
     method: 'POST',
@@ -365,7 +365,7 @@ export function startOAuthLogin(providerId: string): Promise<OAuthStartResponse>
 }
 
 export function submitOAuthCode(providerId: string, sessionId: string, code: string): Promise<OAuthSubmitResponse> {
-  return window.hermesDesktop.api<OAuthSubmitResponse>({
+  return window.nexusAgent.api<OAuthSubmitResponse>({
     ...profileScoped(),
     path: `/api/providers/oauth/${encodeURIComponent(providerId)}/submit`,
     method: 'POST',
@@ -374,14 +374,14 @@ export function submitOAuthCode(providerId: string, sessionId: string, code: str
 }
 
 export function pollOAuthSession(providerId: string, sessionId: string): Promise<OAuthPollResponse> {
-  return window.hermesDesktop.api<OAuthPollResponse>({
+  return window.nexusAgent.api<OAuthPollResponse>({
     ...profileScoped(),
     path: `/api/providers/oauth/${encodeURIComponent(providerId)}/poll/${encodeURIComponent(sessionId)}`
   })
 }
 
 export function cancelOAuthSession(sessionId: string): Promise<{ ok: boolean }> {
-  return window.hermesDesktop.api<{ ok: boolean }>({
+  return window.nexusAgent.api<{ ok: boolean }>({
     ...profileScoped(),
     path: `/api/providers/oauth/sessions/${encodeURIComponent(sessionId)}`,
     method: 'DELETE'
@@ -389,14 +389,14 @@ export function cancelOAuthSession(sessionId: string): Promise<{ ok: boolean }> 
 }
 
 export function getSkills(): Promise<SkillInfo[]> {
-  return window.hermesDesktop.api<SkillInfo[]>({
+  return window.nexusAgent.api<SkillInfo[]>({
     ...profileScoped(),
     path: '/api/skills'
   })
 }
 
 export function toggleSkill(name: string, enabled: boolean): Promise<{ ok: boolean; name: string; enabled: boolean }> {
-  return window.hermesDesktop.api<{ ok: boolean; name: string; enabled: boolean }>({
+  return window.nexusAgent.api<{ ok: boolean; name: string; enabled: boolean }>({
     ...profileScoped(),
     path: '/api/skills/toggle',
     method: 'PUT',
@@ -405,7 +405,7 @@ export function toggleSkill(name: string, enabled: boolean): Promise<{ ok: boole
 }
 
 export function getToolsets(): Promise<ToolsetInfo[]> {
-  return window.hermesDesktop.api<ToolsetInfo[]>({
+  return window.nexusAgent.api<ToolsetInfo[]>({
     ...profileScoped(),
     path: '/api/tools/toolsets'
   })
@@ -415,7 +415,7 @@ export function toggleToolset(
   name: string,
   enabled: boolean
 ): Promise<{ ok: boolean; name: string; enabled: boolean }> {
-  return window.hermesDesktop.api<{ ok: boolean; name: string; enabled: boolean }>({
+  return window.nexusAgent.api<{ ok: boolean; name: string; enabled: boolean }>({
     ...profileScoped(),
     path: `/api/tools/toolsets/${encodeURIComponent(name)}`,
     method: 'PUT',
@@ -424,7 +424,7 @@ export function toggleToolset(
 }
 
 export function getToolsetConfig(name: string): Promise<ToolsetConfig> {
-  return window.hermesDesktop.api<ToolsetConfig>({
+  return window.nexusAgent.api<ToolsetConfig>({
     ...profileScoped(),
     path: `/api/tools/toolsets/${encodeURIComponent(name)}/config`
   })
@@ -434,7 +434,7 @@ export function selectToolsetProvider(
   name: string,
   provider: string
 ): Promise<{ ok: boolean; name: string; provider: string }> {
-  return window.hermesDesktop.api<{ ok: boolean; name: string; provider: string }>({
+  return window.nexusAgent.api<{ ok: boolean; name: string; provider: string }>({
     ...profileScoped(),
     path: `/api/tools/toolsets/${encodeURIComponent(name)}/provider`,
     method: 'PUT',
@@ -443,7 +443,7 @@ export function selectToolsetProvider(
 }
 
 export function getMessagingPlatforms(): Promise<MessagingPlatformsResponse> {
-  return window.hermesDesktop.api<MessagingPlatformsResponse>({
+  return window.nexusAgent.api<MessagingPlatformsResponse>({
     path: '/api/messaging/platforms'
   })
 }
@@ -452,7 +452,7 @@ export function updateMessagingPlatform(
   platformId: string,
   body: MessagingPlatformUpdate
 ): Promise<{ ok: boolean; platform: string }> {
-  return window.hermesDesktop.api<{ ok: boolean; platform: string }>({
+  return window.nexusAgent.api<{ ok: boolean; platform: string }>({
     path: `/api/messaging/platforms/${encodeURIComponent(platformId)}`,
     method: 'PUT',
     body
@@ -460,26 +460,26 @@ export function updateMessagingPlatform(
 }
 
 export function testMessagingPlatform(platformId: string): Promise<MessagingPlatformTestResponse> {
-  return window.hermesDesktop.api<MessagingPlatformTestResponse>({
+  return window.nexusAgent.api<MessagingPlatformTestResponse>({
     path: `/api/messaging/platforms/${encodeURIComponent(platformId)}/test`,
     method: 'POST'
   })
 }
 
 export function getCronJobs(): Promise<CronJob[]> {
-  return window.hermesDesktop.api<CronJob[]>({
+  return window.nexusAgent.api<CronJob[]>({
     path: '/api/cron/jobs'
   })
 }
 
 export function getCronJob(jobId: string): Promise<CronJob> {
-  return window.hermesDesktop.api<CronJob>({
+  return window.nexusAgent.api<CronJob>({
     path: `/api/cron/jobs/${encodeURIComponent(jobId)}`
   })
 }
 
 export function createCronJob(body: CronJobCreatePayload): Promise<CronJob> {
-  return window.hermesDesktop.api<CronJob>({
+  return window.nexusAgent.api<CronJob>({
     path: '/api/cron/jobs',
     method: 'POST',
     body
@@ -487,7 +487,7 @@ export function createCronJob(body: CronJobCreatePayload): Promise<CronJob> {
 }
 
 export function updateCronJob(jobId: string, updates: CronJobUpdates): Promise<CronJob> {
-  return window.hermesDesktop.api<CronJob>({
+  return window.nexusAgent.api<CronJob>({
     path: `/api/cron/jobs/${encodeURIComponent(jobId)}`,
     method: 'PUT',
     body: { updates }
@@ -495,41 +495,41 @@ export function updateCronJob(jobId: string, updates: CronJobUpdates): Promise<C
 }
 
 export function pauseCronJob(jobId: string): Promise<CronJob> {
-  return window.hermesDesktop.api<CronJob>({
+  return window.nexusAgent.api<CronJob>({
     path: `/api/cron/jobs/${encodeURIComponent(jobId)}/pause`,
     method: 'POST'
   })
 }
 
 export function resumeCronJob(jobId: string): Promise<CronJob> {
-  return window.hermesDesktop.api<CronJob>({
+  return window.nexusAgent.api<CronJob>({
     path: `/api/cron/jobs/${encodeURIComponent(jobId)}/resume`,
     method: 'POST'
   })
 }
 
 export function triggerCronJob(jobId: string): Promise<CronJob> {
-  return window.hermesDesktop.api<CronJob>({
+  return window.nexusAgent.api<CronJob>({
     path: `/api/cron/jobs/${encodeURIComponent(jobId)}/trigger`,
     method: 'POST'
   })
 }
 
 export function deleteCronJob(jobId: string): Promise<{ ok: boolean }> {
-  return window.hermesDesktop.api<{ ok: boolean }>({
+  return window.nexusAgent.api<{ ok: boolean }>({
     path: `/api/cron/jobs/${encodeURIComponent(jobId)}`,
     method: 'DELETE'
   })
 }
 
 export function getProfiles(): Promise<ProfilesResponse> {
-  return window.hermesDesktop.api<ProfilesResponse>({
+  return window.nexusAgent.api<ProfilesResponse>({
     path: '/api/profiles'
   })
 }
 
 export function createProfile(body: ProfileCreatePayload): Promise<{ name: string; ok: boolean; path: string }> {
-  return window.hermesDesktop.api<{ name: string; ok: boolean; path: string }>({
+  return window.nexusAgent.api<{ name: string; ok: boolean; path: string }>({
     path: '/api/profiles',
     method: 'POST',
     body
@@ -537,7 +537,7 @@ export function createProfile(body: ProfileCreatePayload): Promise<{ name: strin
 }
 
 export function renameProfile(name: string, newName: string): Promise<{ name: string; ok: boolean; path: string }> {
-  return window.hermesDesktop.api<{ name: string; ok: boolean; path: string }>({
+  return window.nexusAgent.api<{ name: string; ok: boolean; path: string }>({
     path: `/api/profiles/${encodeURIComponent(name)}`,
     method: 'PATCH',
     body: { new_name: newName }
@@ -545,20 +545,20 @@ export function renameProfile(name: string, newName: string): Promise<{ name: st
 }
 
 export function deleteProfile(name: string): Promise<{ ok: boolean; path: string }> {
-  return window.hermesDesktop.api<{ ok: boolean; path: string }>({
+  return window.nexusAgent.api<{ ok: boolean; path: string }>({
     path: `/api/profiles/${encodeURIComponent(name)}`,
     method: 'DELETE'
   })
 }
 
 export function getProfileSoul(name: string): Promise<ProfileSoul> {
-  return window.hermesDesktop.api<ProfileSoul>({
+  return window.nexusAgent.api<ProfileSoul>({
     path: `/api/profiles/${encodeURIComponent(name)}/soul`
   })
 }
 
 export function updateProfileSoul(name: string, content: string): Promise<{ ok: boolean }> {
-  return window.hermesDesktop.api<{ ok: boolean }>({
+  return window.nexusAgent.api<{ ok: boolean }>({
     path: `/api/profiles/${encodeURIComponent(name)}/soul`,
     method: 'PUT',
     body: { content }
@@ -566,20 +566,20 @@ export function updateProfileSoul(name: string, content: string): Promise<{ ok: 
 }
 
 export function getProfileSetupCommand(name: string): Promise<ProfileSetupCommand> {
-  return window.hermesDesktop.api<ProfileSetupCommand>({
+  return window.nexusAgent.api<ProfileSetupCommand>({
     path: `/api/profiles/${encodeURIComponent(name)}/setup-command`
   })
 }
 
 export function getUsageAnalytics(days = 30): Promise<AnalyticsResponse> {
-  return window.hermesDesktop.api<AnalyticsResponse>({
+  return window.nexusAgent.api<AnalyticsResponse>({
     ...profileScoped(),
     path: `/api/analytics/usage?days=${Math.max(1, Math.floor(days))}`
   })
 }
 
 export function getGlobalModelOptions(): Promise<ModelOptionsResponse> {
-  return window.hermesDesktop.api<ModelOptionsResponse>({
+  return window.nexusAgent.api<ModelOptionsResponse>({
     ...profileScoped(),
     path: '/api/model/options'
   })
@@ -596,7 +596,7 @@ export interface RecommendedDefaultModel {
 // curation `hermes model` does — for Nous it honors the free/paid tier so a
 // free user gets a free model instead of a paid default.
 export function getRecommendedDefaultModel(provider: string): Promise<RecommendedDefaultModel> {
-  return window.hermesDesktop.api<RecommendedDefaultModel>({
+  return window.nexusAgent.api<RecommendedDefaultModel>({
     ...profileScoped(),
     path: `/api/model/recommended-default?provider=${encodeURIComponent(provider)}`
   })
@@ -606,7 +606,7 @@ export function setGlobalModel(
   provider: string,
   model: string
 ): Promise<{ ok: boolean; provider: string; model: string }> {
-  return window.hermesDesktop.api<{ ok: boolean; provider: string; model: string }>({
+  return window.nexusAgent.api<{ ok: boolean; provider: string; model: string }>({
     ...profileScoped(),
     path: '/api/model/set',
     method: 'POST',
@@ -619,14 +619,14 @@ export function setGlobalModel(
 }
 
 export function getAuxiliaryModels(): Promise<AuxiliaryModelsResponse> {
-  return window.hermesDesktop.api<AuxiliaryModelsResponse>({
+  return window.nexusAgent.api<AuxiliaryModelsResponse>({
     ...profileScoped(),
     path: '/api/model/auxiliary'
   })
 }
 
 export function setModelAssignment(body: ModelAssignmentRequest): Promise<ModelAssignmentResponse> {
-  return window.hermesDesktop.api<ModelAssignmentResponse>({
+  return window.nexusAgent.api<ModelAssignmentResponse>({
     ...profileScoped(),
     path: '/api/model/set',
     method: 'POST',
@@ -635,27 +635,27 @@ export function setModelAssignment(body: ModelAssignmentRequest): Promise<ModelA
 }
 
 export function restartGateway(): Promise<ActionResponse> {
-  return window.hermesDesktop.api<ActionResponse>({
+  return window.nexusAgent.api<ActionResponse>({
     path: '/api/gateway/restart',
     method: 'POST'
   })
 }
 
 export function updateHermes(): Promise<ActionResponse> {
-  return window.hermesDesktop.api<ActionResponse>({
+  return window.nexusAgent.api<ActionResponse>({
     path: '/api/hermes/update',
     method: 'POST'
   })
 }
 
 export function getActionStatus(name: string, lines = 200): Promise<ActionStatusResponse> {
-  return window.hermesDesktop.api<ActionStatusResponse>({
+  return window.nexusAgent.api<ActionStatusResponse>({
     path: `/api/actions/${encodeURIComponent(name)}/status?lines=${Math.max(1, lines)}`
   })
 }
 
 export function transcribeAudio(dataUrl: string, mimeType?: string): Promise<AudioTranscriptionResponse> {
-  return window.hermesDesktop.api<AudioTranscriptionResponse>({
+  return window.nexusAgent.api<AudioTranscriptionResponse>({
     path: '/api/audio/transcribe',
     method: 'POST',
     body: {
@@ -666,7 +666,7 @@ export function transcribeAudio(dataUrl: string, mimeType?: string): Promise<Aud
 }
 
 export function speakText(text: string): Promise<AudioSpeakResponse> {
-  return window.hermesDesktop.api<AudioSpeakResponse>({
+  return window.nexusAgent.api<AudioSpeakResponse>({
     path: '/api/audio/speak',
     method: 'POST',
     body: { text }
@@ -674,7 +674,7 @@ export function speakText(text: string): Promise<AudioSpeakResponse> {
 }
 
 export function getElevenLabsVoices(): Promise<ElevenLabsVoicesResponse> {
-  return window.hermesDesktop.api<ElevenLabsVoicesResponse>({
+  return window.nexusAgent.api<ElevenLabsVoicesResponse>({
     path: '/api/audio/elevenlabs/voices'
   })
 }

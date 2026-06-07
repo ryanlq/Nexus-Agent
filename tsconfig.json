@@ -17,7 +17,7 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"],
-      "@hermes/desktop-shared": ["./shared/src/index.ts"]
+      "@nexus-agent/desktop-shared": ["./shared/src/index.ts"]
     }
   },
   "include": ["src", "./shared/src"],

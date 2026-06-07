@@ -35,7 +35,7 @@ import {
 } from '@/store/session'
 import { clearSessionSubagents, pruneDelegateFallbackSubagents, upsertSubagent } from '@/store/subagents'
 import { recordToolDiff } from '@/store/tool-diffs'
-import type { RpcEvent } from '@/types/hermes'
+import type { RpcEvent } from '@/types/nexus'
 
 import type { ClientSessionState } from '../../types'
 
@@ -548,7 +548,7 @@ export function useMessageStream({
       }
 
       if (document.hidden && sessionId === activeSessionIdRef.current) {
-        void window.hermesDesktop?.notify({
+        void window.nexusAgent?.notify({
           title: 'Hermes finished',
           body: text.slice(0, 140) || 'The response is ready.'
         })

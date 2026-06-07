@@ -73,7 +73,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Loader } from '@/components/ui/loader'
-import type { HermesGateway } from '@/hermes'
+import type { NexusGateway } from '@/nexus'
 import { useResizeObserver } from '@/hooks/use-resize-observer'
 import { DATA_IMAGE_URL_RE } from '@/lib/embedded-images'
 import { triggerHaptic } from '@/lib/haptics'
@@ -120,7 +120,7 @@ function messageContentText(content: unknown): string {
 export const Thread: FC<{
   clampToComposer?: boolean
   cwd?: string | null
-  gateway?: HermesGateway | null
+  gateway?: NexusGateway | null
   intro?: IntroProps
   loading?: ThreadLoadingState
   onBranchInNewChat?: (messageId: string) => void
@@ -875,7 +875,7 @@ const SystemMessage: FC = () => {
 
 interface UserEditComposerProps {
   cwd: string | null
-  gateway: HermesGateway | null
+  gateway: NexusGateway | null
   sessionId: string | null
 }
 

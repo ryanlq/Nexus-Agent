@@ -2,7 +2,7 @@ import { type MutableRefObject, useCallback } from 'react'
 
 import { notify, notifyError } from '@/store/notifications'
 import { $currentCwd, setCurrentBranch, setCurrentCwd } from '@/store/session'
-import type { SessionRuntimeInfo } from '@/types/hermes'
+import type { SessionRuntimeInfo } from '@/types/nexus'
 
 interface CwdActionsOptions {
   activeSessionId: string | null

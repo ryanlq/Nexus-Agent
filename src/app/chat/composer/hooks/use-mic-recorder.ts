@@ -161,7 +161,7 @@ export function useMicRecorder(): { handle: MicRecorderHandle; level: number; re
       throw new Error('This runtime does not support microphone recording.')
     }
 
-    const permitted = await window.hermesDesktop?.requestMicrophoneAccess?.()
+    const permitted = await window.nexusAgent?.requestMicrophoneAccess?.()
 
     if (permitted === false) {
       throw new Error('Microphone access denied.')

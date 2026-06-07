@@ -53,7 +53,7 @@ const UPDATE_TOAST_ID = 'desktop-update-available'
 // a day, so a "don't show this exact sha again" guard re-popped the toast on
 // every new commit. We instead suppress the toast for a cooldown window that
 // (re)starts whenever the user closes it.
-const UPDATE_TOAST_SNOOZE_KEY = 'hermes:update-toast-snooze-until'
+const UPDATE_TOAST_SNOOZE_KEY = 'nexus:update-toast-snooze-until'
 const UPDATE_TOAST_COOLDOWN_MS = 24 * 60 * 60 * 1000
 
 function snoozeUpdateToast(): void {
@@ -162,7 +162,7 @@ export async function refreshDesktopVersion(): Promise<DesktopVersionInfo | null
   // mid-reload, or the bridge not yet ready on first paint) would surface
   // as an unhandled promise rejection in the renderer. Swallow it.
   try {
-    const next = await window.hermesDesktop?.getVersion?.()
+    const next = await window.nexusAgent?.getVersion?.()
 
     if (next) {
       $desktopVersion.set(next)
@@ -175,7 +175,7 @@ export async function refreshDesktopVersion(): Promise<DesktopVersionInfo | null
 }
 
 export async function checkUpdates(): Promise<DesktopUpdateStatus | null> {
-  const bridge = window.hermesDesktop?.updates
+  const bridge = window.nexusAgent?.updates
 
   if (!bridge || $updateChecking.get()) {
     return $updateStatus.get()
@@ -213,7 +213,7 @@ export async function checkUpdates(): Promise<DesktopUpdateStatus | null> {
 }
 
 export async function applyUpdates(opts: DesktopUpdateApplyOptions = {}): Promise<DesktopUpdateApplyResult> {
-  const bridge = window.hermesDesktop?.updates
+  const bridge = window.nexusAgent?.updates
 
   if (!bridge) {
     return { ok: false, error: 'unavailable', message: 'Desktop bridge unavailable.' }
@@ -274,7 +274,7 @@ export function startUpdatePoller(): void {
     return
   }
 
-  const bridge = window.hermesDesktop?.updates
+  const bridge = window.nexusAgent?.updates
 
   if (!bridge) {
     return

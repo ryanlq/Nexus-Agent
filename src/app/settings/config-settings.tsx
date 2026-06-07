@@ -12,11 +12,11 @@ import {
   getHermesConfigRecord,
   getHermesConfigSchema,
   saveHermesConfig
-} from '@/hermes'
+} from '@/nexus'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
-import type { ConfigFieldSchema, HermesConfigRecord } from '@/types/hermes'
+import type { ConfigFieldSchema, HermesConfigRecord } from '@/types/nexus'
 
 import { CONTROL_TEXT, EMPTY_SELECT_VALUE, FIELD_DESCRIPTIONS, FIELD_LABELS, AGENT_GATEWAY_SECTIONS as SECTIONS } from './constants'
 import { enumOptionsFor, getNested, prettyName, setNested } from './helpers'

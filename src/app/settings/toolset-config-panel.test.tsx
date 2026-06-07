@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ToolsetConfig } from '@/types/hermes'
+import type { ToolsetConfig } from '@/types/nexus'
 
 const getToolsetConfig = vi.fn()
 const selectToolsetProvider = vi.fn()
@@ -9,7 +9,7 @@ const setEnvVar = vi.fn()
 const deleteEnvVar = vi.fn()
 const revealEnvVar = vi.fn()
 
-vi.mock('@/hermes', () => ({
+vi.mock('@/nexus', () => ({
   getToolsetConfig: (name: string) => getToolsetConfig(name),
   selectToolsetProvider: (name: string, provider: string) => selectToolsetProvider(name, provider),
   setEnvVar: (key: string, value: string) => setEnvVar(key, value),

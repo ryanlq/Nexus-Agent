@@ -5,8 +5,8 @@ import { useMemo, useState } from 'react'
 import { BrailleSpinner } from '@/components/ui/braille-spinner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
-import type { HermesGateway } from '@/hermes'
-import { getGlobalModelOptions } from '@/hermes'
+import type { NexusGateway } from '@/nexus'
+import { getGlobalModelOptions } from '@/nexus'
 import { displayModelName, modelDisplayParts } from '@/lib/model-status-label'
 import {
   $visibleModels,
@@ -15,10 +15,10 @@ import {
   modelVisibilityKey,
   setVisibleModels
 } from '@/store/model-visibility'
-import type { ModelOptionProvider, ModelOptionsResponse } from '@/types/hermes'
+import type { ModelOptionProvider, ModelOptionsResponse } from '@/types/nexus'
 
 interface ModelVisibilityDialogProps {
-  gw?: HermesGateway
+  gw?: NexusGateway
   onOpenChange: (open: boolean) => void
   onOpenProviders: () => void
   open: boolean

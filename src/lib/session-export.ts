@@ -1,5 +1,5 @@
-import type { SessionInfo } from '@/hermes'
-import { getSessionMessages } from '@/hermes'
+import type { SessionInfo } from '@/nexus'
+import { getSessionMessages } from '@/nexus'
 import { notify, notifyError } from '@/store/notifications'
 
 interface ExportSessionParams {

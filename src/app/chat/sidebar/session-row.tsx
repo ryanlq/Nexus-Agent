@@ -9,9 +9,16 @@ import { type Translations, useI18n } from '@/i18n'
 import { sessionTitle } from '@/lib/chat-runtime'
 import { triggerHaptic } from '@/lib/haptics'
 import { cn } from '@/lib/utils'
-import { $attentionSessionIds } from '@/store/session'
+import { $attentionSessionIds, $currentProvider } from '@/store/session'
 
 import { SessionActionsMenu, SessionContextMenu } from './session-actions-menu'
+
+/** Short display names for agent slugs, used in sidebar badges. */
+const AGENT_SHORT_NAMES: Record<string, string> = {
+  'claude-code': 'Claude',
+  'pi': 'Pi',
+  'codex': 'Codex',
+}
 
 interface SidebarSessionRowProps extends React.ComponentProps<'div'> {
   session: SessionInfo
@@ -71,6 +78,8 @@ export function SidebarSessionRow({
   // the atom is tiny and rarely non-empty. True when a clarify prompt in this
   // session is waiting on the user.
   const needsInput = useStore($attentionSessionIds).includes(session.id)
+  const currentProvider = useStore($currentProvider)
+  const showAgentBadge = isSelected && currentProvider
 
   return (
     <SessionContextMenu
@@ -182,6 +191,11 @@ export function SidebarSessionRow({
           <span className="min-w-0 flex-1 truncate text-[0.8125rem] font-normal text-(--ui-text-secondary) group-hover:text-foreground group-data-[working=true]:text-foreground/90">
             {title}
           </span>
+          {showAgentBadge && (
+            <span className="ml-1 shrink-0 rounded-sm bg-primary/10 px-1 py-px text-[0.56rem] font-medium leading-none text-primary/70">
+              {AGENT_SHORT_NAMES[currentProvider] ?? currentProvider}
+            </span>
+          )}
         </button>
         <div className="relative z-2 grid w-[1.375rem] place-items-center">
           {!isWorking && (

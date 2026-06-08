@@ -38,7 +38,7 @@ const DEFAULT_AGENTS: AgentInfo[] = [
   {
     slug: 'pi', name: 'Pi Agent', description: "Nous Research's Pi agent. Supports print, json, and rpc modes.", installed: false,
     install_hint: 'pip install pi-agent',
-    params: [{ key: 'mode', label: 'Mode', type: 'select', options: ['print', 'json', 'rpc'], default: 'print', description: 'Pi agent communication mode.' }],
+    params: [{ key: 'mode', label: 'Mode', type: 'select', options: ['print', 'json', 'rpc'], default: 'rpc', description: 'Pi agent communication mode.' }],
   },
   {
     slug: 'codex', name: 'OpenAI Codex', description: "OpenAI's Codex CLI coding agent.", installed: false,

@@ -2251,6 +2251,39 @@ function createPythonBackend(root, label, dashboardArgs, options = {}) {
   };
 }
 
+// Resolve the prebuilt agent-gateway sidecar that electron-builder bundles
+// under resources/gateway/ (the `extraResources` entry in package.json,
+// populated by scripts/before-pack.cjs from the sibling agent-gateway
+// checkout). When present, the desktop runs fully self-contained — no
+// Python, venv, git checkout, or PATH install needed on the user's machine.
+//
+// Returns the absolute path to the binary, or null when the sidecar is not
+// shipped with this build (dev runs, or a package built without the gateway
+// checkout available). The spawn site re-chmods POSIX binaries on launch
+// because some installers / archive extractors strip the executable bit.
+function resolveSidecarBinary() {
+  const resourcesRoot =
+    (process.resourcesPath && path.resolve(process.resourcesPath)) ||
+    path.join(__dirname, "..");
+  const gatewayDir = path.join(resourcesRoot, "gateway");
+
+  if (!directoryExists(gatewayDir)) return null;
+
+  const arch = process.arch === "arm64" ? "arm64" : "amd64";
+  let filename;
+
+  if (process.platform === "win32") {
+    filename = `agent-gateway-windows-${arch}.exe`;
+  } else if (process.platform === "darwin") {
+    filename = `agent-gateway-macos-${arch}`;
+  } else {
+    filename = `agent-gateway-linux-${arch}`;
+  }
+
+  const candidate = path.join(gatewayDir, filename);
+  return fileExists(candidate) ? candidate : null;
+}
+
 // createActiveBackend — build a backend pointing at ACTIVE_NEXUS_ROOT, the
 // canonical install location shared with the CLI installer. The venv at
 // NEXUS_VENV_ROOT may not exist yet on first run; bootstrap=true tells
@@ -2275,6 +2308,29 @@ function createActiveBackend(dashboardArgs) {
 }
 
 function resolveHermesBackend(dashboardArgs) {
+  // 0. Prebuilt sidecar — the packaged-app one-click install path. The
+  //    agent-gateway binary is built by the gateway CI, staged into
+  //    build/sidecar/ by scripts/before-pack.cjs, and shipped by
+  //    electron-builder under resources/gateway/. No Python, venv, git, or
+  //    network required on the user's machine. Wins over every env-var
+  //    source below so a packaged install is deterministic; env-var
+  //    developer overrides still apply on dev builds where no sidecar is
+  //    bundled.
+  const sidecar = resolveSidecarBinary();
+  if (sidecar) {
+    const portIdx = dashboardArgs.indexOf("--port");
+    const port = portIdx >= 0 ? dashboardArgs[portIdx + 1] : "9119";
+    return {
+      kind: "sidecar",
+      label: `bundled agent-gateway sidecar (${path.basename(sidecar)})`,
+      command: sidecar,
+      args: ["--host", "127.0.0.1", "--port", String(port)],
+      env: {},
+      bootstrap: false,
+      shell: false,
+    };
+  }
+
   // 1. Explicit override -- NEXUS_AGENT_ROOT points at a developer
   //    checkout. Honour it as-is (no bootstrap; the user is driving).
   const overrideRoot =
@@ -4998,6 +5054,20 @@ async function spawnPoolBackend(profile, entry) {
   const hermesCwd = resolveHermesCwd();
   const webDist = resolveWebDist();
 
+  // Belt-and-braces: the before-pack hook sets +x at stage time, but some
+  // archive extractors / installer round-trips (notably unpacking an NSIS
+  // payload on a non-NTFS volume) strip the executable bit. Re-apply it on
+  // POSIX before spawn so the sidecar launches; Windows .exe needs no +x.
+  if (backend.kind === "sidecar" && process.platform !== "win32") {
+    try {
+      fs.chmodSync(backend.command, 0o755);
+    } catch (err) {
+      rememberLog(
+        `[sidecar] chmod +x ${backend.command} failed: ${err.message}`,
+      );
+    }
+  }
+
   rememberLog(
     `Starting Nexus Agent backend for profile "${profile}" via ${backend.label}`,
   );
@@ -5158,6 +5228,20 @@ async function startHermes() {
     const backend = await ensureRuntime(resolveHermesBackend(dashboardArgs));
     const hermesCwd = resolveHermesCwd();
     const webDist = resolveWebDist();
+
+    // Belt-and-braces: the before-pack hook sets +x at stage time, but some
+    // archive extractors / installer round-trips (notably unpacking an NSIS
+    // payload on a non-NTFS volume) strip the executable bit. Re-apply it on
+    // POSIX before spawn so the sidecar launches; Windows .exe needs no +x.
+    if (backend.kind === "sidecar" && process.platform !== "win32") {
+      try {
+        fs.chmodSync(backend.command, 0o755);
+      } catch (err) {
+        rememberLog(
+          `[sidecar] chmod +x ${backend.command} failed: ${err.message}`,
+        );
+      }
+    }
 
     await advanceBootProgress(
       "backend.spawn",

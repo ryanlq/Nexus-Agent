@@ -20,6 +20,18 @@ function recordingLimit(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : DEFAULT_VOICE_SECONDS
 }
 
+/** Read the default project dir from Electron's project-dir.json (set via the UI picker). */
+async function getElectronDefaultProjectDir(): Promise<string> {
+  const settings = window.nexusAgent?.settings
+  if (!settings) return ''
+  try {
+    const result = await settings.getDefaultProjectDir()
+    return result.dir?.trim() || ''
+  } catch {
+    return ''
+  }
+}
+
 interface HermesConfigOptions {
   activeSessionIdRef: MutableRefObject<string | null>
   refreshProjectBranch: (cwd: string) => Promise<void>
@@ -49,7 +61,11 @@ export function useHermesConfig({ activeSessionIdRef, refreshProjectBranch }: He
         ])
       ])
 
-      const cwd = (config.terminal?.cwd ?? '').trim()
+      // Resolve cwd: try hermes_config.terminal.cwd first, then Electron's project-dir.json
+      let cwd = (config.terminal?.cwd ?? '').trim()
+      if (!cwd || cwd === '.') {
+        cwd = await getElectronDefaultProjectDir()
+      }
 
       if (cwd && cwd !== '.') {
         setCurrentCwd(prev => prev || cwd)

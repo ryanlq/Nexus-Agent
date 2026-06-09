@@ -21,7 +21,8 @@
       "Bash(ls /home/ryanli/Data/Projects/Agents/agent-gateway/ 2>/dev/null || echo \"not found\")",
       "Bash(python3:*)",
       "Bash(head:*)",
-      "Bash(find /home/ryanli/Data/Projects/Agents/hermes-desktop/shared/src -type f -name \"*.ts\" | head -20)"
+      "Bash(find /home/ryanli/Data/Projects/Agents/hermes-desktop/shared/src -type f -name \"*.ts\" | head -20)",
+      "Bash(ls /home/ryanli/Data/Projects/Agents/hermes-desktop/assets/ && ls /home/ryanli/Data/Projects/Agents/hermes-desktop/public/ 2>/dev/null | head -10)"
     ]
   }
 }

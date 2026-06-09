@@ -3,6 +3,7 @@ const {
   BrowserWindow,
   Menu,
   Notification,
+  Tray,
   clipboard,
   dialog,
   ipcMain,
@@ -14,21 +15,28 @@ const {
   safeStorage,
   session,
   shell,
-  systemPreferences
-} = require('electron')
-const crypto = require('node:crypto')
-const fs = require('node:fs')
-const http = require('node:http')
-const https = require('node:https')
-const net = require('node:net')
-const path = require('node:path')
-const { fileURLToPath, pathToFileURL } = require('node:url')
-const { execFileSync, spawn } = require('node:child_process')
-const { detectRemoteDisplay, isWindowsBinaryPathInWsl, isWslEnvironment } = require('./bootstrap-platform.cjs')
-const { runBootstrap } = require('./bootstrap-runner.cjs')
-const { canImportHermesCli, verifyHermesCli } = require('./backend-probes.cjs')
-const { probeGatewayWebSocket } = require('./gateway-ws-probe.cjs')
-const { serializeJsonBody, setJsonRequestHeaders } = require('./oauth-net-request.cjs')
+  systemPreferences,
+} = require("electron");
+const crypto = require("node:crypto");
+const fs = require("node:fs");
+const http = require("node:http");
+const https = require("node:https");
+const net = require("node:net");
+const path = require("node:path");
+const { fileURLToPath, pathToFileURL } = require("node:url");
+const { execFileSync, spawn } = require("node:child_process");
+const {
+  detectRemoteDisplay,
+  isWindowsBinaryPathInWsl,
+  isWslEnvironment,
+} = require("./bootstrap-platform.cjs");
+const { runBootstrap } = require("./bootstrap-runner.cjs");
+const { canImportHermesCli, verifyHermesCli } = require("./backend-probes.cjs");
+const { probeGatewayWebSocket } = require("./gateway-ws-probe.cjs");
+const {
+  serializeJsonBody,
+  setJsonRequestHeaders,
+} = require("./oauth-net-request.cjs");
 const {
   authModeFromStatus,
   buildGatewayWsUrl,
@@ -41,21 +49,21 @@ const {
   profileRemoteOverride,
   resolveAuthMode,
   resolveTestWsUrl,
-  tokenPreview
-} = require('./connection-config.cjs')
+  tokenPreview,
+} = require("./connection-config.cjs");
 const {
   DATA_URL_READ_MAX_BYTES,
   DEFAULT_FETCH_TIMEOUT_MS,
   TEXT_PREVIEW_SOURCE_MAX_BYTES,
   encryptDesktopSecret: encryptDesktopSecretStrict,
   resolveReadableFileForIpc,
-  resolveTimeoutMs
-} = require('./hardening.cjs')
+  resolveTimeoutMs,
+} = require("./hardening.cjs");
 
-let nodePty = null
+let nodePty = null;
 
 try {
-  nodePty = require('node-pty')
+  nodePty = require("node-pty");
 } catch {
   // Packaged builds set `files:` in package.json, which excludes node_modules
   // from the asar.  Workspace dedup also hoists this native dep to the repo
@@ -65,31 +73,31 @@ try {
   // require() fails.  Dev mode never reaches this branch -- the hoisted
   // resolve succeeds via Node's normal module lookup.
   try {
-    const path = require('node:path')
-    const resourcesPath = process.resourcesPath
+    const path = require("node:path");
+    const resourcesPath = process.resourcesPath;
     if (resourcesPath) {
-      nodePty = require(path.join(resourcesPath, 'native-deps', 'node-pty'))
+      nodePty = require(path.join(resourcesPath, "native-deps", "node-pty"));
     }
   } catch {
-    nodePty = null
+    nodePty = null;
   }
 }
 
-const USER_DATA_OVERRIDE = process.env.NEXUS_AGENT_USER_DATA_DIR
+const USER_DATA_OVERRIDE = process.env.NEXUS_AGENT_USER_DATA_DIR;
 if (USER_DATA_OVERRIDE) {
-  const resolvedUserData = path.resolve(USER_DATA_OVERRIDE)
-  fs.mkdirSync(resolvedUserData, { recursive: true })
-  app.setPath('userData', resolvedUserData)
+  const resolvedUserData = path.resolve(USER_DATA_OVERRIDE);
+  fs.mkdirSync(resolvedUserData, { recursive: true });
+  app.setPath("userData", resolvedUserData);
 }
 
-const PORT_FLOOR = 9120
-const PORT_CEILING = 9199
-const DEV_SERVER = process.env.NEXUS_AGENT_DEV_SERVER
-const IS_PACKAGED = app.isPackaged
-const IS_MAC = process.platform === 'darwin'
-const IS_WINDOWS = process.platform === 'win32'
-const IS_WSL = isWslEnvironment()
-const APP_ROOT = app.getAppPath()
+const PORT_FLOOR = 9120;
+const PORT_CEILING = 9199;
+const DEV_SERVER = process.env.NEXUS_AGENT_DEV_SERVER;
+const IS_PACKAGED = app.isPackaged;
+const IS_MAC = process.platform === "darwin";
+const IS_WINDOWS = process.platform === "win32";
+const IS_WSL = isWslEnvironment();
+const APP_ROOT = app.getAppPath();
 
 // Remote displays (SSH X11 forwarding, VNC, RDP) make Chromium's GPU
 // compositor flicker — accelerated layers can't be presented cleanly over the
@@ -100,17 +108,17 @@ const APP_ROOT = app.getAppPath()
 // next to the connection's latency. Must run before app `ready` — these
 // switches only apply pre-launch. Override with NEXUS_AGENT_DISABLE_GPU
 // (1/true → always disable, 0/false → keep GPU on).
-const REMOTE_DISPLAY_REASON = detectRemoteDisplay()
+const REMOTE_DISPLAY_REASON = detectRemoteDisplay();
 if (REMOTE_DISPLAY_REASON) {
-  app.disableHardwareAcceleration()
+  app.disableHardwareAcceleration();
   // Belt-and-suspenders for X11/VNC, where the Viz compositor can still glitch
   // with only --disable-gpu: force compositing onto the CPU too.
-  app.commandLine.appendSwitch('disable-gpu-compositing')
+  app.commandLine.appendSwitch("disable-gpu-compositing");
   console.log(
-    `[nexus] remote display detected (${REMOTE_DISPLAY_REASON}); disabling GPU hardware acceleration to prevent flicker`
-  )
+    `[nexus] remote display detected (${REMOTE_DISPLAY_REASON}); disabling GPU hardware acceleration to prevent flicker`,
+  );
 }
-const SOURCE_REPO_ROOT = path.resolve(APP_ROOT, '../..')
+const SOURCE_REPO_ROOT = path.resolve(APP_ROOT, "../..");
 
 // Build-time install stamp -- the git ref this .exe was built against.
 //
@@ -125,26 +133,33 @@ const SOURCE_REPO_ROOT = path.resolve(APP_ROOT, '../..')
 //
 // Schema:
 //   { schemaVersion: 1, commit, branch, builtAt, dirty, source }
-const INSTALL_STAMP_SCHEMA_VERSION = 1
+const INSTALL_STAMP_SCHEMA_VERSION = 1;
 function loadInstallStamp() {
   // Try packaged location first (resources/install-stamp.json), then the
   // dev/local build output (apps/desktop/build/install-stamp.json) so
   // someone running `npm run start` after a local `npm run build` also
   // sees a stamp without needing a packaged build.
   const candidates = [
-    process.resourcesPath ? path.join(process.resourcesPath, 'install-stamp.json') : null,
-    path.join(APP_ROOT, 'build', 'install-stamp.json')
-  ].filter(Boolean)
+    process.resourcesPath
+      ? path.join(process.resourcesPath, "install-stamp.json")
+      : null,
+    path.join(APP_ROOT, "build", "install-stamp.json"),
+  ].filter(Boolean);
   for (const p of candidates) {
     try {
-      const raw = fs.readFileSync(p, 'utf8')
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object' && typeof parsed.commit === 'string' && parsed.commit.length >= 7) {
+      const raw = fs.readFileSync(p, "utf8");
+      const parsed = JSON.parse(raw);
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        typeof parsed.commit === "string" &&
+        parsed.commit.length >= 7
+      ) {
         if (parsed.schemaVersion !== INSTALL_STAMP_SCHEMA_VERSION) {
           console.warn(
-            `[nexus] install-stamp.json schemaVersion ${parsed.schemaVersion} != expected ${INSTALL_STAMP_SCHEMA_VERSION}; ignoring`
-          )
-          continue
+            `[nexus] install-stamp.json schemaVersion ${parsed.schemaVersion} != expected ${INSTALL_STAMP_SCHEMA_VERSION}; ignoring`,
+          );
+          continue;
         }
         return Object.freeze({
           schemaVersion: parsed.schemaVersion,
@@ -153,26 +168,26 @@ function loadInstallStamp() {
           builtAt: parsed.builtAt || null,
           dirty: Boolean(parsed.dirty),
           source: parsed.source || null,
-          path: p
-        })
+          path: p,
+        });
       }
     } catch {
       // Either ENOENT or malformed JSON; try the next candidate
     }
   }
-  return null
+  return null;
 }
-const INSTALL_STAMP = loadInstallStamp()
+const INSTALL_STAMP = loadInstallStamp();
 if (INSTALL_STAMP) {
   console.log(
-    `[nexus] install stamp: ${INSTALL_STAMP.commit.slice(0, 12)}${INSTALL_STAMP.branch ? ` (${INSTALL_STAMP.branch})` : ''}${INSTALL_STAMP.dirty ? ' [DIRTY]' : ''} from ${INSTALL_STAMP.source || 'unknown'}`
-  )
+    `[nexus] install stamp: ${INSTALL_STAMP.commit.slice(0, 12)}${INSTALL_STAMP.branch ? ` (${INSTALL_STAMP.branch})` : ""}${INSTALL_STAMP.dirty ? " [DIRTY]" : ""} from ${INSTALL_STAMP.source || "unknown"}`,
+  );
 } else if (IS_PACKAGED) {
   // Dev builds without a stamp are normal; packaged builds without one
   // mean the bootstrap won't know what to clone. Surface clearly.
   console.error(
-    '[nexus] WARNING: no install-stamp.json found in packaged build. First-launch bootstrap will not have a pinned ref to install.'
-  )
+    "[nexus] WARNING: no install-stamp.json found in packaged build. First-launch bootstrap will not have a pinned ref to install.",
+  );
 }
 
 // NEXUS_AGENT_HOME — the user-facing root for everything Hermes-related. Mirrors
@@ -191,26 +206,29 @@ if (INSTALL_STAMP) {
 // NEXUS_AGENT_HOME beneath the throwaway userData dir so a fresh-install run never
 // touches the user's real ~/.hermes / %LOCALAPPDATA%\hermes.
 function resolveNexusHome() {
-  if (process.env.NEXUS_AGENT_HOME) return path.resolve(process.env.NEXUS_AGENT_HOME)
-  if (USER_DATA_OVERRIDE) return path.join(path.resolve(USER_DATA_OVERRIDE), 'hermes-home')
+  if (process.env.NEXUS_AGENT_HOME)
+    return path.resolve(process.env.NEXUS_AGENT_HOME);
+  if (USER_DATA_OVERRIDE)
+    return path.join(path.resolve(USER_DATA_OVERRIDE), "hermes-home");
   if (IS_WINDOWS && process.env.LOCALAPPDATA) {
-    const localappdata = path.join(process.env.LOCALAPPDATA, 'hermes')
-    const legacy = path.join(app.getPath('home'), '.hermes')
+    const localappdata = path.join(process.env.LOCALAPPDATA, "hermes");
+    const legacy = path.join(app.getPath("home"), ".hermes");
     // Migrate transparently to LOCALAPPDATA, but honour an existing legacy
     // ~/.hermes setup (no LOCALAPPDATA install yet) so users don't lose state.
-    if (!directoryExists(localappdata) && directoryExists(legacy)) return legacy
-    return localappdata
+    if (!directoryExists(localappdata) && directoryExists(legacy))
+      return legacy;
+    return localappdata;
   }
-  return path.join(app.getPath('home'), '.hermes')
+  return path.join(app.getPath("home"), ".hermes");
 }
 
-const NEXUS_AGENT_HOME = resolveNexusHome()
+const NEXUS_AGENT_HOME = resolveNexusHome();
 // ACTIVE_NEXUS_ROOT — the canonical mutable Hermes install. Same path
 // install.ps1 / install.sh use, so a desktop-only user and a CLI-only user end
 // up with identical layouts and can share one install.
-const ACTIVE_NEXUS_ROOT = path.join(NEXUS_AGENT_HOME, 'nexus-agent')
+const ACTIVE_NEXUS_ROOT = path.join(NEXUS_AGENT_HOME, "nexus-agent");
 // NEXUS_VENV_ROOT — venv lives inside the repo, exactly like install.ps1 does it.
-const NEXUS_VENV_ROOT = path.join(ACTIVE_NEXUS_ROOT, 'venv')
+const NEXUS_VENV_ROOT = path.join(ACTIVE_NEXUS_ROOT, "venv");
 // BOOTSTRAP_COMPLETE_MARKER — written by the first-launch bootstrap runner
 // (Phase 1D) after install.ps1 has completed all stages and the user has
 // finished initial configuration. Presence of this marker means the install
@@ -222,44 +240,59 @@ const NEXUS_VENV_ROOT = path.join(ACTIVE_NEXUS_ROOT, 'venv')
 // We deliberately put the marker INSIDE ACTIVE_NEXUS_ROOT (not alongside)
 // so that deleting the checkout to start fresh also deletes the marker --
 // avoids the confusing "marker exists but checkout is gone" state.
-const BOOTSTRAP_COMPLETE_MARKER = path.join(ACTIVE_NEXUS_ROOT, '.nexus-bootstrap-complete')
-const BOOTSTRAP_MARKER_SCHEMA_VERSION = 1
+const BOOTSTRAP_COMPLETE_MARKER = path.join(
+  ACTIVE_NEXUS_ROOT,
+  ".nexus-bootstrap-complete",
+);
+const BOOTSTRAP_MARKER_SCHEMA_VERSION = 1;
 
-const DESKTOP_CONNECTION_CONFIG_PATH = path.join(app.getPath('userData'), 'connection.json')
-const DESKTOP_UPDATE_CONFIG_PATH = path.join(app.getPath('userData'), 'updates.json')
+const DESKTOP_CONNECTION_CONFIG_PATH = path.join(
+  app.getPath("userData"),
+  "connection.json",
+);
+const DESKTOP_UPDATE_CONFIG_PATH = path.join(
+  app.getPath("userData"),
+  "updates.json",
+);
 // active-profile.json records which Hermes profile the desktop launches its
 // local backend as. When set, startHermes() passes `hermes --profile <name>
 // dashboard …`, which deterministically pins NEXUS_AGENT_HOME (see
 // _apply_profile_override in hermes_cli/main.py) and bypasses the sticky
 // ~/.hermes/active_profile file. Unset (null) preserves the legacy behavior:
 // no --profile flag, so the backend honors active_profile / default.
-const DESKTOP_PROFILE_CONFIG_PATH = path.join(app.getPath('userData'), 'active-profile.json')
+const DESKTOP_PROFILE_CONFIG_PATH = path.join(
+  app.getPath("userData"),
+  "active-profile.json",
+);
 // Mirrors hermes_cli.profiles._PROFILE_ID_RE so we never hand the backend a
 // value its profile resolver would reject and exit on.
-const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
+const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 // Branch we track for self-update. The GUI work has merged to main, so this
 // tracks main. User can also override at runtime via
 // hermesDesktop.updates.setBranch().
-const DEFAULT_UPDATE_BRANCH = 'main'
+const DEFAULT_UPDATE_BRANCH = "main";
 // desktop.log lives under NEXUS_AGENT_HOME/logs/ so it sits next to agent.log,
 // errors.log, gateway.log produced by hermes_logging.setup_logging — one log
 // directory per user, regardless of which UI surface produced the line.
-const DESKTOP_LOG_PATH = path.join(NEXUS_AGENT_HOME, 'logs', 'desktop.log')
-const DESKTOP_LOG_FLUSH_MS = 120
-const DESKTOP_LOG_BUFFER_MAX_CHARS = 64 * 1024
-const BOOT_FAKE_MODE = process.env.NEXUS_AGENT_BOOT_FAKE === '1'
+const DESKTOP_LOG_PATH = path.join(NEXUS_AGENT_HOME, "logs", "desktop.log");
+const DESKTOP_LOG_FLUSH_MS = 120;
+const DESKTOP_LOG_BUFFER_MAX_CHARS = 64 * 1024;
+const BOOT_FAKE_MODE = process.env.NEXUS_AGENT_BOOT_FAKE === "1";
 const BOOT_FAKE_STEP_MS = (() => {
-  const raw = Number.parseInt(String(process.env.NEXUS_AGENT_BOOT_FAKE_STEP_MS || ''), 10)
-  if (!Number.isFinite(raw) || raw <= 0) return 650
-  return Math.max(120, raw)
-})()
-const APP_NAME = 'Nexus Agent'
-const TITLEBAR_HEIGHT = 34
-const MACOS_TRAFFIC_LIGHTS_HEIGHT = 14
+  const raw = Number.parseInt(
+    String(process.env.NEXUS_AGENT_BOOT_FAKE_STEP_MS || ""),
+    10,
+  );
+  if (!Number.isFinite(raw) || raw <= 0) return 650;
+  return Math.max(120, raw);
+})();
+const APP_NAME = "Nexus Agent";
+const TITLEBAR_HEIGHT = 34;
+const MACOS_TRAFFIC_LIGHTS_HEIGHT = 14;
 const WINDOW_BUTTON_POSITION = {
   x: 24,
-  y: TITLEBAR_HEIGHT / 2 - MACOS_TRAFFIC_LIGHTS_HEIGHT / 2
-}
+  y: TITLEBAR_HEIGHT / 2 - MACOS_TRAFFIC_LIGHTS_HEIGHT / 2,
+};
 // Width Electron reserves for the Windows/Linux native min/max/close cluster
 // when `titleBarOverlay` is enabled. The OS paints these buttons in the
 // top-right corner of the renderer; we have to leave that much room on the
@@ -267,133 +300,139 @@ const WINDOW_BUTTON_POSITION = {
 // underneath them. macOS uses left-side traffic lights instead and reports a
 // position via getWindowButtonPosition(), so this width is non-zero only on
 // non-macOS platforms.
-const NATIVE_OVERLAY_BUTTON_WIDTH = 144
+const NATIVE_OVERLAY_BUTTON_WIDTH = 144;
 const APP_ICON_PATHS = [
-  path.join(APP_ROOT, 'public', 'apple-touch-icon.png'),
-  path.join(APP_ROOT, 'dist', 'apple-touch-icon.png'),
-  path.join(unpackedPathFor(APP_ROOT), 'dist', 'apple-touch-icon.png')
-]
+  path.join(APP_ROOT, "public", "apple-touch-icon.png"),
+  path.join(APP_ROOT, "dist", "apple-touch-icon.png"),
+  path.join(unpackedPathFor(APP_ROOT), "dist", "apple-touch-icon.png"),
+];
 
-let rendererTitleBarTheme = null
-const terminalSessions = new Map()
+let rendererTitleBarTheme = null;
+const terminalSessions = new Map();
 
 function isHexColor(value) {
-  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
 }
 
 function getTitleBarOverlayOptions() {
   if (IS_MAC) {
-    return { height: TITLEBAR_HEIGHT }
+    return { height: TITLEBAR_HEIGHT };
   }
 
   if (rendererTitleBarTheme) {
     return {
       color: rendererTitleBarTheme.background,
       height: TITLEBAR_HEIGHT,
-      symbolColor: rendererTitleBarTheme.foreground
-    }
+      symbolColor: rendererTitleBarTheme.foreground,
+    };
   }
 
-  const useDarkColors = nativeTheme.shouldUseDarkColors
+  const useDarkColors = nativeTheme.shouldUseDarkColors;
 
   return {
-    color: useDarkColors ? '#111111' : '#f7f7f7',
+    color: useDarkColors ? "#111111" : "#f7f7f7",
     height: TITLEBAR_HEIGHT,
-    symbolColor: useDarkColors ? '#f7f7f7' : '#242424'
-  }
+    symbolColor: useDarkColors ? "#f7f7f7" : "#242424",
+  };
 }
 
 const MEDIA_MIME_TYPES = {
-  '.avi': 'video/x-msvideo',
-  '.bmp': 'image/bmp',
-  '.flac': 'audio/flac',
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.m4a': 'audio/mp4',
-  '.mkv': 'video/x-matroska',
-  '.mov': 'video/quicktime',
-  '.mp3': 'audio/mpeg',
-  '.mp4': 'video/mp4',
-  '.ogg': 'audio/ogg',
-  '.opus': 'audio/ogg; codecs=opus',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.wav': 'audio/wav',
-  '.webm': 'video/webm',
-  '.webp': 'image/webp'
-}
+  ".avi": "video/x-msvideo",
+  ".bmp": "image/bmp",
+  ".flac": "audio/flac",
+  ".gif": "image/gif",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".m4a": "audio/mp4",
+  ".mkv": "video/x-matroska",
+  ".mov": "video/quicktime",
+  ".mp3": "audio/mpeg",
+  ".mp4": "video/mp4",
+  ".ogg": "audio/ogg",
+  ".opus": "audio/ogg; codecs=opus",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".wav": "audio/wav",
+  ".webm": "video/webm",
+  ".webp": "image/webp",
+};
 
-const PREVIEW_HTML_EXTENSIONS = new Set(['.html', '.htm'])
-const PREVIEW_WATCH_DEBOUNCE_MS = 120
-const LOCAL_PREVIEW_HOSTS = new Set(['0.0.0.0', '127.0.0.1', '::1', '[::1]', 'localhost'])
-const TEXT_PREVIEW_MAX_BYTES = 512 * 1024
+const PREVIEW_HTML_EXTENSIONS = new Set([".html", ".htm"]);
+const PREVIEW_WATCH_DEBOUNCE_MS = 120;
+const LOCAL_PREVIEW_HOSTS = new Set([
+  "0.0.0.0",
+  "127.0.0.1",
+  "::1",
+  "[::1]",
+  "localhost",
+]);
+const TEXT_PREVIEW_MAX_BYTES = 512 * 1024;
 const PREVIEW_LANGUAGE_BY_EXT = {
-  '.c': 'c',
-  '.conf': 'ini',
-  '.cpp': 'cpp',
-  '.css': 'css',
-  '.csv': 'csv',
-  '.go': 'go',
-  '.graphql': 'graphql',
-  '.h': 'c',
-  '.hpp': 'cpp',
-  '.html': 'html',
-  '.java': 'java',
-  '.js': 'javascript',
-  '.json': 'json',
-  '.jsx': 'jsx',
-  '.kt': 'kotlin',
-  '.lua': 'lua',
-  '.md': 'markdown',
-  '.mjs': 'javascript',
-  '.py': 'python',
-  '.rb': 'ruby',
-  '.rs': 'rust',
-  '.sh': 'shell',
-  '.sql': 'sql',
-  '.svg': 'xml',
-  '.toml': 'toml',
-  '.ts': 'typescript',
-  '.tsx': 'tsx',
-  '.txt': 'text',
-  '.xml': 'xml',
-  '.yaml': 'yaml',
-  '.yml': 'yaml',
-  '.zsh': 'shell'
-}
+  ".c": "c",
+  ".conf": "ini",
+  ".cpp": "cpp",
+  ".css": "css",
+  ".csv": "csv",
+  ".go": "go",
+  ".graphql": "graphql",
+  ".h": "c",
+  ".hpp": "cpp",
+  ".html": "html",
+  ".java": "java",
+  ".js": "javascript",
+  ".json": "json",
+  ".jsx": "jsx",
+  ".kt": "kotlin",
+  ".lua": "lua",
+  ".md": "markdown",
+  ".mjs": "javascript",
+  ".py": "python",
+  ".rb": "ruby",
+  ".rs": "rust",
+  ".sh": "shell",
+  ".sql": "sql",
+  ".svg": "xml",
+  ".toml": "toml",
+  ".ts": "typescript",
+  ".tsx": "tsx",
+  ".txt": "text",
+  ".xml": "xml",
+  ".yaml": "yaml",
+  ".yml": "yaml",
+  ".zsh": "shell",
+};
 
 function looksBinary(buffer) {
-  if (!buffer.length) return false
+  if (!buffer.length) return false;
 
-  let suspicious = 0
+  let suspicious = 0;
 
   for (const byte of buffer) {
-    if (byte === 0) return true
+    if (byte === 0) return true;
     // Allow common whitespace controls: tab, LF, CR.
-    if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) suspicious += 1
+    if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) suspicious += 1;
   }
 
-  return suspicious / buffer.length > 0.12
+  return suspicious / buffer.length > 0.12;
 }
 
 function previewFileMetadata(filePath, mimeType) {
-  let byteSize = 0
-  let binary = false
+  let byteSize = 0;
+  let binary = false;
 
   try {
-    const stat = fs.statSync(filePath)
-    byteSize = stat.size
+    const stat = fs.statSync(filePath);
+    byteSize = stat.size;
 
-    if (!mimeType.startsWith('image/')) {
-      const fd = fs.openSync(filePath, 'r')
+    if (!mimeType.startsWith("image/")) {
+      const fd = fs.openSync(filePath, "r");
 
       try {
-        const sample = Buffer.alloc(Math.min(byteSize, 4096))
-        const bytesRead = fs.readSync(fd, sample, 0, sample.length, 0)
-        binary = looksBinary(sample.subarray(0, bytesRead))
+        const sample = Buffer.alloc(Math.min(byteSize, 4096));
+        const bytesRead = fs.readSync(fd, sample, 0, sample.length, 0);
+        binary = looksBinary(sample.subarray(0, bytesRead));
       } finally {
-        fs.closeSync(fd)
+        fs.closeSync(fd);
       }
     }
   } catch {
@@ -403,15 +442,15 @@ function previewFileMetadata(filePath, mimeType) {
   return {
     binary,
     byteSize,
-    large: byteSize > TEXT_PREVIEW_MAX_BYTES
-  }
+    large: byteSize > TEXT_PREVIEW_MAX_BYTES,
+  };
 }
 
-app.setName(APP_NAME)
+app.setName(APP_NAME);
 app.setAboutPanelOptions({
   applicationName: APP_NAME,
-  copyright: 'Copyright © 2026 Nous Research'
-})
+  copyright: "Copyright © 2026 Nous Research",
+});
 
 // Custom scheme for streaming local media (video/audio) into the renderer.
 // Reading large media through `readFileDataUrl` failed: it base64-loads the
@@ -419,22 +458,22 @@ app.setAboutPanelOptions({
 // so any non-trivial video silently refused to load. Streaming via a protocol
 // handler removes the size cap and gives the <video> element seekable,
 // range-aware playback. Must be registered before the app is ready.
-const MEDIA_PROTOCOL = 'nexus-media'
+const MEDIA_PROTOCOL = "nexus-media";
 // Only audio/video may be streamed. Without this the handler would read any
 // non-blocklisted local file (no size cap) for any `fetch(hermes-media://…)`.
 const STREAMABLE_MEDIA_EXTS = new Set([
-  '.avi',
-  '.flac',
-  '.m4a',
-  '.mkv',
-  '.mov',
-  '.mp3',
-  '.mp4',
-  '.ogg',
-  '.opus',
-  '.wav',
-  '.webm'
-])
+  ".avi",
+  ".flac",
+  ".m4a",
+  ".mkv",
+  ".mov",
+  ".mp3",
+  ".mp4",
+  ".ogg",
+  ".opus",
+  ".wav",
+  ".webm",
+]);
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -443,24 +482,26 @@ protocol.registerSchemesAsPrivileged([
       secure: true,
       standard: true,
       stream: true,
-      supportFetchAPI: true
-    }
-  }
-])
+      supportFetchAPI: true,
+    },
+  },
+]);
 
 function registerMediaProtocol() {
-  protocol.handle(MEDIA_PROTOCOL, async request => {
-    let resolvedPath
+  protocol.handle(MEDIA_PROTOCOL, async (request) => {
+    let resolvedPath;
     try {
-      const url = new URL(request.url)
-      const filePath = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
-      ;({ resolvedPath } = await resolveReadableFileForIpc(filePath, { purpose: 'Media stream' }))
+      const url = new URL(request.url);
+      const filePath = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+      ({ resolvedPath } = await resolveReadableFileForIpc(filePath, {
+        purpose: "Media stream",
+      }));
     } catch {
-      return new Response('Media not found', { status: 404 })
+      return new Response("Media not found", { status: 404 });
     }
 
     if (!STREAMABLE_MEDIA_EXTS.has(path.extname(resolvedPath).toLowerCase())) {
-      return new Response('Unsupported media type', { status: 415 })
+      return new Response("Unsupported media type", { status: 415 });
     }
 
     // Delegate to Electron's net stack on a file:// URL — it resolves the
@@ -468,138 +509,161 @@ function registerMediaProtocol() {
     // renderer's headers (notably Range) and skip custom-protocol re-entry.
     return electronNet.fetch(pathToFileURL(resolvedPath).toString(), {
       bypassCustomProtocolHandlers: true,
-      headers: request.headers
-    })
-  })
+      headers: request.headers,
+    });
+  });
 }
 
-let mainWindow = null
-let hermesProcess = null
-let connectionPromise = null
+let mainWindow = null;
+let hermesProcess = null;
+let connectionPromise = null;
+// System tray + lightweight mode: when enabled the renderer (BrowserWindow) is
+// destroyed to free ~60-70% of the desktop's memory footprint. The backend
+// process (hermesProcess) stays alive so the gateway keeps serving REST/WS and
+// external messaging platforms (email, Telegram, …) continue uninterrupted.
+// Clicking the tray icon or unchecking lightweight mode recreates the window,
+// reconnects the WebSocket, and pulls a fresh session list from the backend.
+let tray = null;
+let lightweightMode = false;
+// Set while the renderer is being rebuilt after a lightweight-mode restore so
+// the boot overlay can be skipped (the backend is already running).
+let restoringFromLightweight = false;
+// True once the user has chosen Quit from the tray (or app.quit() was called
+// elsewhere). Prevents the close-event interceptor from hiding the window
+// instead of letting the app actually exit.
+let quitting = false;
 // Additional per-profile backends, keyed by profile name. The PRIMARY backend
 // (the desktop's launch profile) stays managed by hermesProcess +
 // connectionPromise + startHermes(); this pool only holds EXTRA profile
 // backends spawned lazily when a session belongs to a different profile. A user
 // with no named profiles never populates this map, so their experience is
 // byte-for-byte the single-backend behavior.
-const backendPool = new Map() // profile -> { process, port, token, connectionPromise, lastActiveAt }
+const backendPool = new Map(); // profile -> { process, port, token, connectionPromise, lastActiveAt }
 // Keep the pool light: cap concurrent profile backends (LRU eviction) and reap
 // idle ones. A user idles at exactly the primary backend; pool backends only
 // exist while a non-primary profile is actively being chatted through.
-const POOL_MAX_BACKENDS = Math.max(1, Number(process.env.NEXUS_AGENT_POOL_MAX) || 3)
-const POOL_IDLE_MS = Math.max(60_000, Number(process.env.NEXUS_AGENT_POOL_IDLE_MS) || 10 * 60_000)
+const POOL_MAX_BACKENDS = Math.max(
+  1,
+  Number(process.env.NEXUS_AGENT_POOL_MAX) || 3,
+);
+const POOL_IDLE_MS = Math.max(
+  60_000,
+  Number(process.env.NEXUS_AGENT_POOL_IDLE_MS) || 10 * 60_000,
+);
 // A backend touched within this window has a live renderer socket (the keepalive
 // pings every 60s for every open profile). LRU eviction must spare these — a
 // concurrent multi-profile session keeps several backends "fresh" at once, and
 // killing one to honor the soft cap would abort a running agent.
-const POOL_KEEPALIVE_FRESH_MS = 90_000
-let poolIdleReaper = null
+const POOL_KEEPALIVE_FRESH_MS = 90_000;
+let poolIdleReaper = null;
 // Auto-reload budget for renderer crashes. A deterministic startup crash would
 // otherwise loop forever (reload → crash → reload), pinning CPU and spamming
 // logs. Allow a few reloads per rolling window, then stop and leave the dead
 // window so the user can read the error / quit.
-const RENDERER_RELOAD_WINDOW_MS = 60_000
-const RENDERER_RELOAD_MAX = 3
-let rendererReloadTimes = []
+const RENDERER_RELOAD_WINDOW_MS = 60_000;
+const RENDERER_RELOAD_MAX = 3;
+let rendererReloadTimes = [];
 // Latched bootstrap failure: when the first-launch install fails, we hold
 // onto the error so subsequent startHermes() calls (e.g. the renderer's
 // ensureGatewayOpen retrying after the WS won't open) return the same error
 // instead of re-running install.ps1 in a hot loop. Cleared explicitly by
 // the renderer's "Reload and retry" path or by quitting the app.
-let bootstrapFailure = null
+let bootstrapFailure = null;
 // Active first-launch install, so the renderer's Cancel button (and app quit)
 // can abort the in-flight install.sh/ps1 instead of leaving it running.
-let bootstrapAbortController = null
-let connectionConfigCache = null
-let connectionConfigCacheMtime = null
-const hermesLog = []
-const previewWatchers = new Map()
-let previewShortcutActive = false
-let desktopLogBuffer = ''
-let desktopLogFlushTimer = null
-let desktopLogFlushPromise = Promise.resolve()
-let nativeThemeListenerInstalled = false
+let bootstrapAbortController = null;
+let connectionConfigCache = null;
+let connectionConfigCacheMtime = null;
+const hermesLog = [];
+const previewWatchers = new Map();
+let previewShortcutActive = false;
+let desktopLogBuffer = "";
+let desktopLogFlushTimer = null;
+let desktopLogFlushPromise = Promise.resolve();
+let nativeThemeListenerInstalled = false;
 let bootProgressState = {
   error: null,
   fakeMode: BOOT_FAKE_MODE,
-  message: 'Waiting to start Nexus Agent backend',
-  phase: 'idle',
+  message: "Waiting to start Nexus Agent backend",
+  phase: "idle",
   progress: 0,
   running: false,
-  timestamp: Date.now()
-}
+  timestamp: Date.now(),
+};
 
 function flushDesktopLogBufferSync() {
-  if (!desktopLogBuffer) return
-  const chunk = desktopLogBuffer
-  desktopLogBuffer = ''
+  if (!desktopLogBuffer) return;
+  const chunk = desktopLogBuffer;
+  desktopLogBuffer = "";
 
   try {
-    fs.mkdirSync(path.dirname(DESKTOP_LOG_PATH), { recursive: true })
-    fs.appendFileSync(DESKTOP_LOG_PATH, chunk)
+    fs.mkdirSync(path.dirname(DESKTOP_LOG_PATH), { recursive: true });
+    fs.appendFileSync(DESKTOP_LOG_PATH, chunk);
   } catch {
     // Logging must never block app startup/shutdown.
   }
 }
 
 function flushDesktopLogBufferAsync() {
-  if (!desktopLogBuffer) return desktopLogFlushPromise
-  const chunk = desktopLogBuffer
-  desktopLogBuffer = ''
+  if (!desktopLogBuffer) return desktopLogFlushPromise;
+  const chunk = desktopLogBuffer;
+  desktopLogBuffer = "";
 
   desktopLogFlushPromise = desktopLogFlushPromise
     .then(async () => {
-      await fs.promises.mkdir(path.dirname(DESKTOP_LOG_PATH), { recursive: true })
-      await fs.promises.appendFile(DESKTOP_LOG_PATH, chunk)
+      await fs.promises.mkdir(path.dirname(DESKTOP_LOG_PATH), {
+        recursive: true,
+      });
+      await fs.promises.appendFile(DESKTOP_LOG_PATH, chunk);
     })
     .catch(() => {
       // Logging must never crash the desktop shell.
-    })
+    });
 
-  return desktopLogFlushPromise
+  return desktopLogFlushPromise;
 }
 
 function scheduleDesktopLogFlush() {
-  if (desktopLogFlushTimer) return
+  if (desktopLogFlushTimer) return;
   desktopLogFlushTimer = setTimeout(() => {
-    desktopLogFlushTimer = null
-    void flushDesktopLogBufferAsync()
-  }, DESKTOP_LOG_FLUSH_MS)
+    desktopLogFlushTimer = null;
+    void flushDesktopLogBufferAsync();
+  }, DESKTOP_LOG_FLUSH_MS);
 }
 
 function rememberLog(chunk) {
-  const text = String(chunk || '').trim()
-  if (!text) return
-  const lines = text.split(/\r?\n/).map(line => `[nexus] ${line}`)
-  hermesLog.push(...lines)
+  const text = String(chunk || "").trim();
+  if (!text) return;
+  const lines = text.split(/\r?\n/).map((line) => `[nexus] ${line}`);
+  hermesLog.push(...lines);
   if (hermesLog.length > 300) {
-    hermesLog.splice(0, hermesLog.length - 300)
+    hermesLog.splice(0, hermesLog.length - 300);
   }
 
-  desktopLogBuffer += `${lines.join('\n')}\n`
+  desktopLogBuffer += `${lines.join("\n")}\n`;
 
   if (desktopLogBuffer.length >= DESKTOP_LOG_BUFFER_MAX_CHARS) {
     if (desktopLogFlushTimer) {
-      clearTimeout(desktopLogFlushTimer)
-      desktopLogFlushTimer = null
+      clearTimeout(desktopLogFlushTimer);
+      desktopLogFlushTimer = null;
     }
-    void flushDesktopLogBufferAsync()
+    void flushDesktopLogBufferAsync();
 
-    return
+    return;
   }
 
-  scheduleDesktopLogFlush()
+  scheduleDesktopLogFlush();
 }
 
 function openExternalUrl(rawUrl) {
-  const raw = String(rawUrl || '').trim()
-  if (!raw) return false
+  const raw = String(rawUrl || "").trim();
+  if (!raw) return false;
 
-  let parsed
+  let parsed;
   try {
-    parsed = new URL(raw)
+    parsed = new URL(raw);
   } catch {
-    return false
+    return false;
   }
 
   // `file://` URLs come from the artifacts panel (the renderer can't open
@@ -607,114 +671,138 @@ function openExternalUrl(rawUrl) {
   // origin). Hand them to `shell.openPath`, which dispatches to the OS
   // file association. If the OS can't open it (`error` is a non-empty
   // string), fall back to revealing the file in the system file manager.
-  if (parsed.protocol === 'file:') {
-    let localPath
+  if (parsed.protocol === "file:") {
+    let localPath;
     try {
-      localPath = fileURLToPath(parsed.toString())
+      localPath = fileURLToPath(parsed.toString());
     } catch {
-      return false
+      return false;
     }
 
     void shell
       .openPath(localPath)
-      .then(error => {
+      .then((error) => {
         if (!error) {
-          return
+          return;
         }
 
-        rememberLog(`[file] openPath failed: ${error}; revealing in folder instead`)
+        rememberLog(
+          `[file] openPath failed: ${error}; revealing in folder instead`,
+        );
 
         try {
-          shell.showItemInFolder(localPath)
+          shell.showItemInFolder(localPath);
         } catch (revealError) {
-          rememberLog(`[file] showItemInFolder failed: ${revealError.message}`)
+          rememberLog(`[file] showItemInFolder failed: ${revealError.message}`);
         }
       })
-      .catch(error => rememberLog(`[file] openPath rejected: ${error.message}`))
+      .catch((error) =>
+        rememberLog(`[file] openPath rejected: ${error.message}`),
+      );
 
-    return true
+    return true;
   }
 
-  if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) {
-    return false
+  if (!["http:", "https:", "mailto:"].includes(parsed.protocol)) {
+    return false;
   }
 
-  const url = parsed.toString()
+  const url = parsed.toString();
 
   if (IS_WSL) {
-    rememberLog(`[link] opening via WSL→Windows: ${url}`)
-    const proc = spawn('cmd.exe', ['/c', 'start', '""', url], {
+    rememberLog(`[link] opening via WSL→Windows: ${url}`);
+    const proc = spawn("cmd.exe", ["/c", "start", '""', url], {
       detached: true,
-      stdio: 'ignore',
-      windowsHide: true
-    })
-    proc.on('error', error => {
-      rememberLog(`[link] cmd.exe start failed: ${error.message}; falling back to xdg-open`)
-      shell.openExternal(url).catch(fallback => rememberLog(`[link] xdg-open failed: ${fallback.message}`))
-    })
-    proc.unref()
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    proc.on("error", (error) => {
+      rememberLog(
+        `[link] cmd.exe start failed: ${error.message}; falling back to xdg-open`,
+      );
+      shell
+        .openExternal(url)
+        .catch((fallback) =>
+          rememberLog(`[link] xdg-open failed: ${fallback.message}`),
+        );
+    });
+    proc.unref();
 
-    return true
+    return true;
   }
 
-  shell.openExternal(url).catch(error => rememberLog(`[link] openExternal failed: ${error.message}`))
+  shell
+    .openExternal(url)
+    .catch((error) =>
+      rememberLog(`[link] openExternal failed: ${error.message}`),
+    );
 
-  return true
+  return true;
 }
 
 function ensureWslWindowsFonts() {
-  if (!IS_WSL) return
+  if (!IS_WSL) return;
 
-  const fontsDir = ['/mnt/c/Windows/Fonts', '/mnt/c/windows/fonts'].find(candidate => {
-    try {
-      return fs.statSync(candidate).isDirectory()
-    } catch {
-      return false
-    }
-  })
-  if (!fontsDir) return
+  const fontsDir = ["/mnt/c/Windows/Fonts", "/mnt/c/windows/fonts"].find(
+    (candidate) => {
+      try {
+        return fs.statSync(candidate).isDirectory();
+      } catch {
+        return false;
+      }
+    },
+  );
+  if (!fontsDir) return;
 
   try {
-    const confDir = path.join(app.getPath('home'), '.config', 'fontconfig', 'conf.d')
-    const confPath = path.join(confDir, '99-nexus-wsl-windows-fonts.conf')
-    let existing = ''
+    const confDir = path.join(
+      app.getPath("home"),
+      ".config",
+      "fontconfig",
+      "conf.d",
+    );
+    const confPath = path.join(confDir, "99-nexus-wsl-windows-fonts.conf");
+    let existing = "";
     try {
-      existing = fs.readFileSync(confPath, 'utf8')
+      existing = fs.readFileSync(confPath, "utf8");
     } catch {
-      existing = ''
+      existing = "";
     }
-    if (existing.includes(fontsDir)) return
+    if (existing.includes(fontsDir)) return;
 
-    fs.mkdirSync(confDir, { recursive: true })
+    fs.mkdirSync(confDir, { recursive: true });
     fs.writeFileSync(
       confPath,
-      `<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <dir>${fontsDir}</dir>\n</fontconfig>\n`
-    )
-    rememberLog(`[fonts] wired WSL Windows fonts for renderer: ${fontsDir}`)
+      `<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <dir>${fontsDir}</dir>\n</fontconfig>\n`,
+    );
+    rememberLog(`[fonts] wired WSL Windows fonts for renderer: ${fontsDir}`);
 
-    const cache = spawn('fc-cache', ['-f', fontsDir], { detached: true, stdio: 'ignore' })
-    cache.on('error', () => undefined)
-    cache.unref()
+    const cache = spawn("fc-cache", ["-f", fontsDir], {
+      detached: true,
+      stdio: "ignore",
+    });
+    cache.on("error", () => undefined);
+    cache.unref();
   } catch (error) {
-    rememberLog(`[fonts] WSL font setup skipped: ${error.message}`)
+    rememberLog(`[fonts] WSL font setup skipped: ${error.message}`);
   }
 }
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function clampBootProgress(value) {
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric)) return 0
-  return Math.max(0, Math.min(100, Math.round(numeric)))
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 
 function broadcastBootProgress() {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const { webContents } = mainWindow
-  if (!webContents || webContents.isDestroyed()) return
-  webContents.send('nexus:boot-progress', bootProgressState)
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const { webContents } = mainWindow;
+  if (!webContents || webContents.isDestroyed()) return;
+  webContents.send("nexus:boot-progress", bootProgressState);
 }
 
 // Bootstrap-event broadcast channel + state. The bootstrap runner emits a
@@ -736,7 +824,7 @@ function broadcastBootProgress() {
 // We keep enough to cover an entire failed stage's transcript so the
 // 'Copy output' button gives the user actually-actionable context, not
 // just the last few lines.
-const BOOTSTRAP_LOG_RING_MAX = 500
+const BOOTSTRAP_LOG_RING_MAX = 500;
 let bootstrapState = {
   active: false,
   manifest: null,
@@ -745,62 +833,79 @@ let bootstrapState = {
   log: [],
   startedAt: null,
   completedAt: null,
-  unsupportedPlatform: null
-}
+  unsupportedPlatform: null,
+};
 
 function broadcastBootstrapEvent(ev) {
-  if (ev.type === 'manifest') {
-    bootstrapState.manifest = ev
-    bootstrapState.active = true
-    bootstrapState.startedAt = bootstrapState.startedAt || Date.now()
-    bootstrapState.stages = {}
+  if (ev.type === "manifest") {
+    bootstrapState.manifest = ev;
+    bootstrapState.active = true;
+    bootstrapState.startedAt = bootstrapState.startedAt || Date.now();
+    bootstrapState.stages = {};
     for (const stage of ev.stages || []) {
-      bootstrapState.stages[stage.name] = { state: 'pending', json: null, durationMs: null, error: null }
+      bootstrapState.stages[stage.name] = {
+        state: "pending",
+        json: null,
+        durationMs: null,
+        error: null,
+      };
     }
-  } else if (ev.type === 'stage') {
+  } else if (ev.type === "stage") {
     bootstrapState.stages[ev.name] = {
       state: ev.state,
       durationMs: ev.durationMs ?? null,
       json: ev.json ?? null,
-      error: ev.error ?? null
-    }
-  } else if (ev.type === 'log') {
-    bootstrapState.log.push({ ts: Date.now(), stage: ev.stage || null, line: ev.line, stream: ev.stream || 'stdout' })
+      error: ev.error ?? null,
+    };
+  } else if (ev.type === "log") {
+    bootstrapState.log.push({
+      ts: Date.now(),
+      stage: ev.stage || null,
+      line: ev.line,
+      stream: ev.stream || "stdout",
+    });
     if (bootstrapState.log.length > BOOTSTRAP_LOG_RING_MAX) {
-      bootstrapState.log.splice(0, bootstrapState.log.length - BOOTSTRAP_LOG_RING_MAX)
+      bootstrapState.log.splice(
+        0,
+        bootstrapState.log.length - BOOTSTRAP_LOG_RING_MAX,
+      );
     }
-  } else if (ev.type === 'complete') {
-    bootstrapState.active = false
-    bootstrapState.completedAt = Date.now()
-    bootstrapState.error = null
-    bootstrapState.unsupportedPlatform = null
-  } else if (ev.type === 'failed') {
-    bootstrapState.active = false
-    bootstrapState.error = ev.error || 'unknown error'
-  } else if (ev.type === 'unsupported-platform') {
-    bootstrapState.active = false
+  } else if (ev.type === "complete") {
+    bootstrapState.active = false;
+    bootstrapState.completedAt = Date.now();
+    bootstrapState.error = null;
+    bootstrapState.unsupportedPlatform = null;
+  } else if (ev.type === "failed") {
+    bootstrapState.active = false;
+    bootstrapState.error = ev.error || "unknown error";
+  } else if (ev.type === "unsupported-platform") {
+    bootstrapState.active = false;
     bootstrapState.unsupportedPlatform = {
       platform: ev.platform,
       activeRoot: ev.activeRoot,
       installCommand: ev.installCommand,
-      docsUrl: ev.docsUrl
-    }
+      docsUrl: ev.docsUrl,
+    };
   }
 
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const { webContents } = mainWindow
-  if (!webContents || webContents.isDestroyed()) return
-  webContents.send('nexus:bootstrap:event', ev)
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const { webContents } = mainWindow;
+  if (!webContents || webContents.isDestroyed()) return;
+  webContents.send("nexus:bootstrap:event", ev);
 }
 
 function getBootstrapState() {
-  return bootstrapState
+  return bootstrapState;
 }
 
 function updateBootProgress(update, options = {}) {
   const nextProgressRaw =
-    typeof update.progress === 'number' ? clampBootProgress(update.progress) : bootProgressState.progress
-  const nextProgress = options.allowDecrease ? nextProgressRaw : Math.max(bootProgressState.progress, nextProgressRaw)
+    typeof update.progress === "number"
+      ? clampBootProgress(update.progress)
+      : bootProgressState.progress;
+  const nextProgress = options.allowDecrease
+    ? nextProgressRaw
+    : Math.max(bootProgressState.progress, nextProgressRaw);
 
   bootProgressState = {
     ...bootProgressState,
@@ -808,14 +913,14 @@ function updateBootProgress(update, options = {}) {
     error: update.error === undefined ? bootProgressState.error : update.error,
     fakeMode: BOOT_FAKE_MODE || Boolean(update.fakeMode),
     progress: nextProgress,
-    timestamp: Date.now()
-  }
+    timestamp: Date.now(),
+  };
 
   if (update.message) {
-    rememberLog(`[boot] ${update.message}`)
+    rememberLog(`[boot] ${update.message}`);
   }
 
-  broadcastBootProgress()
+  broadcastBootProgress();
 }
 
 async function advanceBootProgress(phase, message, progress) {
@@ -824,127 +929,153 @@ async function advanceBootProgress(phase, message, progress) {
     message,
     progress,
     running: true,
-    error: null
-  })
+    error: null,
+  });
 
   if (BOOT_FAKE_MODE) {
-    await sleep(BOOT_FAKE_STEP_MS)
+    await sleep(BOOT_FAKE_STEP_MS);
   }
 }
 
 function fileExists(filePath) {
   try {
-    return fs.statSync(filePath).isFile()
+    return fs.statSync(filePath).isFile();
   } catch {
-    return false
+    return false;
   }
 }
 
 function directoryExists(filePath) {
   try {
-    return fs.statSync(filePath).isDirectory()
+    return fs.statSync(filePath).isDirectory();
   } catch {
-    return false
+    return false;
   }
 }
 
 function unpackedPathFor(filePath) {
-  return filePath.replace(/app\.asar(?=$|[\\/])/, 'app.asar.unpacked')
+  return filePath.replace(/app\.asar(?=$|[\\/])/, "app.asar.unpacked");
 }
 
 function findOnPath(command) {
-  if (!command) return null
+  if (!command) return null;
 
-  if (path.isAbsolute(command) || command.includes(path.sep) || (IS_WINDOWS && command.includes('/'))) {
-    if (!fileExists(command)) return null
-    if (isWindowsBinaryPathInWsl(command, { isWsl: IS_WSL })) return null
-    return command
+  if (
+    path.isAbsolute(command) ||
+    command.includes(path.sep) ||
+    (IS_WINDOWS && command.includes("/"))
+  ) {
+    if (!fileExists(command)) return null;
+    if (isWindowsBinaryPathInWsl(command, { isWsl: IS_WSL })) return null;
+    return command;
   }
 
-  const pathEntries = String(process.env.PATH || '')
+  const pathEntries = String(process.env.PATH || "")
     .split(path.delimiter)
-    .filter(Boolean)
+    .filter(Boolean);
   const extensions = IS_WINDOWS
-    ? ['', ...(process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)]
-    : ['']
+    ? [
+        "",
+        ...(process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+          .split(";")
+          .filter(Boolean),
+      ]
+    : [""];
 
   for (const entry of pathEntries) {
     for (const extension of extensions) {
-      const candidate = path.join(entry, `${command}${extension}`)
-      if (fileExists(candidate)) return candidate
+      const candidate = path.join(entry, `${command}${extension}`);
+      if (fileExists(candidate)) return candidate;
     }
   }
 
-  return null
+  return null;
 }
 
 function isCommandScript(command) {
-  return IS_WINDOWS && /\.(cmd|bat)$/i.test(command || '')
+  return IS_WINDOWS && /\.(cmd|bat)$/i.test(command || "");
 }
 
 function normalizeExecutablePathForCompare(commandPath) {
-  if (!commandPath) return null
+  if (!commandPath) return null;
 
-  let resolved = path.resolve(String(commandPath))
+  let resolved = path.resolve(String(commandPath));
   try {
-    resolved = fs.realpathSync.native ? fs.realpathSync.native(resolved) : fs.realpathSync(resolved)
+    resolved = fs.realpathSync.native
+      ? fs.realpathSync.native(resolved)
+      : fs.realpathSync(resolved);
   } catch {
     // Fallback to path.resolve() above.
   }
 
-  return IS_WINDOWS ? resolved.toLowerCase() : resolved
+  return IS_WINDOWS ? resolved.toLowerCase() : resolved;
 }
 
 function looksLikeDesktopAppBinary(commandPath) {
-  if (!IS_WINDOWS || !commandPath) return false
+  if (!IS_WINDOWS || !commandPath) return false;
 
-  const normalizedCandidate = normalizeExecutablePathForCompare(commandPath)
-  const normalizedCurrentExec = normalizeExecutablePathForCompare(process.execPath)
-  if (normalizedCandidate && normalizedCurrentExec && normalizedCandidate === normalizedCurrentExec) {
-    return true
+  const normalizedCandidate = normalizeExecutablePathForCompare(commandPath);
+  const normalizedCurrentExec = normalizeExecutablePathForCompare(
+    process.execPath,
+  );
+  if (
+    normalizedCandidate &&
+    normalizedCurrentExec &&
+    normalizedCandidate === normalizedCurrentExec
+  ) {
+    return true;
   }
 
-  let resolved = path.resolve(String(commandPath))
+  let resolved = path.resolve(String(commandPath));
   try {
-    resolved = fs.realpathSync.native ? fs.realpathSync.native(resolved) : fs.realpathSync(resolved)
+    resolved = fs.realpathSync.native
+      ? fs.realpathSync.native(resolved)
+      : fs.realpathSync(resolved);
   } catch {
     // Keep resolved path fallback.
   }
 
-  const resourcesDir = path.join(path.dirname(resolved), 'resources')
+  const resourcesDir = path.join(path.dirname(resolved), "resources");
   return (
-    fileExists(path.join(resourcesDir, 'app.asar')) || directoryExists(path.join(resourcesDir, 'app.asar.unpacked'))
-  )
+    fileExists(path.join(resourcesDir, "app.asar")) ||
+    directoryExists(path.join(resourcesDir, "app.asar.unpacked"))
+  );
 }
 
 function isHermesSourceRoot(root) {
-  return directoryExists(root) && fileExists(path.join(root, 'hermes_cli', 'main.py'))
+  return (
+    directoryExists(root) &&
+    fileExists(path.join(root, "hermes_cli", "main.py"))
+  );
 }
 
 function findPythonForRoot(root) {
-  const override = process.env.NEXUS_AGENT_PYTHON
-  if (override && fileExists(override)) return override
+  const override = process.env.NEXUS_AGENT_PYTHON;
+  if (override && fileExists(override)) return override;
 
   const relativePaths = IS_WINDOWS
-    ? [path.join('.venv', 'Scripts', 'python.exe'), path.join('venv', 'Scripts', 'python.exe')]
-    : [path.join('.venv', 'bin', 'python'), path.join('venv', 'bin', 'python')]
+    ? [
+        path.join(".venv", "Scripts", "python.exe"),
+        path.join("venv", "Scripts", "python.exe"),
+      ]
+    : [path.join(".venv", "bin", "python"), path.join("venv", "bin", "python")];
 
   for (const relativePath of relativePaths) {
-    const candidate = path.join(root, relativePath)
-    if (fileExists(candidate)) return candidate
+    const candidate = path.join(root, relativePath);
+    if (fileExists(candidate)) return candidate;
   }
 
-  return findSystemPython()
+  return findSystemPython();
 }
 
 function findSystemPython() {
   if (!IS_WINDOWS) {
     // POSIX systems: PATH lookup is safe.
-    for (const command of ['python3', 'python']) {
-      const candidate = findOnPath(command)
-      if (candidate) return candidate
+    for (const command of ["python3", "python"]) {
+      const candidate = findOnPath(command);
+      if (candidate) return candidate;
     }
-    return null
+    return null;
   }
 
   // Windows: PATH-based detection has TWO landmines we have to dodge.
@@ -986,25 +1117,30 @@ function findSystemPython() {
   //          py.exe's default is (which on a 3.14-only box would be
   //          3.14).
 
-  const SUPPORTED_VERSIONS = ['3.11', '3.12', '3.13']
-  const SUPPORTED_VERSIONS_NO_DOT = ['311', '312', '313']
+  const SUPPORTED_VERSIONS = ["3.11", "3.12", "3.13"];
+  const SUPPORTED_VERSIONS_NO_DOT = ["311", "312", "313"];
 
   // Pass 1: registry. Use `reg query` since main process doesn't have
   // a reliable in-process registry API across all electron versions.
-  for (const hive of ['HKLM', 'HKCU']) {
+  for (const hive of ["HKLM", "HKCU"]) {
     for (const version of SUPPORTED_VERSIONS) {
       try {
         const out = execFileSync(
-          'reg',
-          ['query', `${hive}\\SOFTWARE\\Python\\PythonCore\\${version}\\InstallPath`, '/ve', '/reg:64'],
-          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
-        )
+          "reg",
+          [
+            "query",
+            `${hive}\\SOFTWARE\\Python\\PythonCore\\${version}\\InstallPath`,
+            "/ve",
+            "/reg:64",
+          ],
+          { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+        );
         // Output format: "    (Default)    REG_SZ    C:\Path\To\Python\"
-        const match = out.match(/REG_SZ\s+(.+?)\s*$/m)
+        const match = out.match(/REG_SZ\s+(.+?)\s*$/m);
         if (match) {
-          const installPath = match[1].trim()
-          const pythonExe = path.join(installPath, 'python.exe')
-          if (fileExists(pythonExe)) return pythonExe
+          const installPath = match[1].trim();
+          const pythonExe = path.join(installPath, "python.exe");
+          if (fileExists(pythonExe)) return pythonExe;
         }
       } catch {
         // Key not present — try next.
@@ -1013,14 +1149,24 @@ function findSystemPython() {
   }
 
   // Pass 2: filesystem probe of standard locations.
-  const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files'
-  const localAppData = process.env.LOCALAPPDATA || ''
+  const programFiles = process.env["ProgramFiles"] || "C:\\Program Files";
+  const localAppData = process.env.LOCALAPPDATA || "";
   for (const versionDir of SUPPORTED_VERSIONS_NO_DOT) {
-    const systemWide = path.join(programFiles, `Python${versionDir}`, 'python.exe')
-    if (fileExists(systemWide)) return systemWide
+    const systemWide = path.join(
+      programFiles,
+      `Python${versionDir}`,
+      "python.exe",
+    );
+    if (fileExists(systemWide)) return systemWide;
     if (localAppData) {
-      const perUser = path.join(localAppData, 'Programs', 'Python', `Python${versionDir}`, 'python.exe')
-      if (fileExists(perUser)) return perUser
+      const perUser = path.join(
+        localAppData,
+        "Programs",
+        "Python",
+        `Python${versionDir}`,
+        "python.exe",
+      );
+      if (fileExists(perUser)) return perUser;
     }
   }
 
@@ -1029,16 +1175,20 @@ function findSystemPython() {
   // print(sys.executable)"` resolves to the actual python.exe path of
   // the requested version. We try in version-priority order so the
   // first hit wins.
-  const pyExe = findOnPath('py.exe')
+  const pyExe = findOnPath("py.exe");
   if (pyExe) {
     for (const version of SUPPORTED_VERSIONS) {
       try {
-        const out = execFileSync(pyExe, [`-${version}`, '-c', 'import sys; print(sys.executable)'], {
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'ignore']
-        })
-        const candidate = out.trim()
-        if (candidate && fileExists(candidate)) return candidate
+        const out = execFileSync(
+          pyExe,
+          [`-${version}`, "-c", "import sys; print(sys.executable)"],
+          {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+          },
+        );
+        const candidate = out.trim();
+        if (candidate && fileExists(candidate)) return candidate;
       } catch {
         // py couldn't find that version — try next.
       }
@@ -1051,7 +1201,7 @@ function findSystemPython() {
   // could land us on 3.14 and trigger the Rust-build-from-source
   // failure. Better to return null and let the NSIS prereq page
   // offer to install a known-good 3.11 via winget.
-  return null
+  return null;
 }
 
 // findGitBash — locate bash.exe on Windows. Hermes' terminal tool requires
@@ -1064,38 +1214,63 @@ function findSystemPython() {
 // first bash on PATH.
 function findGitBash() {
   if (!IS_WINDOWS) {
-    return findOnPath('bash')
+    return findOnPath("bash");
   }
 
   // install.ps1 drops PortableGit at %LOCALAPPDATA%\hermes\git\... — checked
   // first so users who installed via install.ps1 are detected before we
   // start probing system-wide locations.
-  const localAppData = process.env.LOCALAPPDATA || ''
-  const candidates = []
+  const localAppData = process.env.LOCALAPPDATA || "";
+  const candidates = [];
   if (localAppData) {
-    candidates.push(path.join(localAppData, 'nexus-agent', 'git', 'bin', 'bash.exe'))
-    candidates.push(path.join(localAppData, 'nexus-agent', 'git', 'usr', 'bin', 'bash.exe'))
+    candidates.push(
+      path.join(localAppData, "nexus-agent", "git", "bin", "bash.exe"),
+    );
+    candidates.push(
+      path.join(localAppData, "nexus-agent", "git", "usr", "bin", "bash.exe"),
+    );
   }
 
   // Standard Git for Windows install locations.
-  candidates.push(path.join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Git', 'bin', 'bash.exe'))
-  candidates.push(path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Git', 'bin', 'bash.exe'))
+  candidates.push(
+    path.join(
+      process.env["ProgramFiles"] || "C:\\Program Files",
+      "Git",
+      "bin",
+      "bash.exe",
+    ),
+  );
+  candidates.push(
+    path.join(
+      process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)",
+      "Git",
+      "bin",
+      "bash.exe",
+    ),
+  );
   if (localAppData) {
-    candidates.push(path.join(localAppData, 'Programs', 'Git', 'bin', 'bash.exe'))
+    candidates.push(
+      path.join(localAppData, "Programs", "Git", "bin", "bash.exe"),
+    );
   }
 
   for (const candidate of candidates) {
-    if (fileExists(candidate)) return candidate
+    if (fileExists(candidate)) return candidate;
   }
 
   // Last resort — bash on PATH (covers WSL bash, MSYS2, custom installs).
   // On WSL hosts findOnPath itself filters out Windows-binary paths via
   // isWindowsBinaryPathInWsl, so we won't hand back a wsl.exe shim either.
-  return findOnPath('bash')
+  return findOnPath("bash");
 }
 
 function getVenvPython(venvRoot) {
-  return path.join(venvRoot, IS_WINDOWS ? path.join('Scripts', 'python.exe') : path.join('bin', 'python'))
+  return path.join(
+    venvRoot,
+    IS_WINDOWS
+      ? path.join("Scripts", "python.exe")
+      : path.join("bin", "python"),
+  );
 }
 
 // resolveGitBinary — locate git.exe on Windows. A fresh installer-driven
@@ -1103,57 +1278,80 @@ function getVenvPython(venvRoot) {
 // PATH), so a bare spawn('git') ENOENTs and self-update checks fail with
 // "Couldn't check for updates". Mirror findGitBash: PortableGit first, then
 // standard Git-for-Windows locations, then PATH. Cached after first probe.
-let _gitBinaryCache = null
+let _gitBinaryCache = null;
 function resolveGitBinary() {
-  if (_gitBinaryCache) return _gitBinaryCache
+  if (_gitBinaryCache) return _gitBinaryCache;
   if (!IS_WINDOWS) {
-    _gitBinaryCache = findOnPath('git') || 'git'
-    return _gitBinaryCache
+    _gitBinaryCache = findOnPath("git") || "git";
+    return _gitBinaryCache;
   }
 
-  const localAppData = process.env.LOCALAPPDATA || ''
-  const candidates = []
+  const localAppData = process.env.LOCALAPPDATA || "";
+  const candidates = [];
   if (localAppData) {
-    candidates.push(path.join(localAppData, 'nexus-agent', 'git', 'cmd', 'git.exe'))
-    candidates.push(path.join(localAppData, 'nexus-agent', 'git', 'bin', 'git.exe'))
+    candidates.push(
+      path.join(localAppData, "nexus-agent", "git", "cmd", "git.exe"),
+    );
+    candidates.push(
+      path.join(localAppData, "nexus-agent", "git", "bin", "git.exe"),
+    );
   }
-  candidates.push(path.join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Git', 'cmd', 'git.exe'))
-  candidates.push(path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Git', 'cmd', 'git.exe'))
+  candidates.push(
+    path.join(
+      process.env["ProgramFiles"] || "C:\\Program Files",
+      "Git",
+      "cmd",
+      "git.exe",
+    ),
+  );
+  candidates.push(
+    path.join(
+      process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)",
+      "Git",
+      "cmd",
+      "git.exe",
+    ),
+  );
   if (localAppData) {
-    candidates.push(path.join(localAppData, 'Programs', 'Git', 'cmd', 'git.exe'))
+    candidates.push(
+      path.join(localAppData, "Programs", "Git", "cmd", "git.exe"),
+    );
   }
 
-  _gitBinaryCache = candidates.find(fileExists) || findOnPath('git') || 'git'
-  return _gitBinaryCache
+  _gitBinaryCache = candidates.find(fileExists) || findOnPath("git") || "git";
+  return _gitBinaryCache;
 }
 
 function recentHermesLog() {
-  return hermesLog.slice(-20).join('\n')
+  return hermesLog.slice(-20).join("\n");
 }
 
 // ─── Self-update (git-pull against the running backend's hermes root) ──────
 
 function readDesktopUpdateConfig() {
   try {
-    const parsed = JSON.parse(fs.readFileSync(DESKTOP_UPDATE_CONFIG_PATH, 'utf8'))
-    const branch = typeof parsed?.branch === 'string' ? parsed.branch.trim() : ''
-    return { branch: branch || DEFAULT_UPDATE_BRANCH }
+    const parsed = JSON.parse(
+      fs.readFileSync(DESKTOP_UPDATE_CONFIG_PATH, "utf8"),
+    );
+    const branch =
+      typeof parsed?.branch === "string" ? parsed.branch.trim() : "";
+    return { branch: branch || DEFAULT_UPDATE_BRANCH };
   } catch {
-    return { branch: DEFAULT_UPDATE_BRANCH }
+    return { branch: DEFAULT_UPDATE_BRANCH };
   }
 }
 
 // Atomic file write: temp + rename (atomic on all platforms). Prevents
 // partial writes on crash/power loss that corrupt JSON config files.
 function writeFileAtomic(targetPath, data, encoding) {
-  const tmp = targetPath + '.tmp'
-  fs.writeFileSync(tmp, data, encoding)
-  fs.renameSync(tmp, targetPath)
+  const tmp = targetPath + ".tmp";
+  fs.writeFileSync(tmp, data, encoding);
+  fs.renameSync(tmp, targetPath);
 }
 
 function writeDesktopUpdateConfig(config) {
-  fs.mkdirSync(path.dirname(DESKTOP_UPDATE_CONFIG_PATH), { recursive: true })
-  writeFileAtomic(DESKTOP_UPDATE_CONFIG_PATH, JSON.stringify(config, null, 2))
+  fs.mkdirSync(path.dirname(DESKTOP_UPDATE_CONFIG_PATH), { recursive: true });
+  writeFileAtomic(DESKTOP_UPDATE_CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
 // Match the backend's source resolution but bias toward a real git checkout.
@@ -1162,45 +1360,68 @@ function writeDesktopUpdateConfig(config) {
 function resolveUpdateRoot() {
   const candidates = [
     process.env.NEXUS_AGENT_ROOT && path.resolve(process.env.NEXUS_AGENT_ROOT),
-    !IS_PACKAGED && isHermesSourceRoot(SOURCE_REPO_ROOT) ? SOURCE_REPO_ROOT : null,
-    isHermesSourceRoot(ACTIVE_NEXUS_ROOT) ? ACTIVE_NEXUS_ROOT : null
-  ].filter(Boolean)
+    !IS_PACKAGED && isHermesSourceRoot(SOURCE_REPO_ROOT)
+      ? SOURCE_REPO_ROOT
+      : null,
+    isHermesSourceRoot(ACTIVE_NEXUS_ROOT) ? ACTIVE_NEXUS_ROOT : null,
+  ].filter(Boolean);
 
-  return candidates.find(c => directoryExists(path.join(c, '.git'))) || candidates[0] || ACTIVE_NEXUS_ROOT
+  return (
+    candidates.find((c) => directoryExists(path.join(c, ".git"))) ||
+    candidates[0] ||
+    ACTIVE_NEXUS_ROOT
+  );
 }
 
 function runGit(args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(resolveGitBinary(), IS_WINDOWS ? ['-c', 'windows.appendAtomically=false', ...args] : args, {
-      cwd: options.cwd,
-      env: { ...process.env, ...(options.env || {}), GIT_TERMINAL_PROMPT: '0' },
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
+    const child = spawn(
+      resolveGitBinary(),
+      IS_WINDOWS ? ["-c", "windows.appendAtomically=false", ...args] : args,
+      {
+        cwd: options.cwd,
+        env: {
+          ...process.env,
+          ...(options.env || {}),
+          GIT_TERMINAL_PROMPT: "0",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
 
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', chunk => {
-      const text = chunk.toString()
-      stdout += text
-      options.onLine?.('stdout', text)
-    })
-    child.stderr.on('data', chunk => {
-      const text = chunk.toString()
-      stderr += text
-      options.onLine?.('stderr', text)
-    })
-    child.once('error', reject)
-    child.once('exit', code => resolve({ code, stdout, stderr }))
-  })
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      const text = chunk.toString();
+      stdout += text;
+      options.onLine?.("stdout", text);
+    });
+    child.stderr.on("data", (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      options.onLine?.("stderr", text);
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => resolve({ code, stdout, stderr }));
+  });
 }
 
-const firstLine = text => (text || '').split('\n').find(Boolean) || ''
+const firstLine = (text) => (text || "").split("\n").find(Boolean) || "";
 
 function emitUpdateProgress(payload) {
-  const merged = { stage: 'idle', message: '', percent: null, error: null, ...payload, at: Date.now() }
-  rememberLog(`[updates] ${merged.stage}: ${merged.message || merged.error || ''}`)
+  const merged = {
+    stage: "idle",
+    message: "",
+    percent: null,
+    error: null,
+    ...payload,
+    at: Date.now(),
+  };
+  rememberLog(
+    `[updates] ${merged.stage}: ${merged.message || merged.error || ""}`,
+  );
   for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send('nexus:updates:progress', merged)
+    window.webContents.send("nexus:updates:progress", merged);
   }
 }
 
@@ -1211,61 +1432,70 @@ function emitUpdateProgress(payload) {
 // "ref absent" (exit 2), never on a transient network error, so a flaky
 // connection can't strand a user on the wrong branch.
 async function resolveHealedBranch(updateRoot, branch) {
-  if (!branch || branch === 'main') {
-    return branch || 'main'
+  if (!branch || branch === "main") {
+    return branch || "main";
   }
 
-  const probe = await runGit(['ls-remote', '--exit-code', '--heads', 'origin', branch], { cwd: updateRoot })
+  const probe = await runGit(
+    ["ls-remote", "--exit-code", "--heads", "origin", branch],
+    { cwd: updateRoot },
+  );
   if (probe.code !== 2) {
-    return branch
+    return branch;
   }
 
-  rememberLog(`[updates] origin/${branch} is gone (merged?); falling back to main`)
-  const config = readDesktopUpdateConfig()
-  if (config.branch !== 'main') {
-    writeDesktopUpdateConfig({ ...config, branch: 'main' })
+  rememberLog(
+    `[updates] origin/${branch} is gone (merged?); falling back to main`,
+  );
+  const config = readDesktopUpdateConfig();
+  if (config.branch !== "main") {
+    writeDesktopUpdateConfig({ ...config, branch: "main" });
   }
-  return 'main'
+  return "main";
 }
 
 async function checkUpdates() {
-  const updateRoot = resolveUpdateRoot()
-  let { branch } = readDesktopUpdateConfig()
-  const gitDir = path.join(updateRoot, '.git')
+  const updateRoot = resolveUpdateRoot();
+  let { branch } = readDesktopUpdateConfig();
+  const gitDir = path.join(updateRoot, ".git");
   if (!directoryExists(gitDir)) {
     return {
       supported: false,
-      reason: 'not-a-git-checkout',
+      reason: "not-a-git-checkout",
       message: `${updateRoot} isn't a git checkout — desktop self-update only runs against a source install.`,
       hermesRoot: updateRoot,
-      branch
-    }
+      branch,
+    };
   }
 
-  branch = await resolveHealedBranch(updateRoot, branch)
-  const fetched = await runGit(['fetch', '--quiet', 'origin', branch], { cwd: updateRoot })
+  branch = await resolveHealedBranch(updateRoot, branch);
+  const fetched = await runGit(["fetch", "--quiet", "origin", branch], {
+    cwd: updateRoot,
+  });
   if (fetched.code !== 0) {
     return {
       supported: true,
       branch,
-      error: 'fetch-failed',
-      message: firstLine(fetched.stderr) || 'git fetch failed.',
+      error: "fetch-failed",
+      message: firstLine(fetched.stderr) || "git fetch failed.",
       hermesRoot: updateRoot,
-      fetchedAt: Date.now()
-    }
+      fetchedAt: Date.now(),
+    };
   }
 
-  const git = args => runGit(args, { cwd: updateRoot }).then(r => r.stdout.trim())
-  const [currentSha, targetSha, countStr, dirtyStr, currentBranch] = await Promise.all([
-    git(['rev-parse', 'HEAD']),
-    git(['rev-parse', `origin/${branch}`]),
-    git(['rev-list', `HEAD..origin/${branch}`, '--count']),
-    git(['status', '--porcelain']),
-    git(['rev-parse', '--abbrev-ref', 'HEAD'])
-  ])
+  const git = (args) =>
+    runGit(args, { cwd: updateRoot }).then((r) => r.stdout.trim());
+  const [currentSha, targetSha, countStr, dirtyStr, currentBranch] =
+    await Promise.all([
+      git(["rev-parse", "HEAD"]),
+      git(["rev-parse", `origin/${branch}`]),
+      git(["rev-list", `HEAD..origin/${branch}`, "--count"]),
+      git(["status", "--porcelain"]),
+      git(["rev-parse", "--abbrev-ref", "HEAD"]),
+    ]);
 
-  const behind = Number.parseInt(countStr, 10) || 0
-  const commits = behind > 0 ? await readCommitLog(updateRoot, branch) : []
+  const behind = Number.parseInt(countStr, 10) || 0;
+  const commits = behind > 0 ? await readCommitLog(updateRoot, branch) : [];
 
   return {
     supported: true,
@@ -1277,29 +1507,35 @@ async function checkUpdates() {
     commits,
     dirty: dirtyStr.length > 0,
     hermesRoot: updateRoot,
-    fetchedAt: Date.now()
-  }
+    fetchedAt: Date.now(),
+  };
 }
 
 async function readCommitLog(cwd, branch) {
-  const SEP = '\x1f'
-  const REC = '\x1e'
+  const SEP = "\x1f";
+  const REC = "\x1e";
   const { stdout } = await runGit(
-    ['log', `HEAD..origin/${branch}`, `--pretty=format:%H${SEP}%s${SEP}%an${SEP}%at${REC}`, '-n', '40'],
-    { cwd }
-  )
+    [
+      "log",
+      `HEAD..origin/${branch}`,
+      `--pretty=format:%H${SEP}%s${SEP}%an${SEP}%at${REC}`,
+      "-n",
+      "40",
+    ],
+    { cwd },
+  );
 
   return stdout
     .split(REC)
-    .map(line => line.trim())
+    .map((line) => line.trim())
     .filter(Boolean)
-    .map(line => {
-      const [sha, summary, author, at] = line.split(SEP)
-      return { sha, summary, author, at: Number.parseInt(at, 10) * 1000 }
-    })
+    .map((line) => {
+      const [sha, summary, author, at] = line.split(SEP);
+      return { sha, summary, author, at: Number.parseInt(at, 10) * 1000 };
+    });
 }
 
-let updateInFlight = false
+let updateInFlight = false;
 
 // Resolve the staged updater binary. The Tauri installer copies itself to
 // NEXUS_AGENT_HOME/hermes-setup.exe on a successful install (see
@@ -1309,33 +1545,41 @@ let updateInFlight = false
 // updater isn't staged (e.g. a dev/source run that never went through the
 // installer); callers degrade gracefully.
 function resolveUpdaterBinary() {
-  const name = IS_WINDOWS ? 'hermes-setup.exe' : 'hermes-setup'
-  const candidate = path.join(NEXUS_AGENT_HOME, name)
-  return fileExists(candidate) ? candidate : null
+  const name = IS_WINDOWS ? "hermes-setup.exe" : "hermes-setup";
+  const candidate = path.join(NEXUS_AGENT_HOME, name);
+  return fileExists(candidate) ? candidate : null;
 }
 
 function repairMacUpdaterHelper(updater) {
-  if (!IS_MAC || !updater) return
+  if (!IS_MAC || !updater) return;
 
   try {
-    execFileSync('/usr/bin/xattr', ['-cr', updater], { stdio: 'ignore' })
+    execFileSync("/usr/bin/xattr", ["-cr", updater], { stdio: "ignore" });
   } catch (err) {
-    rememberLog(`[updates] macOS updater helper quarantine repair skipped: ${err.message}`)
+    rememberLog(
+      `[updates] macOS updater helper quarantine repair skipped: ${err.message}`,
+    );
   }
 
   try {
-    execFileSync('/usr/bin/codesign', ['--verify', updater], { stdio: 'ignore' })
-    return
+    execFileSync("/usr/bin/codesign", ["--verify", updater], {
+      stdio: "ignore",
+    });
+    return;
   } catch {
     // Unsigned or invalid helper. Apply a local ad-hoc signature so Gatekeeper
     // does not block the staged updater before it can run.
   }
 
   try {
-    execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', updater], { stdio: 'ignore' })
-    rememberLog('[updates] repaired macOS updater helper signature')
+    execFileSync("/usr/bin/codesign", ["--force", "--sign", "-", updater], {
+      stdio: "ignore",
+    });
+    rememberLog("[updates] repaired macOS updater helper signature");
   } catch (err) {
-    rememberLog(`[updates] macOS updater helper signature repair skipped: ${err.message}`)
+    rememberLog(
+      `[updates] macOS updater helper signature repair skipped: ${err.message}`,
+    );
   }
 }
 
@@ -1344,8 +1588,8 @@ function repairMacUpdaterHelper(updater) {
 // `hermes.exe` holds open; on POSIX it's never mandatory-locked.
 function venvHermesShimPath(updateRoot) {
   return IS_WINDOWS
-    ? path.join(updateRoot, 'venv', 'Scripts', 'hermes.exe')
-    : path.join(updateRoot, 'venv', 'bin', 'hermes')
+    ? path.join(updateRoot, "venv", "Scripts", "hermes.exe")
+    : path.join(updateRoot, "venv", "bin", "hermes");
 }
 
 // Best-effort lock probe mirroring the Rust updater's is_locked(): a running
@@ -1353,21 +1597,21 @@ function venvHermesShimPath(updateRoot) {
 // this practically always succeeds (no mandatory locking), so it returns false
 // — correct, since the shim-contention brick is Windows-only.
 function isShimLocked(shimPath) {
-  if (!IS_WINDOWS) return false
-  let fd
+  if (!IS_WINDOWS) return false;
+  let fd;
   try {
-    fd = fs.openSync(shimPath, 'r+')
-    return false
+    fd = fs.openSync(shimPath, "r+");
+    return false;
   } catch (err) {
     // ENOENT ⇒ not there ⇒ nothing locking it. Anything else (EBUSY/EPERM/
     // EACCES) on Windows means a live handle holds it.
-    return err && err.code !== 'ENOENT'
+    return err && err.code !== "ENOENT";
   } finally {
     if (fd !== undefined) {
       try {
-        fs.closeSync(fd)
+        fs.closeSync(fd);
       } catch {
-        void 0
+        void 0;
       }
     }
   }
@@ -1382,10 +1626,12 @@ function isShimLocked(shimPath) {
 // not a process-group leader — a POSIX negative-pgid kill would be meaningless
 // here anyway). POSIX teardown stays with the existing before-quit SIGTERM.
 function forceKillProcessTree(pid) {
-  if (!IS_WINDOWS) return
-  if (!Number.isInteger(pid) || pid <= 0) return
+  if (!IS_WINDOWS) return;
+  if (!Number.isInteger(pid) || pid <= 0) return;
   try {
-    execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' })
+    execFileSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
+      stdio: "ignore",
+    });
   } catch {
     // Already gone, or no permission — best effort; the unlock wait below is
     // the real gate.
@@ -1409,39 +1655,43 @@ function forceKillProcessTree(pid) {
 // aggressively SIGKILL-ing the backend here would be an untested behavior change
 // for no benefit. So we no-op off Windows and leave that path exactly as it was.
 async function releaseBackendLockForUpdate(updateRoot) {
-  if (!IS_WINDOWS) return { unlocked: true }
+  if (!IS_WINDOWS) return { unlocked: true };
 
   // Collect every backend PID the desktop owns: primary window backend + pool.
-  const pids = []
-  if (hermesProcess && Number.isInteger(hermesProcess.pid)) pids.push(hermesProcess.pid)
+  const pids = [];
+  if (hermesProcess && Number.isInteger(hermesProcess.pid))
+    pids.push(hermesProcess.pid);
   for (const entry of backendPool.values()) {
-    if (entry.process && Number.isInteger(entry.process.pid)) pids.push(entry.process.pid)
+    if (entry.process && Number.isInteger(entry.process.pid))
+      pids.push(entry.process.pid);
   }
 
   // Graceful first (lets Python flush), then tree-kill to catch grandchildren.
   if (hermesProcess && !hermesProcess.killed) {
     try {
-      hermesProcess.kill('SIGTERM')
+      hermesProcess.kill("SIGTERM");
     } catch {
-      void 0
+      void 0;
     }
   }
-  stopAllPoolBackends()
-  for (const pid of pids) forceKillProcessTree(pid)
+  stopAllPoolBackends();
+  for (const pid of pids) forceKillProcessTree(pid);
 
-  const shim = venvHermesShimPath(updateRoot)
-  const deadlineMs = Date.now() + 15000
+  const shim = venvHermesShimPath(updateRoot);
+  const deadlineMs = Date.now() + 15000;
   while (Date.now() < deadlineMs) {
     if (!isShimLocked(shim)) {
-      rememberLog('[updates] venv shim unlocked; safe to hand off the update')
-      return { unlocked: true }
+      rememberLog("[updates] venv shim unlocked; safe to hand off the update");
+      return { unlocked: true };
     }
-    await new Promise(r => setTimeout(r, 300))
+    await new Promise((r) => setTimeout(r, 300));
   }
   // Timed out: the updater's own wait_for_venv_free + force-kill is the second
   // line of defense, and we pass --force so the guard won't dead-end. Log it.
-  rememberLog('[updates] venv shim still locked after 15s; handing off anyway (updater will force)')
-  return { unlocked: false }
+  rememberLog(
+    "[updates] venv shim still locked after 15s; handing off anyway (updater will force)",
+  );
+  return { unlocked: false };
 }
 
 // applyUpdates — hand off to the installer's --update flow, then exit.
@@ -1456,12 +1706,12 @@ async function releaseBackendLockForUpdate(updateRoot) {
 // only this apply action changed.
 async function applyUpdates(opts = {}) {
   if (updateInFlight) {
-    throw new Error('An update is already in progress.')
+    throw new Error("An update is already in progress.");
   }
-  updateInFlight = true
+  updateInFlight = true;
 
   try {
-    const updater = resolveUpdaterBinary()
+    const updater = resolveUpdaterBinary();
     if (!updater && !IS_WINDOWS) {
       // macOS/Linux drag-install: no staged Tauri hermes-setup. Unlike Windows
       // (where a venv-shim file lock forces the quit→hand-off→rebuild dance),
@@ -1469,7 +1719,7 @@ async function applyUpdates(opts = {}) {
       // whole update itself: `hermes update` (backend) + `hermes desktop
       // --build-only` (OS-aware GUI rebuild), then swap the running .app bundle
       // with the freshly built one and relaunch.
-      return await applyUpdatesPosixInApp(opts)
+      return await applyUpdatesPosixInApp(opts);
     }
     if (!updater) {
       // No staged updater binary — this is a CLI-installed user (they ran
@@ -1481,41 +1731,56 @@ async function applyUpdates(opts = {}) {
       // silently switch a bb/gui (or any non-main) install off-branch. Mirror
       // the GUI button's contract: append --branch <current> for non-main
       // checkouts, keep it bare for main so the card stays clean.
-      const updateRoot = resolveUpdateRoot()
-      let command = 'hermes update'
+      const updateRoot = resolveUpdateRoot();
+      let command = "hermes update";
       try {
-        const head = await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: updateRoot })
-        const current = (head.stdout || '').trim()
-        if (head.code === 0 && current && current !== 'HEAD') {
-          const branch = await resolveHealedBranch(updateRoot, current)
-          if (branch !== 'main') command = `hermes update --branch ${branch}`
+        const head = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], {
+          cwd: updateRoot,
+        });
+        const current = (head.stdout || "").trim();
+        if (head.code === 0 && current && current !== "HEAD") {
+          const branch = await resolveHealedBranch(updateRoot, current);
+          if (branch !== "main") command = `hermes update --branch ${branch}`;
         }
       } catch {
         // Best-effort: fall back to bare `hermes update` if branch detection fails.
       }
-      rememberLog(`[updates] no staged updater; surfacing manual \`${command}\` for CLI install at ${updateRoot}`)
-      emitUpdateProgress({ stage: 'manual', message: command, percent: null })
-      return { ok: true, manual: true, command, hermesRoot: updateRoot }
+      rememberLog(
+        `[updates] no staged updater; surfacing manual \`${command}\` for CLI install at ${updateRoot}`,
+      );
+      emitUpdateProgress({ stage: "manual", message: command, percent: null });
+      return { ok: true, manual: true, command, hermesRoot: updateRoot };
     }
 
-    emitUpdateProgress({ stage: 'restart', message: 'Handing off to the Nexus Agent updater…', percent: 100 })
-    repairMacUpdaterHelper(updater)
+    emitUpdateProgress({
+      stage: "restart",
+      message: "Handing off to the Nexus Agent updater…",
+      percent: 100,
+    });
+    repairMacUpdaterHelper(updater);
 
-    const updateRoot = resolveUpdateRoot()
-    const { branch: configuredBranch } = readDesktopUpdateConfig()
-    const branch = await resolveHealedBranch(updateRoot, configuredBranch || DEFAULT_UPDATE_BRANCH)
-    const updaterArgs = ['--update', '--branch', branch]
-    const targetApp = IS_MAC ? runningAppBundle() : null
+    const updateRoot = resolveUpdateRoot();
+    const { branch: configuredBranch } = readDesktopUpdateConfig();
+    const branch = await resolveHealedBranch(
+      updateRoot,
+      configuredBranch || DEFAULT_UPDATE_BRANCH,
+    );
+    const updaterArgs = ["--update", "--branch", branch];
+    const targetApp = IS_MAC ? runningAppBundle() : null;
     if (targetApp) {
-      updaterArgs.push('--target-app', targetApp)
+      updaterArgs.push("--target-app", targetApp);
     }
-    const venvBin = path.join(updateRoot, 'venv', IS_WINDOWS ? 'Scripts' : 'bin')
+    const venvBin = path.join(
+      updateRoot,
+      "venv",
+      IS_WINDOWS ? "Scripts" : "bin",
+    );
 
     // Stop our own backend(s) and wait for the venv shim to unlock BEFORE we
     // spawn the updater. Without this the updater races a still-locked
     // hermes.exe (held by the backend child / its grandchildren) and the update
     // bricks. See releaseBackendLockForUpdate for the full failure analysis.
-    await releaseBackendLockForUpdate(updateRoot)
+    await releaseBackendLockForUpdate(updateRoot);
 
     // Detached so the updater outlives this process — it needs us GONE before
     // `hermes update` will run (the venv shim is locked while we live).
@@ -1524,74 +1789,83 @@ async function applyUpdates(opts = {}) {
       env: {
         ...process.env,
         NEXUS_AGENT_HOME,
-        PATH: [path.join(NEXUS_AGENT_HOME, 'node', 'bin'), venvBin, process.env.PATH].filter(Boolean).join(path.delimiter)
+        PATH: [
+          path.join(NEXUS_AGENT_HOME, "node", "bin"),
+          venvBin,
+          process.env.PATH,
+        ]
+          .filter(Boolean)
+          .join(path.delimiter),
       },
       detached: true,
-      stdio: 'ignore',
-      windowsHide: false
-    })
-    child.unref()
+      stdio: "ignore",
+      windowsHide: false,
+    });
+    child.unref();
 
-    rememberLog(`[updates] launched updater: ${updater} ${updaterArgs.join(' ')}; exiting desktop to release venv shim`)
+    rememberLog(
+      `[updates] launched updater: ${updater} ${updaterArgs.join(" ")}; exiting desktop to release venv shim`,
+    );
 
     // Give the OS a beat to register the new process, then quit. The updater
     // rebuilds and relaunches us when it's done.
     setTimeout(() => {
-      app.quit()
-    }, 600)
+      app.quit();
+    }, 600);
 
-    return { ok: true, handedOff: true, updater }
+    return { ok: true, handedOff: true, updater };
   } finally {
-    updateInFlight = false
+    updateInFlight = false;
   }
 }
 
 // Resolve the hermes CLI to drive an in-app update: prefer the venv shim in
 // the install we're updating, fall back to `hermes` on PATH.
 function resolveHermesCliBinary(updateRoot) {
-  const venvHermes = path.join(updateRoot, 'venv', 'bin', 'hermes')
-  if (fileExists(venvHermes)) return venvHermes
-  return findOnPath('hermes') || null
+  const venvHermes = path.join(updateRoot, "venv", "bin", "hermes");
+  if (fileExists(venvHermes)) return venvHermes;
+  return findOnPath("hermes") || null;
 }
 
 // Spawn a command and stream each output line to the update progress channel.
 function runStreamedUpdate(command, args, { cwd, env, stage } = {}) {
-  return new Promise(resolve => {
-    let child
+  return new Promise((resolve) => {
+    let child;
     try {
       child = spawn(command, args, {
         cwd,
         env: { ...process.env, ...(env || {}) },
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
+        stdio: ["ignore", "pipe", "pipe"],
+      });
     } catch (err) {
-      resolve({ code: 1, error: err.message })
-      return
+      resolve({ code: 1, error: err.message });
+      return;
     }
-    const emitLines = chunk => {
-      for (const line of chunk.toString().split('\n')) {
-        const trimmed = line.trim()
-        if (trimmed) emitUpdateProgress({ stage, message: trimmed, percent: null })
+    const emitLines = (chunk) => {
+      for (const line of chunk.toString().split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed)
+          emitUpdateProgress({ stage, message: trimmed, percent: null });
       }
-    }
-    child.stdout.on('data', emitLines)
-    child.stderr.on('data', emitLines)
-    child.once('error', err => resolve({ code: 1, error: err.message }))
-    child.once('exit', code => resolve({ code }))
-  })
+    };
+    child.stdout.on("data", emitLines);
+    child.stderr.on("data", emitLines);
+    child.once("error", (err) => resolve({ code: 1, error: err.message }));
+    child.once("exit", (code) => resolve({ code }));
+  });
 }
 
 // The running app's .app bundle (packaged macOS): execPath is
 // <App>.app/Contents/MacOS/<exe>; climb three levels to the bundle root.
 function runningAppBundle() {
-  if (!IS_MAC) return null
-  let dir = path.dirname(app.getPath('exe')) // .../Contents/MacOS
-  for (let i = 0; i < 2; i++) dir = path.dirname(dir) // -> .../X.app
-  return dir.endsWith('.app') ? dir : null
+  if (!IS_MAC) return null;
+  let dir = path.dirname(app.getPath("exe")); // .../Contents/MacOS
+  for (let i = 0; i < 2; i++) dir = path.dirname(dir); // -> .../X.app
+  return dir.endsWith(".app") ? dir : null;
 }
 
 function shellQuote(value) {
-  return `'${String(value).replace(/'/g, `'\\''`)}'`
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
 // macOS/Linux in-app update: backend (`hermes update`) + OS-aware GUI rebuild
@@ -1599,22 +1873,34 @@ function shellQuote(value) {
 // with the freshly built one and relaunch. Degrades to "backend updated,
 // restart to load the new GUI" if the swap can't be performed.
 async function applyUpdatesPosixInApp() {
-  const updateRoot = resolveUpdateRoot()
-  const hermes = resolveHermesCliBinary(updateRoot)
+  const updateRoot = resolveUpdateRoot();
+  const hermes = resolveHermesCliBinary(updateRoot);
   if (!hermes) {
-    emitUpdateProgress({ stage: 'manual', message: 'hermes update', percent: null })
-    return { ok: true, manual: true, command: 'hermes update', hermesRoot: updateRoot }
+    emitUpdateProgress({
+      stage: "manual",
+      message: "hermes update",
+      percent: null,
+    });
+    return {
+      ok: true,
+      manual: true,
+      command: "hermes update",
+      hermesRoot: updateRoot,
+    };
   }
 
   // Put the Hermes-managed Node and the venv on PATH so `hermes desktop`'s
   // npm build can find them on a machine with no system Node.
-  const extraPath = [path.join(NEXUS_AGENT_HOME, 'node', 'bin'), path.join(updateRoot, 'venv', 'bin')]
+  const extraPath = [
+    path.join(NEXUS_AGENT_HOME, "node", "bin"),
+    path.join(updateRoot, "venv", "bin"),
+  ]
     .filter(Boolean)
-    .join(path.delimiter)
+    .join(path.delimiter);
   const env = {
     NEXUS_AGENT_HOME,
-    PATH: [extraPath, process.env.PATH].filter(Boolean).join(path.delimiter)
-  }
+    PATH: [extraPath, process.env.PATH].filter(Boolean).join(path.delimiter),
+  };
 
   // `hermes update` reaps stale `hermes dashboard` backends (a code update
   // leaves the running process serving old Python against the freshly-updated
@@ -1627,76 +1913,113 @@ async function applyUpdatesPosixInApp() {
   // Exclude every desktop-managed backend (primary + all pool profiles) from
   // the update reaper. _kill_stale_dashboard_processes accepts a comma-separated
   // list (a single int still parses for back-compat).
-  const desktopChildPids = []
+  const desktopChildPids = [];
   if (hermesProcess && Number.isInteger(hermesProcess.pid)) {
-    desktopChildPids.push(hermesProcess.pid)
+    desktopChildPids.push(hermesProcess.pid);
   }
   for (const entry of backendPool.values()) {
     if (entry.process && Number.isInteger(entry.process.pid)) {
-      desktopChildPids.push(entry.process.pid)
+      desktopChildPids.push(entry.process.pid);
     }
   }
   if (desktopChildPids.length) {
-    env.NEXUS_AGENT_CHILD_PID = desktopChildPids.join(',')
+    env.NEXUS_AGENT_CHILD_PID = desktopChildPids.join(",");
   }
 
   // Branch-pin so a non-main checkout doesn't get switched to main (and self-heal
   // to main when the pinned branch no longer exists on origin).
-  let branchArgs = []
+  let branchArgs = [];
   try {
-    const head = await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: updateRoot })
-    const current = (head.stdout || '').trim()
-    if (head.code === 0 && current && current !== 'HEAD') {
-      branchArgs = ['--branch', await resolveHealedBranch(updateRoot, current)]
+    const head = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: updateRoot,
+    });
+    const current = (head.stdout || "").trim();
+    if (head.code === 0 && current && current !== "HEAD") {
+      branchArgs = ["--branch", await resolveHealedBranch(updateRoot, current)];
     }
   } catch {
     // best effort
   }
 
-  emitUpdateProgress({ stage: 'update', message: 'Updating Nexus Agent (git + dependencies)…', percent: 10 })
-  const updated = await runStreamedUpdate(hermes, ['update', '--yes', ...branchArgs], {
-    cwd: updateRoot,
-    env,
-    stage: 'update'
-  })
+  emitUpdateProgress({
+    stage: "update",
+    message: "Updating Nexus Agent (git + dependencies)…",
+    percent: 10,
+  });
+  const updated = await runStreamedUpdate(
+    hermes,
+    ["update", "--yes", ...branchArgs],
+    {
+      cwd: updateRoot,
+      env,
+      stage: "update",
+    },
+  );
   if (updated.code !== 0) {
-    emitUpdateProgress({ stage: 'error', message: 'hermes update failed.', error: updated.error || 'update-failed' })
-    return { ok: false, error: 'hermes update failed' }
+    emitUpdateProgress({
+      stage: "error",
+      message: "hermes update failed.",
+      error: updated.error || "update-failed",
+    });
+    return { ok: false, error: "hermes update failed" };
   }
 
-  emitUpdateProgress({ stage: 'rebuild', message: 'Rebuilding the desktop app…', percent: 60 })
-  const rebuilt = await runStreamedUpdate(hermes, ['desktop', '--build-only'], {
+  emitUpdateProgress({
+    stage: "rebuild",
+    message: "Rebuilding the desktop app…",
+    percent: 60,
+  });
+  const rebuilt = await runStreamedUpdate(hermes, ["desktop", "--build-only"], {
     cwd: updateRoot,
     env,
-    stage: 'rebuild'
-  })
+    stage: "rebuild",
+  });
   if (rebuilt.code !== 0) {
     emitUpdateProgress({
-      stage: 'error',
-      message: 'Backend updated, but the desktop rebuild failed. Restart Nexus Agent to retry.',
-      error: rebuilt.error || 'rebuild-failed'
-    })
-    return { ok: false, backendUpdated: true, error: 'desktop rebuild failed' }
+      stage: "error",
+      message:
+        "Backend updated, but the desktop rebuild failed. Restart Nexus Agent to retry.",
+      error: rebuilt.error || "rebuild-failed",
+    });
+    return { ok: false, backendUpdated: true, error: "desktop rebuild failed" };
   }
 
   const rebuiltApp = [
-    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac-arm64', 'Nexus Agent.app'),
-    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac', 'Nexus Agent.app')
-  ].find(directoryExists)
-  const targetApp = runningAppBundle()
+    path.join(
+      updateRoot,
+      "apps",
+      "desktop",
+      "release",
+      "mac-arm64",
+      "Nexus Agent.app",
+    ),
+    path.join(
+      updateRoot,
+      "apps",
+      "desktop",
+      "release",
+      "mac",
+      "Nexus Agent.app",
+    ),
+  ].find(directoryExists);
+  const targetApp = runningAppBundle();
 
   // No bundle to swap (dev run, Linux AppImage, or unresolved paths): the
   // backend is updated; the next launch picks up the rebuilt GUI.
   if (!rebuiltApp || !targetApp) {
     emitUpdateProgress({
-      stage: 'done',
-      message: 'Backend updated. Restart Nexus Agent to load the new version.',
-      percent: 100
-    })
-    return { ok: true, backendUpdated: true, rebuiltApp: rebuiltApp || null }
+      stage: "done",
+      message: "Backend updated. Restart Nexus Agent to load the new version.",
+      percent: 100,
+    });
+    return { ok: true, backendUpdated: true, rebuiltApp: rebuiltApp || null };
   }
 
-  emitUpdateProgress({ stage: 'restart', message: 'Installing the updated app and restarting…', percent: 95 })
+  emitUpdateProgress({
+    stage: "restart",
+    message: "Installing the updated app and restarting…",
+    percent: 95,
+  });
 
   // Detached swapper: wait for THIS process to exit (so the bundle is free),
   // ditto the rebuilt app over the running one, clear quarantine, relaunch.
@@ -1719,33 +2042,44 @@ if [ "$SRC" != "$DST" ]; then
 fi
 /usr/bin/xattr -dr com.apple.quarantine "$DST" 2>/dev/null || true
 /usr/bin/open "$DST"
-`
-  const scriptPath = path.join(app.getPath('temp'), `nexus-desktop-update-${Date.now()}.sh`)
+`;
+  const scriptPath = path.join(
+    app.getPath("temp"),
+    `nexus-desktop-update-${Date.now()}.sh`,
+  );
   try {
-    fs.writeFileSync(scriptPath, swapScript, { mode: 0o755 })
+    fs.writeFileSync(scriptPath, swapScript, { mode: 0o755 });
   } catch (err) {
     emitUpdateProgress({
-      stage: 'done',
-      message: 'Backend + app updated. Restart Nexus Agent to load the new version.',
-      percent: 100
-    })
-    rememberLog(`[updates] could not write swap script: ${err.message}; rebuilt app at ${rebuiltApp}`)
-    return { ok: true, backendUpdated: true, rebuiltApp }
+      stage: "done",
+      message:
+        "Backend + app updated. Restart Nexus Agent to load the new version.",
+      percent: 100,
+    });
+    rememberLog(
+      `[updates] could not write swap script: ${err.message}; rebuilt app at ${rebuiltApp}`,
+    );
+    return { ok: true, backendUpdated: true, rebuiltApp };
   }
 
-  const child = spawn('/bin/bash', [scriptPath], { detached: true, stdio: 'ignore' })
-  child.unref()
-  rememberLog(`[updates] launched mac swap+relaunch: ${scriptPath} (${rebuiltApp} -> ${targetApp})`)
+  const child = spawn("/bin/bash", [scriptPath], {
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+  rememberLog(
+    `[updates] launched mac swap+relaunch: ${scriptPath} (${rebuiltApp} -> ${targetApp})`,
+  );
 
-  setTimeout(() => app.quit(), 600)
-  return { ok: true, handedOff: true, rebuiltApp, targetApp }
+  setTimeout(() => app.quit(), 600);
+  return { ok: true, handedOff: true, rebuiltApp, targetApp };
 }
 
 function readJson(filePath) {
   try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -1764,14 +2098,15 @@ function readJson(filePath) {
 //     desktopVersion: "<app.getVersion()>"  // for forensics
 //   }
 function readBootstrapMarker() {
-  return readJson(BOOTSTRAP_COMPLETE_MARKER)
+  return readJson(BOOTSTRAP_COMPLETE_MARKER);
 }
 
 function isBootstrapComplete() {
-  const marker = readBootstrapMarker()
-  if (!marker || typeof marker !== 'object') return false
-  if (marker.schemaVersion !== BOOTSTRAP_MARKER_SCHEMA_VERSION) return false
-  if (typeof marker.pinnedCommit !== 'string' || marker.pinnedCommit.length < 7) return false
+  const marker = readBootstrapMarker();
+  if (!marker || typeof marker !== "object") return false;
+  if (marker.schemaVersion !== BOOTSTRAP_MARKER_SCHEMA_VERSION) return false;
+  if (typeof marker.pinnedCommit !== "string" || marker.pinnedCommit.length < 7)
+    return false;
   // We DELIBERATELY do NOT verify that the checkout is currently at the
   // pinned commit -- users update via the in-app update path or `hermes
   // update`, which moves HEAD legitimately. The marker just attests "we
@@ -1779,35 +2114,46 @@ function isBootstrapComplete() {
   // a runnable venv: an interrupted or split-home install can leave the marker
   // + checkout without a venv, and trusting that spawns a dead backend
   // ("gateway offline") instead of re-running bootstrap to repair it.
-  return isHermesSourceRoot(ACTIVE_NEXUS_ROOT) && fileExists(getVenvPython(NEXUS_VENV_ROOT))
+  return (
+    isHermesSourceRoot(ACTIVE_NEXUS_ROOT) &&
+    fileExists(getVenvPython(NEXUS_VENV_ROOT))
+  );
 }
 
 function writeBootstrapMarker(payload) {
-  fs.mkdirSync(path.dirname(BOOTSTRAP_COMPLETE_MARKER), { recursive: true })
+  fs.mkdirSync(path.dirname(BOOTSTRAP_COMPLETE_MARKER), { recursive: true });
   const merged = {
     schemaVersion: BOOTSTRAP_MARKER_SCHEMA_VERSION,
     pinnedCommit: payload.pinnedCommit || null,
     pinnedBranch: payload.pinnedBranch || null,
     completedAt: new Date().toISOString(),
-    desktopVersion: app.getVersion()
-  }
-  writeFileAtomic(BOOTSTRAP_COMPLETE_MARKER, JSON.stringify(merged, null, 2) + '\n', 'utf8')
-  return merged
+    desktopVersion: app.getVersion(),
+  };
+  writeFileAtomic(
+    BOOTSTRAP_COMPLETE_MARKER,
+    JSON.stringify(merged, null, 2) + "\n",
+    "utf8",
+  );
+  return merged;
 }
 
 function resolveWebDist() {
-  const override = process.env.NEXUS_AGENT_WEB_DIST
-  if (override && directoryExists(path.resolve(override))) return path.resolve(override)
+  const override = process.env.NEXUS_AGENT_WEB_DIST;
+  if (override && directoryExists(path.resolve(override)))
+    return path.resolve(override);
 
-  const unpackedDist = path.join(unpackedPathFor(APP_ROOT), 'dist')
-  if (directoryExists(unpackedDist)) return unpackedDist
+  const unpackedDist = path.join(unpackedPathFor(APP_ROOT), "dist");
+  if (directoryExists(unpackedDist)) return unpackedDist;
 
-  return path.join(APP_ROOT, 'dist')
+  return path.join(APP_ROOT, "dist");
 }
 
 function resolveRendererIndex() {
-  const candidates = [path.join(APP_ROOT, 'dist', 'index.html'), path.join(resolveWebDist(), 'index.html')]
-  return candidates.find(fileExists) || candidates[0]
+  const candidates = [
+    path.join(APP_ROOT, "dist", "index.html"),
+    path.join(resolveWebDist(), "index.html"),
+  ];
+  return candidates.find(fileExists) || candidates[0];
 }
 
 function resolveHermesCwd() {
@@ -1824,38 +2170,41 @@ function resolveHermesCwd() {
     process.env.INIT_CWD,
     IS_PACKAGED ? null : process.cwd(),
     !IS_PACKAGED ? SOURCE_REPO_ROOT : null,
-    app.getPath('home')
-  ]
+    app.getPath("home"),
+  ];
 
   for (const candidate of candidates) {
-    if (!candidate) continue
-    const resolved = path.resolve(String(candidate))
-    if (directoryExists(resolved)) return resolved
+    if (!candidate) continue;
+    const resolved = path.resolve(String(candidate));
+    if (directoryExists(resolved)) return resolved;
   }
 
-  return app.getPath('home')
+  return app.getPath("home");
 }
 
 // Persisted "Default project directory" — surfaced as a setting in the
 // renderer (see app/settings/sessions-settings.tsx). Stored as JSON in
 // userData so it survives self-updates without bleeding into the new
 // install. `null` means "no preference, fall back to the usual chain".
-const DEFAULT_PROJECT_DIR_CONFIG_FILENAME = 'project-dir.json'
+const DEFAULT_PROJECT_DIR_CONFIG_FILENAME = "project-dir.json";
 
 function defaultProjectDirConfigPath() {
-  return path.join(app.getPath('userData'), DEFAULT_PROJECT_DIR_CONFIG_FILENAME)
+  return path.join(
+    app.getPath("userData"),
+    DEFAULT_PROJECT_DIR_CONFIG_FILENAME,
+  );
 }
 
 function readDefaultProjectDir() {
   try {
-    const raw = fs.readFileSync(defaultProjectDirConfigPath(), 'utf8')
-    const parsed = JSON.parse(raw)
+    const raw = fs.readFileSync(defaultProjectDirConfigPath(), "utf8");
+    const parsed = JSON.parse(raw);
 
-    if (parsed && typeof parsed.dir === 'string' && parsed.dir.trim()) {
-      const resolved = path.resolve(parsed.dir)
+    if (parsed && typeof parsed.dir === "string" && parsed.dir.trim()) {
+      const resolved = path.resolve(parsed.dir);
 
       if (directoryExists(resolved)) {
-        return resolved
+        return resolved;
       }
     }
   } catch {
@@ -1863,37 +2212,43 @@ function readDefaultProjectDir() {
     // candidate chain.
   }
 
-  return null
+  return null;
 }
 
 function writeDefaultProjectDir(dir) {
-  const target = defaultProjectDirConfigPath()
-  const payload = dir ? JSON.stringify({ dir: path.resolve(dir) }, null, 2) : JSON.stringify({}, null, 2)
+  const target = defaultProjectDirConfigPath();
+  const payload = dir
+    ? JSON.stringify({ dir: path.resolve(dir) }, null, 2)
+    : JSON.stringify({}, null, 2);
 
   try {
-    fs.mkdirSync(path.dirname(target), { recursive: true })
-    fs.writeFileSync(target, payload, 'utf8')
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, payload, "utf8");
   } catch (error) {
-    rememberLog(`[settings] write default project dir failed: ${error.message}`)
+    rememberLog(
+      `[settings] write default project dir failed: ${error.message}`,
+    );
   }
 }
 
 function createPythonBackend(root, label, dashboardArgs, options = {}) {
-  const python = findPythonForRoot(root)
-  if (!python) return null
+  const python = findPythonForRoot(root);
+  if (!python) return null;
 
   return {
-    kind: 'python',
+    kind: "python",
     label,
     command: python,
-    args: ['-m', 'hermes_cli.main', ...dashboardArgs],
+    args: ["-m", "hermes_cli.main", ...dashboardArgs],
     env: {
-      PYTHONPATH: [root, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
+      PYTHONPATH: [root, process.env.PYTHONPATH]
+        .filter(Boolean)
+        .join(path.delimiter),
     },
     root,
     bootstrap: Boolean(options.bootstrap),
-    shell: false
-  }
+    shell: false,
+  };
 }
 
 // createActiveBackend — build a backend pointing at ACTIVE_NEXUS_ROOT, the
@@ -1901,60 +2256,70 @@ function createPythonBackend(root, label, dashboardArgs, options = {}) {
 // NEXUS_VENV_ROOT may not exist yet on first run; bootstrap=true tells
 // ensureRuntime() to create / refresh it before launch.
 function createActiveBackend(dashboardArgs) {
-  const venvPython = getVenvPython(NEXUS_VENV_ROOT)
+  const venvPython = getVenvPython(NEXUS_VENV_ROOT);
 
   return {
-    kind: 'python',
+    kind: "python",
     label: `Hermes at ${ACTIVE_NEXUS_ROOT}`,
     command: fileExists(venvPython) ? venvPython : findSystemPython(),
-    args: ['-m', 'hermes_cli.main', ...dashboardArgs],
+    args: ["-m", "hermes_cli.main", ...dashboardArgs],
     env: {
-      PYTHONPATH: [ACTIVE_NEXUS_ROOT, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
+      PYTHONPATH: [ACTIVE_NEXUS_ROOT, process.env.PYTHONPATH]
+        .filter(Boolean)
+        .join(path.delimiter),
     },
     root: ACTIVE_NEXUS_ROOT,
     bootstrap: true,
-    shell: false
-  }
+    shell: false,
+  };
 }
 
 function resolveHermesBackend(dashboardArgs) {
   // 1. Explicit override -- NEXUS_AGENT_ROOT points at a developer
   //    checkout. Honour it as-is (no bootstrap; the user is driving).
-  const overrideRoot = process.env.NEXUS_AGENT_ROOT && path.resolve(process.env.NEXUS_AGENT_ROOT)
+  const overrideRoot =
+    process.env.NEXUS_AGENT_ROOT && path.resolve(process.env.NEXUS_AGENT_ROOT);
   if (overrideRoot && isHermesSourceRoot(overrideRoot)) {
-    const backend = createPythonBackend(overrideRoot, `Hermes source at ${overrideRoot}`, dashboardArgs)
-    if (backend) return backend
+    const backend = createPythonBackend(
+      overrideRoot,
+      `Hermes source at ${overrideRoot}`,
+      dashboardArgs,
+    );
+    if (backend) return backend;
   }
 
   // 1.5. External agent-gateway server — NEXUS_AGENT_AGENT_GATEWAY_ROOT points
   //      at the standalone agent-gateway checkout. Spawns `python -m agent_gateway`
   //      which starts a FastAPI + WebSocket JSON-RPC server compatible with this
   //      desktop's expected gateway protocol.
-  const agRoot = process.env.NEXUS_AGENT_AGENT_GATEWAY_ROOT
-    && path.resolve(process.env.NEXUS_AGENT_AGENT_GATEWAY_ROOT)
-  if (agRoot && directoryExists(path.join(agRoot, 'src', 'agent_gateway'))) {
-    const python = findPythonForRoot(agRoot) || findOnPath('python3')
+  const agRoot =
+    process.env.NEXUS_AGENT_AGENT_GATEWAY_ROOT &&
+    path.resolve(process.env.NEXUS_AGENT_AGENT_GATEWAY_ROOT);
+  if (agRoot && directoryExists(path.join(agRoot, "src", "agent_gateway"))) {
+    const python = findPythonForRoot(agRoot) || findOnPath("python3");
     if (python) {
       // Extract port from dashboardArgs (set by startHermes/pickPort)
-      const portIdx = dashboardArgs.indexOf('--port')
-      const port = portIdx >= 0 ? dashboardArgs[portIdx + 1] : '9119'
+      const portIdx = dashboardArgs.indexOf("--port");
+      const port = portIdx >= 0 ? dashboardArgs[portIdx + 1] : "9119";
       return {
-        kind: 'python',
+        kind: "python",
         label: `agent-gateway server at ${agRoot}`,
         command: python,
-        args: ['-m', 'agent_gateway', '--host', '127.0.0.1', '--port', port],
+        args: ["-m", "agent_gateway", "--host", "127.0.0.1", "--port", port],
         env: {
-          PYTHONPATH: [path.join(agRoot, 'src'), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
+          PYTHONPATH: [path.join(agRoot, "src"), process.env.PYTHONPATH]
+            .filter(Boolean)
+            .join(path.delimiter),
         },
         cwd: agRoot,
         bootstrap: false,
-        shell: false
-      }
+        shell: false,
+      };
     }
     rememberLog(
       `Found agent-gateway at ${agRoot} but no Python found; ` +
-      'falling through to other backend sources.'
-    )
+        "falling through to other backend sources.",
+    );
   }
 
   // 2. Development source -- when running `npm run dev` from a checkout, the
@@ -1962,8 +2327,12 @@ function resolveHermesBackend(dashboardArgs) {
   //    installed `hermes` on PATH so local Python edits are actually exercised.
   //    (In dev with no checkout, SOURCE_REPO_ROOT won't pass isHermesSourceRoot.)
   if (!IS_PACKAGED && isHermesSourceRoot(SOURCE_REPO_ROOT)) {
-    const backend = createPythonBackend(SOURCE_REPO_ROOT, `Hermes source at ${SOURCE_REPO_ROOT}`, dashboardArgs)
-    if (backend) return backend
+    const backend = createPythonBackend(
+      SOURCE_REPO_ROOT,
+      `Hermes source at ${SOURCE_REPO_ROOT}`,
+      dashboardArgs,
+    );
+    if (backend) return backend;
   }
 
   // 3. Bootstrap-complete ACTIVE_NEXUS_ROOT -- the canonical install at
@@ -1973,7 +2342,7 @@ function resolveHermesBackend(dashboardArgs) {
   //    to spawning hermes. Updates flow through the in-app update path
   //    (applyUpdates -> git pull) or `hermes update` from the CLI.
   if (isBootstrapComplete()) {
-    return createActiveBackend(dashboardArgs)
+    return createActiveBackend(dashboardArgs);
   }
 
   // 4. Existing `hermes` on PATH -- installed via install.ps1 / install.sh from
@@ -1981,27 +2350,31 @@ function resolveHermesBackend(dashboardArgs) {
   //    do NOT write a bootstrap marker; the user did this themselves and we
   //    don't want to take ownership of an install we didn't perform.
   //    NEXUS_AGENT_IGNORE_EXISTING=1 forces the bootstrap path for testing.
-  if (process.env.NEXUS_AGENT_IGNORE_EXISTING !== '1') {
-    let hermesCommand = null
-    const hermesOverride = process.env.NEXUS_AGENT_CLI
+  if (process.env.NEXUS_AGENT_IGNORE_EXISTING !== "1") {
+    let hermesCommand = null;
+    const hermesOverride = process.env.NEXUS_AGENT_CLI;
 
     if (hermesOverride) {
-      const resolvedOverride = findOnPath(hermesOverride)
+      const resolvedOverride = findOnPath(hermesOverride);
       if (resolvedOverride) {
-        hermesCommand = resolvedOverride
+        hermesCommand = resolvedOverride;
       } else if (!isWindowsBinaryPathInWsl(hermesOverride, { isWsl: IS_WSL })) {
-        hermesCommand = hermesOverride
+        hermesCommand = hermesOverride;
       } else {
-        rememberLog(`Ignoring Windows Hermes override under WSL: ${hermesOverride}`)
+        rememberLog(
+          `Ignoring Windows Hermes override under WSL: ${hermesOverride}`,
+        );
       }
     } else {
-      hermesCommand = findOnPath('hermes')
+      hermesCommand = findOnPath("hermes");
     }
 
     if (hermesCommand) {
       if (looksLikeDesktopAppBinary(hermesCommand)) {
-        rememberLog(`Ignoring desktop app executable on PATH while resolving Hermes CLI: ${hermesCommand}`)
-        hermesCommand = null
+        rememberLog(
+          `Ignoring desktop app executable on PATH while resolving Hermes CLI: ${hermesCommand}`,
+        );
+        hermesCommand = null;
       }
     }
 
@@ -2013,7 +2386,7 @@ function resolveHermesBackend(dashboardArgs) {
       // dead backend instead of the first-launch installer. The cheap
       // `--version` probe (see backend-probes.cjs) catches that case
       // and lets the resolver fall through to step 6 / bootstrap.
-      const shellForProbe = isCommandScript(hermesCommand)
+      const shellForProbe = isCommandScript(hermesCommand);
       if (verifyHermesCli(hermesCommand, { shell: shellForProbe })) {
         return {
           label: `existing Hermes CLI at ${hermesCommand}`,
@@ -2021,20 +2394,20 @@ function resolveHermesBackend(dashboardArgs) {
           args: dashboardArgs,
           bootstrap: false,
           env: {},
-          kind: 'command',
-          shell: shellForProbe
-        }
+          kind: "command",
+          shell: shellForProbe,
+        };
       }
       rememberLog(
-        `Ignoring existing Hermes CLI at ${hermesCommand}: --version probe failed; falling through to bootstrap.`
-      )
+        `Ignoring existing Hermes CLI at ${hermesCommand}: --version probe failed; falling through to bootstrap.`,
+      );
     }
   }
 
   // 5. Last-ditch: pip-installed hermes_cli module via system Python.
   //    Same rationale as #4 -- the user installed this; we use it but don't
   //    take ownership.
-  const python = findSystemPython()
+  const python = findSystemPython();
   if (python) {
     // Same smoke-test rationale as step 4: a system Python in the
     // SUPPORTED_VERSIONS range can be registered (PEP 514) without
@@ -2046,16 +2419,18 @@ function resolveHermesBackend(dashboardArgs) {
     // a uv-managed 3.11 into %LOCALAPPDATA%\hermes\nexus-agent\venv.
     if (canImportHermesCli(python)) {
       return {
-        kind: 'python',
+        kind: "python",
         label: `installed hermes_cli module via ${python}`,
         command: python,
-        args: ['-m', 'hermes_cli.main', ...dashboardArgs],
+        args: ["-m", "hermes_cli.main", ...dashboardArgs],
         bootstrap: false,
         env: {},
-        shell: false
-      }
+        shell: false,
+      };
     }
-    rememberLog(`Ignoring system Python ${python}: hermes_cli is not importable; falling through to bootstrap.`)
+    rememberLog(
+      `Ignoring system Python ${python}: hermes_cli is not importable; falling through to bootstrap.`,
+    );
   }
 
   // 6. Nothing usable yet -- signal the bootstrap runner that we need to
@@ -2069,8 +2444,8 @@ function resolveHermesBackend(dashboardArgs) {
   //    user into a dead end. With the bootstrap protocol, "no install yet"
   //    is a recoverable state the GUI can drive through.
   return {
-    kind: 'bootstrap-needed',
-    label: 'Hermes Agent not installed yet; bootstrap required',
+    kind: "bootstrap-needed",
+    label: "Hermes Agent not installed yet; bootstrap required",
     command: null,
     args: dashboardArgs,
     bootstrap: true,
@@ -2080,14 +2455,14 @@ function resolveHermesBackend(dashboardArgs) {
     activeRoot: ACTIVE_NEXUS_ROOT,
     installStamp: INSTALL_STAMP, // may be null in dev
     isPackaged: IS_PACKAGED,
-    platform: process.platform
-  }
+    platform: process.platform,
+  };
 }
 
 async function ensureRuntime(backend) {
   if (!backend.bootstrap) {
-    await advanceBootProgress('runtime.external', `Using ${backend.label}`, 32)
-    return backend
+    await advanceBootProgress("runtime.external", `Using ${backend.label}`, 32);
+    return backend;
   }
 
   // backend.kind === 'bootstrap-needed' means resolveHermesBackend couldn't
@@ -2099,8 +2474,10 @@ async function ensureRuntime(backend) {
   // (renderer window isn't created until later in startBackend). Phase 1E
   // will rewire startup to spawn the window first and route bootstrap events
   // to a renderer-side install overlay.
-  if (backend.kind === 'bootstrap-needed') {
-    rememberLog('[bootstrap] no Hermes install found; starting first-launch bootstrap')
+  if (backend.kind === "bootstrap-needed") {
+    rememberLog(
+      "[bootstrap] no Hermes install found; starting first-launch bootstrap",
+    );
 
     // Eagerly flip the bootstrap UI state to 'active' so the renderer
     // shows the install overlay BEFORE the runner finishes fetching the
@@ -2110,71 +2487,73 @@ async function ensureRuntime(backend) {
     // manifest event will overwrite it once install.ps1 -Manifest returns.
     try {
       broadcastBootstrapEvent({
-        type: 'manifest',
+        type: "manifest",
         stages: [],
-        protocolVersion: null
-      })
+        protocolVersion: null,
+      });
     } catch {
-      void 0
+      void 0;
     }
 
-    bootstrapAbortController = new AbortController()
+    bootstrapAbortController = new AbortController();
 
     const bootstrapResult = await runBootstrap({
       installStamp: backend.installStamp,
       activeRoot: backend.activeRoot,
       sourceRepoRoot: SOURCE_REPO_ROOT,
       nexusHome: NEXUS_AGENT_HOME,
-      logRoot: path.join(NEXUS_AGENT_HOME, 'logs'),
+      logRoot: path.join(NEXUS_AGENT_HOME, "logs"),
       abortSignal: bootstrapAbortController.signal,
-      onEvent: ev => {
+      onEvent: (ev) => {
         // Tee every bootstrap event to (a) the desktop log for forensics
         // and (b) the renderer for live progress UI. Either may be absent;
         // tolerate both gracefully so a renderer crash doesn't stall the
         // bootstrap and a log-write failure doesn't suppress the UI signal.
         try {
-          rememberLog(`[bootstrap] ${JSON.stringify(ev)}`)
+          rememberLog(`[bootstrap] ${JSON.stringify(ev)}`);
         } catch {
-          void 0
+          void 0;
         }
         try {
-          broadcastBootstrapEvent(ev)
+          broadcastBootstrapEvent(ev);
         } catch {
-          void 0
+          void 0;
         }
       },
-      writeMarker: writeBootstrapMarker
-    })
+      writeMarker: writeBootstrapMarker,
+    });
 
-    bootstrapAbortController = null
+    bootstrapAbortController = null;
 
     if (bootstrapResult.cancelled) {
-      const cancelledError = new Error('Hermes install was cancelled.')
-      cancelledError.isBootstrapFailure = true
-      cancelledError.bootstrapCancelled = true
-      bootstrapFailure = cancelledError
-      throw cancelledError
+      const cancelledError = new Error("Hermes install was cancelled.");
+      cancelledError.isBootstrapFailure = true;
+      cancelledError.bootstrapCancelled = true;
+      bootstrapFailure = cancelledError;
+      throw cancelledError;
     }
 
     if (!bootstrapResult.ok) {
       const bootstrapError = new Error(
-        `Hermes bootstrap failed${bootstrapResult.failedStage ? ` at stage '${bootstrapResult.failedStage}'` : ''}: ` +
-          `${bootstrapResult.error || 'unknown error'}. ` +
-          `Check ${path.join(NEXUS_AGENT_HOME, 'logs', 'desktop.log')} for the full transcript.`
-      )
-      bootstrapError.isBootstrapFailure = true
-      bootstrapError.failedStage = bootstrapResult.failedStage || null
+        `Hermes bootstrap failed${bootstrapResult.failedStage ? ` at stage '${bootstrapResult.failedStage}'` : ""}: ` +
+          `${bootstrapResult.error || "unknown error"}. ` +
+          `Check ${path.join(NEXUS_AGENT_HOME, "logs", "desktop.log")} for the full transcript.`,
+      );
+      bootstrapError.isBootstrapFailure = true;
+      bootstrapError.failedStage = bootstrapResult.failedStage || null;
       // Latch the failure so subsequent startHermes() calls return this
       // same error without re-running install.ps1.  Cleared by the
       // hermes:bootstrap:reset IPC (renderer's "Reload and retry").
-      bootstrapFailure = bootstrapError
-      throw bootstrapError
+      bootstrapFailure = bootstrapError;
+      throw bootstrapError;
     }
 
-    rememberLog('[bootstrap] bootstrap complete; marker written. Re-resolving backend.')
+    rememberLog(
+      "[bootstrap] bootstrap complete; marker written. Re-resolving backend.",
+    );
     // Re-resolve now that the install exists. The new resolution lands in
     // step 3 (bootstrap-complete marker) and we recurse to wire venvPython.
-    return ensureRuntime(resolveHermesBackend(backend.args))
+    return ensureRuntime(resolveHermesBackend(backend.args));
   }
 
   // bootstrap=true with a real backend (createActiveBackend path) means we
@@ -2186,8 +2565,8 @@ async function ensureRuntime(backend) {
   if (!isHermesSourceRoot(ACTIVE_NEXUS_ROOT)) {
     throw new Error(
       `Hermes install at ${ACTIVE_NEXUS_ROOT} is missing or incomplete. ` +
-        'Reinstall via the desktop installer or scripts/install.ps1.'
-    )
+        "Reinstall via the desktop installer or scripts/install.ps1.",
+    );
   }
 
   // On Windows, preflight Git Bash. Hermes' terminal tool calls bash.exe
@@ -2198,14 +2577,14 @@ async function ensureRuntime(backend) {
   // here via an external `hermes` on PATH, this check still helps.
   if (IS_WINDOWS && !findGitBash()) {
     throw new Error(
-      'Git for Windows is required for Hermes on Windows (provides Git Bash, ' +
+      "Git for Windows is required for Hermes on Windows (provides Git Bash, " +
         "which the agent's terminal tool uses). Install it from " +
-        'https://git-scm.com/download/win or run `winget install -e --id Git.Git`, ' +
-        'then relaunch Hermes.'
-    )
+        "https://git-scm.com/download/win or run `winget install -e --id Git.Git`, " +
+        "then relaunch Hermes.",
+    );
   }
 
-  const venvPython = getVenvPython(NEXUS_VENV_ROOT)
+  const venvPython = getVenvPython(NEXUS_VENV_ROOT);
   if (!fileExists(venvPython)) {
     // No venv at the expected location AND no bootstrap-needed sentinel
     // means we have a half-installed checkout: .git exists, source files
@@ -2215,107 +2594,128 @@ async function ensureRuntime(backend) {
     // install.ps1 succeeds. If we hit this, the user (or a deleted venv)
     // broke the invariant; tell them to re-run the install.
     throw new Error(
-      `Hermes venv missing at ${NEXUS_VENV_ROOT}. Re-run the desktop installer or ` + '`scripts/install.ps1` to rebuild it.'
-    )
+      `Hermes venv missing at ${NEXUS_VENV_ROOT}. Re-run the desktop installer or ` +
+        "`scripts/install.ps1` to rebuild it.",
+    );
   }
 
-  backend.command = venvPython
-  backend.label = `Hermes at ${ACTIVE_NEXUS_ROOT} (venv: ${NEXUS_VENV_ROOT})`
+  backend.command = venvPython;
+  backend.label = `Hermes at ${ACTIVE_NEXUS_ROOT} (venv: ${NEXUS_VENV_ROOT})`;
   updateBootProgress({
-    phase: 'runtime.ready',
-    message: 'Hermes runtime is ready',
+    phase: "runtime.ready",
+    message: "Hermes runtime is ready",
     progress: 82,
     running: true,
-    error: null
-  })
-  return backend
+    error: null,
+  });
+  return backend;
 }
 
 function isPortAvailable(port) {
-  return new Promise(resolve => {
-    const server = net.createServer()
-    server.once('error', () => resolve(false))
-    server.once('listening', () => {
-      server.close(() => resolve(true))
-    })
-    server.listen(port, '127.0.0.1')
-  })
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
 }
 
 async function pickPort() {
   for (let port = PORT_FLOOR; port <= PORT_CEILING; port += 1) {
-    if (await isPortAvailable(port)) return port
+    if (await isPortAvailable(port)) return port;
   }
-  throw new Error(`No free localhost port in ${PORT_FLOOR}-${PORT_CEILING}`)
+  throw new Error(`No free localhost port in ${PORT_FLOOR}-${PORT_CEILING}`);
 }
 
 function fetchJson(url, token, options = {}) {
   return new Promise((resolve, reject) => {
-    const body = options.body === undefined ? undefined : Buffer.from(JSON.stringify(options.body))
-    const parsed = new URL(url)
-    const client = parsed.protocol === 'https:' ? https : http
-    const timeoutMs = resolveTimeoutMs(options.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
+    const body =
+      options.body === undefined
+        ? undefined
+        : Buffer.from(JSON.stringify(options.body));
+    const parsed = new URL(url);
+    const client = parsed.protocol === "https:" ? https : http;
+    const timeoutMs = resolveTimeoutMs(
+      options.timeoutMs,
+      DEFAULT_FETCH_TIMEOUT_MS,
+    );
 
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      reject(new Error(`Unsupported Nexus Agent backend URL protocol: ${parsed.protocol}`))
-      return
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      reject(
+        new Error(
+          `Unsupported Nexus Agent backend URL protocol: ${parsed.protocol}`,
+        ),
+      );
+      return;
     }
 
     const req = client.request(
       parsed,
       {
-        method: options.method || 'GET',
+        method: options.method || "GET",
         headers: {
-          'Content-Type': 'application/json',
-          'X-Nexus-Agent-Session-Token': token,
-          ...(body ? { 'Content-Length': String(body.length) } : {})
-        }
+          "Content-Type": "application/json",
+          "X-Nexus-Agent-Session-Token": token,
+          ...(body ? { "Content-Length": String(body.length) } : {}),
+        },
       },
-      res => {
-        const chunks = []
-        res.on('error', reject)
-        res.on('data', chunk => chunks.push(chunk))
-        res.on('end', () => {
-          const text = Buffer.concat(chunks).toString('utf8')
+      (res) => {
+        const chunks = [];
+        res.on("error", reject);
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
           if ((res.statusCode || 500) >= 400) {
-            reject(new Error(`${res.statusCode}: ${text || res.statusMessage}`))
-            return
+            reject(
+              new Error(`${res.statusCode}: ${text || res.statusMessage}`),
+            );
+            return;
           }
           if (!text) {
-            resolve(null)
-            return
+            resolve(null);
+            return;
           }
           // A 2xx response whose body is HTML means the request fell through
           // to the SPA index.html (e.g. an unregistered /api path). JSON.parse
           // would throw an opaque `Unexpected token '<'` here, so surface a
           // clear diagnostic with the offending URL instead.
-          const looksHtml = /^\s*<(?:!doctype|html)/i.test(text)
-          const contentType = String(res.headers['content-type'] || '')
-          if (looksHtml || contentType.includes('text/html')) {
+          const looksHtml = /^\s*<(?:!doctype|html)/i.test(text);
+          const contentType = String(res.headers["content-type"] || "");
+          if (looksHtml || contentType.includes("text/html")) {
             reject(
               new Error(
                 `Expected JSON from ${url} but got HTML (status ${res.statusCode}). ` +
-                  'The endpoint is likely missing on the Nexus Agent backend.'
-              )
-            )
-            return
+                  "The endpoint is likely missing on the Nexus Agent backend.",
+              ),
+            );
+            return;
           }
           try {
-            resolve(JSON.parse(text))
+            resolve(JSON.parse(text));
           } catch {
-            reject(new Error(`Invalid JSON from ${url} (status ${res.statusCode}): ${text.slice(0, 200)}`))
+            reject(
+              new Error(
+                `Invalid JSON from ${url} (status ${res.statusCode}): ${text.slice(0, 200)}`,
+              ),
+            );
           }
-        })
-      }
-    )
+        });
+      },
+    );
 
-    req.on('error', reject)
+    req.on("error", reject);
     req.setTimeout(timeoutMs, () => {
-      req.destroy(new Error(`Timed out connecting to Nexus Agent backend after ${timeoutMs}ms`))
-    })
-    if (body) req.write(body)
-    req.end()
-  })
+      req.destroy(
+        new Error(
+          `Timed out connecting to Nexus Agent backend after ${timeoutMs}ms`,
+        ),
+      );
+    });
+    if (body) req.write(body);
+    req.end();
+  });
 }
 
 function fetchPublicJson(url, options = {}) {
@@ -2325,265 +2725,310 @@ function fetchPublicJson(url, options = {}) {
   // any credentials exist, and any time we must not leak a token to an
   // endpoint that doesn't need one.
   return new Promise((resolve, reject) => {
-    const body = options.body === undefined ? undefined : Buffer.from(JSON.stringify(options.body))
-    let parsed
+    const body =
+      options.body === undefined
+        ? undefined
+        : Buffer.from(JSON.stringify(options.body));
+    let parsed;
     try {
-      parsed = new URL(url)
+      parsed = new URL(url);
     } catch (error) {
-      reject(new Error(`Invalid URL: ${error.message}`))
-      return
+      reject(new Error(`Invalid URL: ${error.message}`));
+      return;
     }
-    const client = parsed.protocol === 'https:' ? https : http
-    const timeoutMs = resolveTimeoutMs(options.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
+    const client = parsed.protocol === "https:" ? https : http;
+    const timeoutMs = resolveTimeoutMs(
+      options.timeoutMs,
+      DEFAULT_FETCH_TIMEOUT_MS,
+    );
 
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      reject(new Error(`Unsupported Nexus Agent backend URL protocol: ${parsed.protocol}`))
-      return
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      reject(
+        new Error(
+          `Unsupported Nexus Agent backend URL protocol: ${parsed.protocol}`,
+        ),
+      );
+      return;
     }
 
     const req = client.request(
       parsed,
       {
-        method: options.method || 'GET',
+        method: options.method || "GET",
         headers: {
-          'Content-Type': 'application/json',
-          ...(body ? { 'Content-Length': String(body.length) } : {})
-        }
+          "Content-Type": "application/json",
+          ...(body ? { "Content-Length": String(body.length) } : {}),
+        },
       },
-      res => {
-        const chunks = []
-        res.on('data', chunk => chunks.push(chunk))
-        res.on('end', () => {
-          const text = Buffer.concat(chunks).toString('utf8')
+      (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
           if ((res.statusCode || 500) >= 400) {
-            reject(new Error(`${res.statusCode}: ${text || res.statusMessage}`))
-            return
+            reject(
+              new Error(`${res.statusCode}: ${text || res.statusMessage}`),
+            );
+            return;
           }
           if (!text) {
-            resolve(null)
-            return
+            resolve(null);
+            return;
           }
-          const looksHtml = /^\s*<(?:!doctype|html)/i.test(text)
-          const contentType = String(res.headers['content-type'] || '')
-          if (looksHtml || contentType.includes('text/html')) {
+          const looksHtml = /^\s*<(?:!doctype|html)/i.test(text);
+          const contentType = String(res.headers["content-type"] || "");
+          if (looksHtml || contentType.includes("text/html")) {
             reject(
               new Error(
                 `Expected JSON from ${url} but got HTML (status ${res.statusCode}). ` +
-                  'The endpoint is likely missing on the Nexus Agent backend.'
-              )
-            )
-            return
+                  "The endpoint is likely missing on the Nexus Agent backend.",
+              ),
+            );
+            return;
           }
           try {
-            resolve(JSON.parse(text))
+            resolve(JSON.parse(text));
           } catch {
-            reject(new Error(`Invalid JSON from ${url} (status ${res.statusCode}): ${text.slice(0, 200)}`))
+            reject(
+              new Error(
+                `Invalid JSON from ${url} (status ${res.statusCode}): ${text.slice(0, 200)}`,
+              ),
+            );
           }
-        })
-      }
-    )
+        });
+      },
+    );
 
-    req.on('error', reject)
+    req.on("error", reject);
     req.setTimeout(timeoutMs, () => {
-      req.destroy(new Error(`Timed out connecting to Nexus Agent backend after ${timeoutMs}ms`))
-    })
-    if (body) req.write(body)
-    req.end()
-  })
+      req.destroy(
+        new Error(
+          `Timed out connecting to Nexus Agent backend after ${timeoutMs}ms`,
+        ),
+      );
+    });
+    if (body) req.write(body);
+    req.end();
+  });
 }
 
 function mimeTypeForPath(filePath) {
-  const ext = path.extname(filePath || '').toLowerCase()
+  const ext = path.extname(filePath || "").toLowerCase();
 
-  return MEDIA_MIME_TYPES[ext] || 'application/octet-stream'
+  return MEDIA_MIME_TYPES[ext] || "application/octet-stream";
 }
 
 function extensionForMimeType(mimeType) {
-  const type = String(mimeType || '')
-    .split(';')[0]
+  const type = String(mimeType || "")
+    .split(";")[0]
     .trim()
-    .toLowerCase()
-  if (type === 'image/png') return '.png'
-  if (type === 'image/jpeg') return '.jpg'
-  if (type === 'image/gif') return '.gif'
-  if (type === 'image/webp') return '.webp'
-  if (type === 'image/bmp') return '.bmp'
-  if (type === 'image/svg+xml') return '.svg'
-  return ''
+    .toLowerCase();
+  if (type === "image/png") return ".png";
+  if (type === "image/jpeg") return ".jpg";
+  if (type === "image/gif") return ".gif";
+  if (type === "image/webp") return ".webp";
+  if (type === "image/bmp") return ".bmp";
+  if (type === "image/svg+xml") return ".svg";
+  return "";
 }
 
-function filenameFromUrl(rawUrl, fallback = 'image') {
+function filenameFromUrl(rawUrl, fallback = "image") {
   try {
-    const parsed = new URL(rawUrl)
-    const base = path.basename(decodeURIComponent(parsed.pathname || ''))
-    return base && base.includes('.') ? base : fallback
+    const parsed = new URL(rawUrl);
+    const base = path.basename(decodeURIComponent(parsed.pathname || ""));
+    return base && base.includes(".") ? base : fallback;
   } catch {
-    return fallback
+    return fallback;
   }
 }
 
 // Link title resolution — curl (tier 1) → hidden BrowserWindow (tier 2).
-const titleCache = new Map()
-const titleInflight = new Map()
-const TITLE_CACHE_LIMIT = 500
-const TITLE_BYTE_BUDGET = 96 * 1024
-const TITLE_TIMEOUT_MS = 5000
-const TITLE_MAX_REDIRECTS = 3
+const titleCache = new Map();
+const titleInflight = new Map();
+const TITLE_CACHE_LIMIT = 500;
+const TITLE_BYTE_BUDGET = 96 * 1024;
+const TITLE_TIMEOUT_MS = 5000;
+const TITLE_MAX_REDIRECTS = 3;
 // Browser-shaped UA — many bot-walled sites (GetYourGuide, Cloudflare-protected
 // pages) refuse anything that doesn't look like a real Chrome.
 const TITLE_USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 const TITLE_ERROR_RE =
-  /\b(access denied|attention required|captcha|error|forbidden|just a moment|request blocked|too many requests)\b/i
-const HTML_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" }
+  /\b(access denied|attention required|captcha|error|forbidden|just a moment|request blocked|too many requests)\b/i;
+const HTML_ENTITIES = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  "#39": "'",
+};
 
 // Tier-2 renderer fallback config. Only invoked when curl came back empty or
 // matched TITLE_ERROR_RE — keeps cold/CDN-cached pages on the cheap path.
-const RENDER_TITLE_MAX_CONCURRENT = 2
-const RENDER_TITLE_TIMEOUT_MS = 8000
-const RENDER_TITLE_GRACE_MS = 700
+const RENDER_TITLE_MAX_CONCURRENT = 2;
+const RENDER_TITLE_TIMEOUT_MS = 8000;
+const RENDER_TITLE_GRACE_MS = 700;
 // Resource types we cancel before the network even fires — keeps the hidden
 // renderer fast and cuts third-party tracking noise.
 const RENDER_TITLE_BLOCKED_RESOURCES = new Set([
-  'cspReport',
-  'font',
-  'imageset',
-  'media',
-  'object',
-  'ping',
-  'stylesheet'
-])
+  "cspReport",
+  "font",
+  "imageset",
+  "media",
+  "object",
+  "ping",
+  "stylesheet",
+]);
 
-let linkTitleSession = null
-let oauthSession = null
-let renderTitleInFlight = 0
-const renderTitleQueue = []
+let linkTitleSession = null;
+let oauthSession = null;
+let renderTitleInFlight = 0;
+const renderTitleQueue = [];
 
 function canonicalTitleCacheKey(rawUrl) {
-  const value = String(rawUrl || '').trim()
-  if (!value) return ''
+  const value = String(rawUrl || "").trim();
+  if (!value) return "";
 
   try {
-    const url = new URL(value)
-    const host = url.hostname.replace(/^www\./i, '').toLowerCase()
-    const pathname = url.pathname === '/' ? '/' : url.pathname.replace(/\/+$/, '') || '/'
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+    const pathname =
+      url.pathname === "/" ? "/" : url.pathname.replace(/\/+$/, "") || "/";
 
-    return `${host}${pathname}${url.search || ''}`
+    return `${host}${pathname}${url.search || ""}`;
   } catch {
-    return value
+    return value;
   }
 }
 
 function cacheTitle(key, title) {
-  if (titleCache.size >= TITLE_CACHE_LIMIT) titleCache.delete(titleCache.keys().next().value)
-  titleCache.set(key, title)
+  if (titleCache.size >= TITLE_CACHE_LIMIT)
+    titleCache.delete(titleCache.keys().next().value);
+  titleCache.set(key, title);
 }
 
 function decodeHtmlEntities(value) {
   return value
-    .replace(/&(amp|lt|gt|quot|apos|nbsp|#39);/gi, (_, k) => HTML_ENTITIES[k.toLowerCase()] ?? '')
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16) || 32))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10) || 32))
+    .replace(
+      /&(amp|lt|gt|quot|apos|nbsp|#39);/gi,
+      (_, k) => HTML_ENTITIES[k.toLowerCase()] ?? "",
+    )
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) =>
+      String.fromCodePoint(parseInt(hex, 16) || 32),
+    )
+    .replace(/&#(\d+);/g, (_, dec) =>
+      String.fromCodePoint(parseInt(dec, 10) || 32),
+    );
 }
 
 function parseHtmlTitle(html) {
-  const raw = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
-  return raw ? decodeHtmlEntities(raw).replace(/\s+/g, ' ').trim() : ''
+  const raw = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+  return raw ? decodeHtmlEntities(raw).replace(/\s+/g, " ").trim() : "";
 }
 
 function fetchHtmlTitleWithCurl(rawUrl) {
-  return new Promise(resolve => {
-    const url = String(rawUrl || '').trim()
-    if (!url) return resolve('')
+  return new Promise((resolve) => {
+    const url = String(rawUrl || "").trim();
+    if (!url) return resolve("");
 
     const args = [
-      '--silent',
-      '--show-error',
-      '--location',
-      '--max-redirs',
+      "--silent",
+      "--show-error",
+      "--location",
+      "--max-redirs",
       String(TITLE_MAX_REDIRECTS),
-      '--max-time',
+      "--max-time",
       String(Math.max(2, Math.ceil(TITLE_TIMEOUT_MS / 1000))),
-      '--connect-timeout',
-      '4',
-      '--user-agent',
+      "--connect-timeout",
+      "4",
+      "--user-agent",
       TITLE_USER_AGENT,
-      '--header',
-      'Accept: text/html,application/xhtml+xml;q=0.9,*/*;q=0.5',
-      '--header',
-      'Accept-Language: en-US,en;q=0.7',
-      '--header',
-      'Accept-Encoding: identity',
-      '--raw',
-      url
-    ]
-    const child = spawn('curl', args, { stdio: ['ignore', 'pipe', 'ignore'] })
-    const chunks = []
-    let bytes = 0
+      "--header",
+      "Accept: text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+      "--header",
+      "Accept-Language: en-US,en;q=0.7",
+      "--header",
+      "Accept-Encoding: identity",
+      "--raw",
+      url,
+    ];
+    const child = spawn("curl", args, { stdio: ["ignore", "pipe", "ignore"] });
+    const chunks = [];
+    let bytes = 0;
 
-    child.stdout.on('data', chunk => {
-      if (bytes >= TITLE_BYTE_BUDGET) return
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-      const remaining = TITLE_BYTE_BUDGET - bytes
-      const next = buffer.length > remaining ? buffer.subarray(0, remaining) : buffer
-      chunks.push(next)
-      bytes += next.length
-    })
+    child.stdout.on("data", (chunk) => {
+      if (bytes >= TITLE_BYTE_BUDGET) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const remaining = TITLE_BYTE_BUDGET - bytes;
+      const next =
+        buffer.length > remaining ? buffer.subarray(0, remaining) : buffer;
+      chunks.push(next);
+      bytes += next.length;
+    });
 
-    child.on('error', () => resolve(''))
-    child.on('close', () => {
-      if (!chunks.length) return resolve('')
-      resolve(parseHtmlTitle(Buffer.concat(chunks).toString('utf8')))
-    })
-  })
+    child.on("error", () => resolve(""));
+    child.on("close", () => {
+      if (!chunks.length) return resolve("");
+      resolve(parseHtmlTitle(Buffer.concat(chunks).toString("utf8")));
+    });
+  });
 }
 
 function getLinkTitleSession() {
-  if (linkTitleSession || !app.isReady()) return linkTitleSession
-  linkTitleSession = session.fromPartition('nexus:link-titles', { cache: false })
+  if (linkTitleSession || !app.isReady()) return linkTitleSession;
+  linkTitleSession = session.fromPartition("nexus:link-titles", {
+    cache: false,
+  });
   linkTitleSession.webRequest.onBeforeRequest((details, callback) => {
-    callback({ cancel: RENDER_TITLE_BLOCKED_RESOURCES.has(details.resourceType) })
-  })
-  return linkTitleSession
+    callback({
+      cancel: RENDER_TITLE_BLOCKED_RESOURCES.has(details.resourceType),
+    });
+  });
+  return linkTitleSession;
 }
 
 function dequeueRenderTitle() {
-  while (renderTitleInFlight < RENDER_TITLE_MAX_CONCURRENT && renderTitleQueue.length) {
-    const item = renderTitleQueue.shift()
-    renderTitleInFlight += 1
-    runRenderTitleJob(item.url).then(title => {
-      renderTitleInFlight -= 1
-      item.resolve(title)
-      dequeueRenderTitle()
-    })
+  while (
+    renderTitleInFlight < RENDER_TITLE_MAX_CONCURRENT &&
+    renderTitleQueue.length
+  ) {
+    const item = renderTitleQueue.shift();
+    renderTitleInFlight += 1;
+    runRenderTitleJob(item.url).then((title) => {
+      renderTitleInFlight -= 1;
+      item.resolve(title);
+      dequeueRenderTitle();
+    });
   }
 }
 
 function runRenderTitleJob(rawUrl) {
-  return new Promise(resolve => {
-    if (!app.isReady()) return resolve('')
+  return new Promise((resolve) => {
+    if (!app.isReady()) return resolve("");
 
-    const partitionSession = getLinkTitleSession()
-    if (!partitionSession) return resolve('')
+    const partitionSession = getLinkTitleSession();
+    if (!partitionSession) return resolve("");
 
-    let settled = false
-    let window = null
-    let hardTimer = null
-    let graceTimer = null
+    let settled = false;
+    let window = null;
+    let hardTimer = null;
+    let graceTimer = null;
 
-    const finish = title => {
-      if (settled) return
-      settled = true
-      if (hardTimer) clearTimeout(hardTimer)
-      if (graceTimer) clearTimeout(graceTimer)
-      const value = (title || '').replace(/\s+/g, ' ').trim()
+    const finish = (title) => {
+      if (settled) return;
+      settled = true;
+      if (hardTimer) clearTimeout(hardTimer);
+      if (graceTimer) clearTimeout(graceTimer);
+      const value = (title || "").replace(/\s+/g, " ").trim();
       try {
-        if (window && !window.isDestroyed()) window.destroy()
+        if (window && !window.isDestroyed()) window.destroy();
       } catch {
         // BrowserWindow may already be torn down; ignore.
       }
-      resolve(value)
-    }
+      resolve(value);
+    };
 
     try {
       window = new BrowserWindow({
@@ -2597,327 +3042,365 @@ function runRenderTitleJob(rawUrl) {
           nodeIntegration: false,
           sandbox: true,
           session: partitionSession,
-          webSecurity: true
-        }
-      })
+          webSecurity: true,
+        },
+      });
     } catch {
-      return finish('')
+      return finish("");
     }
 
-    const readTitle = () => window?.webContents?.getTitle?.() || ''
+    const readTitle = () => window?.webContents?.getTitle?.() || "";
     const scheduleGrace = () => {
-      if (graceTimer) clearTimeout(graceTimer)
-      graceTimer = setTimeout(() => finish(readTitle()), RENDER_TITLE_GRACE_MS)
-    }
+      if (graceTimer) clearTimeout(graceTimer);
+      graceTimer = setTimeout(() => finish(readTitle()), RENDER_TITLE_GRACE_MS);
+    };
 
-    hardTimer = setTimeout(() => finish(readTitle()), RENDER_TITLE_TIMEOUT_MS)
+    hardTimer = setTimeout(() => finish(readTitle()), RENDER_TITLE_TIMEOUT_MS);
 
-    window.webContents.setUserAgent(TITLE_USER_AGENT)
-    window.webContents.on('page-title-updated', scheduleGrace)
-    window.webContents.on('did-finish-load', scheduleGrace)
-    window.webContents.on('did-fail-load', (_event, _code, _desc, _validatedURL, isMainFrame) => {
-      if (isMainFrame) finish('')
-    })
+    window.webContents.setUserAgent(TITLE_USER_AGENT);
+    window.webContents.on("page-title-updated", scheduleGrace);
+    window.webContents.on("did-finish-load", scheduleGrace);
+    window.webContents.on(
+      "did-fail-load",
+      (_event, _code, _desc, _validatedURL, isMainFrame) => {
+        if (isMainFrame) finish("");
+      },
+    );
 
     window
       .loadURL(rawUrl, {
-        httpReferrer: 'https://www.google.com/',
-        userAgent: TITLE_USER_AGENT
+        httpReferrer: "https://www.google.com/",
+        userAgent: TITLE_USER_AGENT,
       })
-      .catch(() => finish(''))
-  })
+      .catch(() => finish(""));
+  });
 }
 
 function fetchHtmlTitleWithRenderer(rawUrl) {
-  return new Promise(resolve => {
-    renderTitleQueue.push({ resolve, url: rawUrl })
-    dequeueRenderTitle()
-  })
+  return new Promise((resolve) => {
+    renderTitleQueue.push({ resolve, url: rawUrl });
+    dequeueRenderTitle();
+  });
 }
 
 // Strips known error/captcha titles (e.g. "GetYourGuide – Error", "Just a
 // moment...") so they don't get cached as the resolved title.
-const usableTitle = value => (value && !TITLE_ERROR_RE.test(value) ? value : '')
+const usableTitle = (value) =>
+  value && !TITLE_ERROR_RE.test(value) ? value : "";
 
 function fetchLinkTitle(rawUrl) {
-  const url = String(rawUrl || '').trim()
-  const key = canonicalTitleCacheKey(url)
-  if (!key) return Promise.resolve('')
-  if (titleCache.has(key)) return Promise.resolve(titleCache.get(key))
-  if (titleInflight.has(key)) return titleInflight.get(key)
+  const url = String(rawUrl || "").trim();
+  const key = canonicalTitleCacheKey(url);
+  if (!key) return Promise.resolve("");
+  if (titleCache.has(key)) return Promise.resolve(titleCache.get(key));
+  if (titleInflight.has(key)) return titleInflight.get(key);
 
   const pending = fetchHtmlTitleWithCurl(url)
-    .catch(() => '')
-    .then(value => usableTitle((value || '').slice(0, 240)))
+    .catch(() => "")
+    .then((value) => usableTitle((value || "").slice(0, 240)))
     .then(
-      async value => value || usableTitle(((await fetchHtmlTitleWithRenderer(url).catch(() => '')) || '').slice(0, 240))
+      async (value) =>
+        value ||
+        usableTitle(
+          ((await fetchHtmlTitleWithRenderer(url).catch(() => "")) || "").slice(
+            0,
+            240,
+          ),
+        ),
     )
-    .then(clean => {
-      cacheTitle(key, clean)
-      titleInflight.delete(key)
-      return clean
-    })
+    .then((clean) => {
+      cacheTitle(key, clean);
+      titleInflight.delete(key);
+      return clean;
+    });
 
-  titleInflight.set(key, pending)
-  return pending
+  titleInflight.set(key, pending);
+  return pending;
 }
 
 async function resourceBufferFromUrl(rawUrl) {
-  if (!rawUrl) throw new Error('Missing URL')
-  if (rawUrl.startsWith('data:')) {
-    const match = rawUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/s)
-    if (!match) throw new Error('Invalid data URL')
-    const mimeType = match[1] || 'application/octet-stream'
-    const encoded = match[3] || ''
-    const buffer = match[2] ? Buffer.from(encoded, 'base64') : Buffer.from(decodeURIComponent(encoded), 'utf8')
-    return { buffer, mimeType }
+  if (!rawUrl) throw new Error("Missing URL");
+  if (rawUrl.startsWith("data:")) {
+    const match = rawUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/s);
+    if (!match) throw new Error("Invalid data URL");
+    const mimeType = match[1] || "application/octet-stream";
+    const encoded = match[3] || "";
+    const buffer = match[2]
+      ? Buffer.from(encoded, "base64")
+      : Buffer.from(decodeURIComponent(encoded), "utf8");
+    return { buffer, mimeType };
   }
-  if (rawUrl.startsWith('file:')) {
-    const filePath = fileURLToPath(rawUrl)
-    const buffer = await fs.promises.readFile(filePath)
-    return { buffer, mimeType: mimeTypeForPath(filePath) }
+  if (rawUrl.startsWith("file:")) {
+    const filePath = fileURLToPath(rawUrl);
+    const buffer = await fs.promises.readFile(filePath);
+    return { buffer, mimeType: mimeTypeForPath(filePath) };
   }
 
-  const parsed = new URL(rawUrl)
-  const client = parsed.protocol === 'https:' ? https : http
+  const parsed = new URL(rawUrl);
+  const client = parsed.protocol === "https:" ? https : http;
   return new Promise((resolve, reject) => {
-    const req = client.get(parsed, res => {
+    const req = client.get(parsed, (res) => {
       if ((res.statusCode || 500) >= 400) {
-        reject(new Error(`Failed to fetch ${rawUrl}: ${res.statusCode}`))
-        res.resume()
-        return
+        reject(new Error(`Failed to fetch ${rawUrl}: ${res.statusCode}`));
+        res.resume();
+        return;
       }
-      const chunks = []
-      res.on('error', reject)
-      res.on('data', chunk => chunks.push(chunk))
-      res.on('end', () => {
+      const chunks = [];
+      res.on("error", reject);
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => {
         resolve({
           buffer: Buffer.concat(chunks),
-          mimeType: res.headers['content-type'] || 'application/octet-stream'
-        })
-      })
-    })
-    req.on('error', reject)
-  })
+          mimeType: res.headers["content-type"] || "application/octet-stream",
+        });
+      });
+    });
+    req.on("error", reject);
+  });
 }
 
 async function copyImageFromUrl(rawUrl) {
-  const { buffer } = await resourceBufferFromUrl(rawUrl)
-  const image = nativeImage.createFromBuffer(buffer)
-  if (image.isEmpty()) throw new Error('Could not read image')
-  clipboard.writeImage(image)
+  const { buffer } = await resourceBufferFromUrl(rawUrl);
+  const image = nativeImage.createFromBuffer(buffer);
+  if (image.isEmpty()) throw new Error("Could not read image");
+  clipboard.writeImage(image);
 }
 
 async function saveImageFromUrl(rawUrl) {
-  const { buffer, mimeType } = await resourceBufferFromUrl(rawUrl)
-  const fallbackName = filenameFromUrl(rawUrl, `image${extensionForMimeType(mimeType) || '.png'}`)
+  const { buffer, mimeType } = await resourceBufferFromUrl(rawUrl);
+  const fallbackName = filenameFromUrl(
+    rawUrl,
+    `image${extensionForMimeType(mimeType) || ".png"}`,
+  );
   const result = await dialog.showSaveDialog(mainWindow, {
-    title: 'Save Image',
-    defaultPath: fallbackName
-  })
-  if (result.canceled || !result.filePath) return false
-  await fs.promises.writeFile(result.filePath, buffer)
-  return true
+    title: "Save Image",
+    defaultPath: fallbackName,
+  });
+  if (result.canceled || !result.filePath) return false;
+  await fs.promises.writeFile(result.filePath, buffer);
+  return true;
 }
 
-async function writeComposerImage(buffer, ext = '.png') {
-  const rawExt = String(ext || '.png')
+async function writeComposerImage(buffer, ext = ".png") {
+  const rawExt = String(ext || ".png")
     .trim()
-    .toLowerCase()
-  const normalizedExt = rawExt.startsWith('.') ? rawExt : `.${rawExt}`
-  const safeExt = /^\.[a-z0-9]{1,5}$/.test(normalizedExt) ? normalizedExt : '.png'
-  const dir = path.join(app.getPath('userData'), 'composer-images')
-  await fs.promises.mkdir(dir, { recursive: true })
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', '')
-  const random = crypto.randomBytes(3).toString('hex')
-  const filePath = path.join(dir, `composer_${stamp}_${random}${safeExt}`)
-  await fs.promises.writeFile(filePath, buffer)
-  return filePath
+    .toLowerCase();
+  const normalizedExt = rawExt.startsWith(".") ? rawExt : `.${rawExt}`;
+  const safeExt = /^\.[a-z0-9]{1,5}$/.test(normalizedExt)
+    ? normalizedExt
+    : ".png";
+  const dir = path.join(app.getPath("userData"), "composer-images");
+  await fs.promises.mkdir(dir, { recursive: true });
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-")
+    .replace("T", "_")
+    .replace("Z", "");
+  const random = crypto.randomBytes(3).toString("hex");
+  const filePath = path.join(dir, `composer_${stamp}_${random}${safeExt}`);
+  await fs.promises.writeFile(filePath, buffer);
+  return filePath;
 }
 
 function previewLabelForUrl(url) {
-  return `${url.host}${url.pathname === '/' ? '' : url.pathname}`
+  return `${url.host}${url.pathname === "/" ? "" : url.pathname}`;
 }
 
 function expandUserPath(filePath) {
-  const value = String(filePath || '').trim()
+  const value = String(filePath || "").trim();
 
-  if (value === '~') {
-    return app.getPath('home')
+  if (value === "~") {
+    return app.getPath("home");
   }
 
-  if (value.startsWith(`~${path.sep}`) || value.startsWith('~/')) {
-    return path.join(app.getPath('home'), value.slice(2))
+  if (value.startsWith(`~${path.sep}`) || value.startsWith("~/")) {
+    return path.join(app.getPath("home"), value.slice(2));
   }
 
-  return value
+  return value;
 }
 
 function previewFileTarget(rawTarget, baseDir) {
-  const raw = String(rawTarget || '').trim()
-  const base = baseDir ? path.resolve(expandUserPath(baseDir)) : resolveHermesCwd()
-  const filePath = raw.startsWith('file:') ? fileURLToPath(raw) : path.resolve(base, expandUserPath(raw))
-  let resolved = filePath
+  const raw = String(rawTarget || "").trim();
+  const base = baseDir
+    ? path.resolve(expandUserPath(baseDir))
+    : resolveHermesCwd();
+  const filePath = raw.startsWith("file:")
+    ? fileURLToPath(raw)
+    : path.resolve(base, expandUserPath(raw));
+  let resolved = filePath;
 
   if (directoryExists(resolved)) {
-    resolved = path.join(resolved, 'index.html')
+    resolved = path.join(resolved, "index.html");
   }
 
-  const ext = path.extname(resolved).toLowerCase()
+  const ext = path.extname(resolved).toLowerCase();
   if (!fileExists(resolved)) {
-    return null
+    return null;
   }
 
-  const mimeType = mimeTypeForPath(resolved)
-  const metadata = previewFileMetadata(resolved, mimeType)
-  const isHtml = PREVIEW_HTML_EXTENSIONS.has(ext)
-  const isImage = mimeType.startsWith('image/')
-  const previewKind = isHtml ? 'html' : isImage ? 'image' : metadata.binary ? 'binary' : 'text'
+  const mimeType = mimeTypeForPath(resolved);
+  const metadata = previewFileMetadata(resolved, mimeType);
+  const isHtml = PREVIEW_HTML_EXTENSIONS.has(ext);
+  const isImage = mimeType.startsWith("image/");
+  const previewKind = isHtml
+    ? "html"
+    : isImage
+      ? "image"
+      : metadata.binary
+        ? "binary"
+        : "text";
 
   return {
     binary: metadata.binary,
     byteSize: metadata.byteSize,
-    kind: 'file',
+    kind: "file",
     large: metadata.large,
     label: path.basename(resolved),
-    language: PREVIEW_LANGUAGE_BY_EXT[ext] || 'text',
+    language: PREVIEW_LANGUAGE_BY_EXT[ext] || "text",
     mimeType,
     path: resolved,
     previewKind,
     source: raw,
-    url: pathToFileURL(resolved).toString()
-  }
+    url: pathToFileURL(resolved).toString(),
+  };
 }
 
 function previewUrlTarget(rawTarget) {
-  const raw = String(rawTarget || '').trim()
-  const url = new URL(raw)
+  const raw = String(rawTarget || "").trim();
+  const url = new URL(raw);
 
-  if (!['http:', 'https:'].includes(url.protocol)) {
-    return null
+  if (!["http:", "https:"].includes(url.protocol)) {
+    return null;
   }
 
   if (!LOCAL_PREVIEW_HOSTS.has(url.hostname.toLowerCase())) {
-    return null
+    return null;
   }
 
-  if (url.hostname === '0.0.0.0') {
-    url.hostname = '127.0.0.1'
+  if (url.hostname === "0.0.0.0") {
+    url.hostname = "127.0.0.1";
   }
 
   return {
-    kind: 'url',
+    kind: "url",
     label: previewLabelForUrl(url),
     source: raw,
-    url: url.toString()
-  }
+    url: url.toString(),
+  };
 }
 
 function normalizePreviewTarget(rawTarget, baseDir) {
-  const raw = String(rawTarget || '').trim()
+  const raw = String(rawTarget || "").trim();
 
   if (!raw) {
-    return null
+    return null;
   }
 
   try {
     if (/^https?:\/\//i.test(raw)) {
-      return previewUrlTarget(raw)
+      return previewUrlTarget(raw);
     }
 
-    return previewFileTarget(raw, baseDir)
+    return previewFileTarget(raw, baseDir);
   } catch {
-    return null
+    return null;
   }
 }
 
 function filePathFromPreviewUrl(rawUrl) {
-  const filePath = fileURLToPath(String(rawUrl || ''))
+  const filePath = fileURLToPath(String(rawUrl || ""));
 
   if (!fileExists(filePath)) {
-    throw new Error('Preview file is not readable')
+    throw new Error("Preview file is not readable");
   }
 
-  return filePath
+  return filePath;
 }
 
 function sendPreviewFileChanged(payload) {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const { webContents } = mainWindow
-  if (!webContents || webContents.isDestroyed()) return
-  webContents.send('nexus:preview-file-changed', payload)
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const { webContents } = mainWindow;
+  if (!webContents || webContents.isDestroyed()) return;
+  webContents.send("nexus:preview-file-changed", payload);
 }
 
 function watchPreviewFile(rawUrl) {
-  const filePath = filePathFromPreviewUrl(rawUrl)
-  const watchDir = path.dirname(filePath)
-  const targetName = path.basename(filePath)
-  const id = crypto.randomBytes(12).toString('base64url')
-  let timer = null
+  const filePath = filePathFromPreviewUrl(rawUrl);
+  const watchDir = path.dirname(filePath);
+  const targetName = path.basename(filePath);
+  const id = crypto.randomBytes(12).toString("base64url");
+  let timer = null;
   const watcher = fs.watch(watchDir, (_eventType, filename) => {
-    const changedName = filename ? path.basename(String(filename)) : ''
+    const changedName = filename ? path.basename(String(filename)) : "";
 
     if (changedName && changedName !== targetName) {
-      return
+      return;
     }
 
-    if (timer) clearTimeout(timer)
+    if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
-      timer = null
-      if (!fileExists(filePath)) return
-      sendPreviewFileChanged({ id, path: filePath, url: pathToFileURL(filePath).toString() })
-    }, PREVIEW_WATCH_DEBOUNCE_MS)
-  })
+      timer = null;
+      if (!fileExists(filePath)) return;
+      sendPreviewFileChanged({
+        id,
+        path: filePath,
+        url: pathToFileURL(filePath).toString(),
+      });
+    }, PREVIEW_WATCH_DEBOUNCE_MS);
+  });
 
   previewWatchers.set(id, {
     close: () => {
-      if (timer) clearTimeout(timer)
-      watcher.close()
-    }
-  })
+      if (timer) clearTimeout(timer);
+      watcher.close();
+    },
+  });
 
-  return { id, path: filePath }
+  return { id, path: filePath };
 }
 
 function stopPreviewFileWatch(id) {
-  const watcher = previewWatchers.get(id)
+  const watcher = previewWatchers.get(id);
 
   if (!watcher) {
-    return false
+    return false;
   }
 
-  watcher.close()
-  previewWatchers.delete(id)
+  watcher.close();
+  previewWatchers.delete(id);
 
-  return true
+  return true;
 }
 
 function closePreviewWatchers() {
   for (const id of previewWatchers.keys()) {
-    stopPreviewFileWatch(id)
+    stopPreviewFileWatch(id);
   }
 }
 
 async function waitForHermes(baseUrl, token) {
-  const deadline = Date.now() + 45_000
-  let lastError = null
+  const deadline = Date.now() + 45_000;
+  let lastError = null;
 
   while (Date.now() < deadline) {
     try {
-      await fetchJson(`${baseUrl}/api/status`, token)
-      return
+      await fetchJson(`${baseUrl}/api/status`, token);
+      return;
     } catch (error) {
-      lastError = error
-      await new Promise(resolve => setTimeout(resolve, 500))
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
 
-  throw new Error(`Nexus Agent backend did not become ready: ${lastError?.message || 'timeout'}`)
+  throw new Error(
+    `Nexus Agent backend did not become ready: ${lastError?.message || "timeout"}`,
+  );
 }
 
 function getWindowButtonPosition() {
-  if (!IS_MAC) return null
-  return mainWindow?.getWindowButtonPosition?.() || WINDOW_BUTTON_POSITION
+  if (!IS_MAC) return null;
+  return mainWindow?.getWindowButtonPosition?.() || WINDOW_BUTTON_POSITION;
 }
 
 function getNativeOverlayWidth() {
@@ -2925,51 +3408,51 @@ function getNativeOverlayWidth() {
   // titlebarOverlay there doesn't reserve right-edge space. Windows/Linux
   // render the native window-controls overlay on the right, so the renderer
   // needs to inset its right cluster by this much to clear them.
-  return IS_MAC ? 0 : NATIVE_OVERLAY_BUTTON_WIDTH
+  return IS_MAC ? 0 : NATIVE_OVERLAY_BUTTON_WIDTH;
 }
 
 function getWindowState() {
   return {
     isFullscreen: Boolean(mainWindow?.isFullScreen?.()),
     nativeOverlayWidth: getNativeOverlayWidth(),
-    windowButtonPosition: getWindowButtonPosition()
-  }
+    windowButtonPosition: getWindowButtonPosition(),
+  };
 }
 
 function sendBackendExit(payload) {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const { webContents } = mainWindow
-  if (!webContents || webContents.isDestroyed()) return
-  webContents.send('nexus:backend-exit', payload)
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const { webContents } = mainWindow;
+  if (!webContents || webContents.isDestroyed()) return;
+  webContents.send("nexus:backend-exit", payload);
 }
 
 function sendClosePreviewRequested() {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const { webContents } = mainWindow
-  if (!webContents || webContents.isDestroyed()) return
-  webContents.send('nexus:close-preview-requested')
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const { webContents } = mainWindow;
+  if (!webContents || webContents.isDestroyed()) return;
+  webContents.send("nexus:close-preview-requested");
 }
 
 // Tell the renderer the machine just woke. Sleep silently drops the
 // renderer's WebSocket to the local backend; the renderer reconnects on this
 // signal so the chat composer doesn't stay stuck on "Starting Hermes...".
 function sendPowerResume() {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const { webContents } = mainWindow
-  if (!webContents || webContents.isDestroyed()) return
-  webContents.send('nexus:power-resume')
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const { webContents } = mainWindow;
+  if (!webContents || webContents.isDestroyed()) return;
+  webContents.send("nexus:power-resume");
 }
 
-let powerResumeRegistered = false
+let powerResumeRegistered = false;
 
 function registerPowerResumeListeners() {
-  if (powerResumeRegistered) return
-  powerResumeRegistered = true
+  if (powerResumeRegistered) return;
+  powerResumeRegistered = true;
   try {
     // 'resume' covers sleep/wake; 'unlock-screen' covers lock/unlock without a
     // full suspend. Either can drop an idle socket.
-    powerMonitor.on('resume', sendPowerResume)
-    powerMonitor.on('unlock-screen', sendPowerResume)
+    powerMonitor.on("resume", sendPowerResume);
+    powerMonitor.on("unlock-screen", sendPowerResume);
   } catch {
     // powerMonitor is unavailable before app 'ready' on some platforms; the
     // caller registers after 'ready', so this should not normally throw.
@@ -2977,137 +3460,230 @@ function registerPowerResumeListeners() {
 }
 
 function getAppIconPath() {
-  return APP_ICON_PATHS.find(fileExists)
+  return APP_ICON_PATHS.find(fileExists);
+}
+
+function getTrayIconPath() {
+  const icon = getAppIconPath();
+  if (icon) return icon;
+  // Fallback to assets/icon.png when the packed dist icons are missing (dev).
+  return path.join(APP_ROOT, "assets", "icon.png");
+}
+
+function rebuildTrayMenu() {
+  if (!tray) return;
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: "轻量模式 (Lightweight)",
+      type: "checkbox",
+      checked: lightweightMode,
+      click(item) {
+        lightweightMode = item.checked;
+        if (lightweightMode) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.destroy();
+            mainWindow = null;
+          }
+        } else {
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            restoreWindowFromLightweight();
+          }
+        }
+      },
+    },
+    { type: "separator" },
+    {
+      label: "显示窗口 (Show Window)",
+      click() {
+        if (lightweightMode) {
+          lightweightMode = false;
+          rebuildTrayMenu();
+        }
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          restoreWindowFromLightweight();
+        } else {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    { type: "separator" },
+    {
+      label: "退出 (Quit)",
+      click() {
+        quitting = true;
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(contextMenu);
+}
+
+function createTray() {
+  const iconPath = getTrayIconPath();
+  tray = new Tray(iconPath);
+  tray.setToolTip("Nexus Agent");
+  rebuildTrayMenu();
+
+  // Left-click on tray icon: show the window (or restore from lightweight).
+  tray.on("click", () => {
+    if (lightweightMode) {
+      lightweightMode = false;
+      rebuildTrayMenu();
+      restoreWindowFromLightweight();
+      return;
+    }
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      restoreWindowFromLightweight();
+    } else if (mainWindow.isVisible()) {
+      mainWindow.focus();
+    } else {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+function restoreWindowFromLightweight() {
+  restoringFromLightweight = true;
+  createWindow();
 }
 
 function sendOpenUpdatesRequested() {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const { webContents } = mainWindow
-  if (!webContents || webContents.isDestroyed()) return
-  webContents.send('nexus:open-updates')
-  if (!mainWindow.isVisible()) mainWindow.show()
-  mainWindow.focus()
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const { webContents } = mainWindow;
+  if (!webContents || webContents.isDestroyed()) return;
+  webContents.send("nexus:open-updates");
+  if (!mainWindow.isVisible()) mainWindow.show();
+  mainWindow.focus();
 }
 
 function sendWindowStateChanged(nextIsFullscreen) {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const { webContents } = mainWindow
-  if (!webContents || webContents.isDestroyed()) return
-  const state = getWindowState()
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const { webContents } = mainWindow;
+  if (!webContents || webContents.isDestroyed()) return;
+  const state = getWindowState();
 
-  if (typeof nextIsFullscreen === 'boolean') {
-    state.isFullscreen = nextIsFullscreen
+  if (typeof nextIsFullscreen === "boolean") {
+    state.isFullscreen = nextIsFullscreen;
   }
 
-  webContents.send('nexus:window-state-changed', state)
+  webContents.send("nexus:window-state-changed", state);
 }
 
 function buildApplicationMenu() {
-  const template = []
+  const template = [];
   const checkForUpdatesItem = {
-    label: 'Check for Updates…',
-    click: () => sendOpenUpdatesRequested()
-  }
+    label: "Check for Updates…",
+    click: () => sendOpenUpdatesRequested(),
+  };
   if (IS_MAC) {
     template.push({
       label: APP_NAME,
       submenu: [
-        { role: 'about', label: `About ${APP_NAME}` },
+        { role: "about", label: `About ${APP_NAME}` },
         checkForUpdatesItem,
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' }
-      ]
-    })
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    });
   }
 
   template.push({
-    label: 'File',
+    label: "File",
     submenu: [
       IS_MAC
         ? {
-            accelerator: 'CommandOrControl+W',
+            accelerator: "CommandOrControl+W",
             click: () => {
               if (previewShortcutActive) {
-                sendClosePreviewRequested()
+                sendClosePreviewRequested();
               } else {
-                mainWindow?.close()
+                mainWindow?.close();
               }
             },
-            label: 'Close'
+            label: "Close",
           }
-        : { role: 'quit' }
-    ]
-  })
+        : { role: "quit" },
+    ],
+  });
   template.push({
-    label: 'Edit',
+    label: "Edit",
     submenu: [
-      { role: 'undo' },
-      { role: 'redo' },
-      { type: 'separator' },
-      { role: 'cut' },
-      { role: 'copy' },
-      { role: 'paste' },
-      { role: 'delete' },
-      { role: 'selectAll' }
-    ]
-  })
+      { role: "undo" },
+      { role: "redo" },
+      { type: "separator" },
+      { role: "cut" },
+      { role: "copy" },
+      { role: "paste" },
+      { role: "delete" },
+      { role: "selectAll" },
+    ],
+  });
   template.push({
-    label: 'View',
+    label: "View",
     submenu: [
-      { role: 'reload' },
-      { role: 'forceReload' },
-      { role: 'toggleDevTools' },
-      { type: 'separator' },
+      { role: "reload" },
+      { role: "forceReload" },
+      { role: "toggleDevTools" },
+      { type: "separator" },
       {
-        label: 'Actual Size',
-        accelerator: 'CommandOrControl+0',
+        label: "Actual Size",
+        accelerator: "CommandOrControl+0",
         click: () => {
-          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.setZoomLevel(0)
-        }
+          if (mainWindow && !mainWindow.isDestroyed())
+            mainWindow.webContents.setZoomLevel(0);
+        },
       },
       {
-        label: 'Zoom In',
-        accelerator: 'CommandOrControl+Plus',
+        label: "Zoom In",
+        accelerator: "CommandOrControl+Plus",
         click: () => {
           if (mainWindow && !mainWindow.isDestroyed()) {
-            const next = Math.min(mainWindow.webContents.getZoomLevel() + 0.1, 9)
-            mainWindow.webContents.setZoomLevel(next)
+            const next = Math.min(
+              mainWindow.webContents.getZoomLevel() + 0.1,
+              9,
+            );
+            mainWindow.webContents.setZoomLevel(next);
           }
-        }
+        },
       },
       {
-        label: 'Zoom Out',
-        accelerator: 'CommandOrControl+-',
+        label: "Zoom Out",
+        accelerator: "CommandOrControl+-",
         click: () => {
           if (mainWindow && !mainWindow.isDestroyed()) {
-            const next = Math.max(mainWindow.webContents.getZoomLevel() - 0.1, -9)
-            mainWindow.webContents.setZoomLevel(next)
+            const next = Math.max(
+              mainWindow.webContents.getZoomLevel() - 0.1,
+              -9,
+            );
+            mainWindow.webContents.setZoomLevel(next);
           }
-        }
+        },
       },
-      { type: 'separator' },
-      { role: 'togglefullscreen' }
-    ]
-  })
+      { type: "separator" },
+      { role: "togglefullscreen" },
+    ],
+  });
   template.push({
-    label: 'Window',
+    label: "Window",
     submenu: IS_MAC
-      ? [{ role: 'minimize' }, { role: 'zoom' }, { role: 'front' }]
-      : [{ role: 'minimize' }, { role: 'close' }]
-  })
+      ? [{ role: "minimize" }, { role: "zoom" }, { role: "front" }]
+      : [{ role: "minimize" }, { role: "close" }],
+  });
   template.push({
-    label: 'Help',
-    role: 'help',
-    submenu: [checkForUpdatesItem]
-  })
+    label: "Help",
+    role: "help",
+    submenu: [checkForUpdatesItem],
+  });
 
-  return Menu.buildFromTemplate(template)
+  return Menu.buildFromTemplate(template);
 }
 
 function toggleDevTools(window) {
@@ -3115,38 +3691,42 @@ function toggleDevTools(window) {
   // issues without needing a dev build. Trade-off: tiny attack surface
   // increase versus a much better support story when WS connection or
   // CSP issues surface in the field.
-  const { webContents } = window
+  const { webContents } = window;
   if (webContents.isDevToolsOpened()) {
-    webContents.closeDevTools()
+    webContents.closeDevTools();
   } else {
-    webContents.openDevTools({ mode: 'detach' })
+    webContents.openDevTools({ mode: "detach" });
   }
 }
 
 function installDevToolsShortcut(window) {
   // F12 / Cmd+Opt+I works in both dev and packaged builds.
-  window.webContents.on('before-input-event', (event, input) => {
-    const key = input.key.toLowerCase()
+  window.webContents.on("before-input-event", (event, input) => {
+    const key = input.key.toLowerCase();
     const isInspectShortcut =
-      input.key === 'F12' ||
-      (IS_MAC && input.meta && input.alt && key === 'i') ||
-      (!IS_MAC && input.control && input.shift && key === 'i')
-    if (!isInspectShortcut) return
-    event.preventDefault()
-    toggleDevTools(window)
-  })
+      input.key === "F12" ||
+      (IS_MAC && input.meta && input.alt && key === "i") ||
+      (!IS_MAC && input.control && input.shift && key === "i");
+    if (!isInspectShortcut) return;
+    event.preventDefault();
+    toggleDevTools(window);
+  });
 }
 
 function installPreviewShortcut(window) {
-  window.webContents.on('before-input-event', (event, input) => {
-    const key = String(input.key || '').toLowerCase()
-    const isPreviewCloseShortcut = key === 'w' && (IS_MAC ? input.meta : input.control) && !input.alt && !input.shift
+  window.webContents.on("before-input-event", (event, input) => {
+    const key = String(input.key || "").toLowerCase();
+    const isPreviewCloseShortcut =
+      key === "w" &&
+      (IS_MAC ? input.meta : input.control) &&
+      !input.alt &&
+      !input.shift;
 
-    if (!isPreviewCloseShortcut || !previewShortcutActive) return
+    if (!isPreviewCloseShortcut || !previewShortcutActive) return;
 
-    event.preventDefault()
-    sendClosePreviewRequested()
-  })
+    event.preventDefault();
+    sendClosePreviewRequested();
+  });
 }
 
 function installZoomShortcuts(window) {
@@ -3154,122 +3734,131 @@ function installZoomShortcuts(window) {
   // The menu items handle this on macOS (where the menu is always present),
   // but on Linux/Windows the menu is null and Chromium's default handler
   // would use the full 0.2 step, so we intercept here for consistency.
-  const ZOOM_STEP = 0.1
-  window.webContents.on('before-input-event', (event, input) => {
-    const mod = IS_MAC ? input.meta : input.control
-    if (!mod || input.alt || input.shift) return
+  const ZOOM_STEP = 0.1;
+  window.webContents.on("before-input-event", (event, input) => {
+    const mod = IS_MAC ? input.meta : input.control;
+    if (!mod || input.alt || input.shift) return;
 
-    const key = input.key
-    if (key === '0') {
-      event.preventDefault()
-      window.webContents.setZoomLevel(0)
-    } else if (key === '=' || key === '+') {
-      event.preventDefault()
-      const next = Math.min(window.webContents.getZoomLevel() + ZOOM_STEP, 9)
-      window.webContents.setZoomLevel(next)
-    } else if (key === '-') {
-      event.preventDefault()
-      const next = Math.max(window.webContents.getZoomLevel() - ZOOM_STEP, -9)
-      window.webContents.setZoomLevel(next)
+    const key = input.key;
+    if (key === "0") {
+      event.preventDefault();
+      window.webContents.setZoomLevel(0);
+    } else if (key === "=" || key === "+") {
+      event.preventDefault();
+      const next = Math.min(window.webContents.getZoomLevel() + ZOOM_STEP, 9);
+      window.webContents.setZoomLevel(next);
+    } else if (key === "-") {
+      event.preventDefault();
+      const next = Math.max(window.webContents.getZoomLevel() - ZOOM_STEP, -9);
+      window.webContents.setZoomLevel(next);
     }
-  })
+  });
 }
 
 function installContextMenu(window) {
-  window.webContents.on('context-menu', (_event, params) => {
-    const template = []
-    const hasSelection = Boolean(params.selectionText?.trim())
-    const hasImage = params.mediaType === 'image' && Boolean(params.srcURL)
-    const hasLink = Boolean(params.linkURL)
-    const isEditable = Boolean(params.isEditable)
+  window.webContents.on("context-menu", (_event, params) => {
+    const template = [];
+    const hasSelection = Boolean(params.selectionText?.trim());
+    const hasImage = params.mediaType === "image" && Boolean(params.srcURL);
+    const hasLink = Boolean(params.linkURL);
+    const isEditable = Boolean(params.isEditable);
 
     if (hasImage) {
       template.push(
         {
-          label: 'Open Image',
+          label: "Open Image",
           click: () => {
-            if (params.srcURL && !params.srcURL.startsWith('data:')) {
-              openExternalUrl(params.srcURL)
+            if (params.srcURL && !params.srcURL.startsWith("data:")) {
+              openExternalUrl(params.srcURL);
             }
           },
-          enabled: !params.srcURL.startsWith('data:')
+          enabled: !params.srcURL.startsWith("data:"),
         },
         {
-          label: 'Copy Image',
+          label: "Copy Image",
           click: () => {
-            void copyImageFromUrl(params.srcURL).catch(error => rememberLog(`Copy image failed: ${error.message}`))
-          }
+            void copyImageFromUrl(params.srcURL).catch((error) =>
+              rememberLog(`Copy image failed: ${error.message}`),
+            );
+          },
         },
         {
-          label: 'Copy Image Address',
-          click: () => clipboard.writeText(params.srcURL)
+          label: "Copy Image Address",
+          click: () => clipboard.writeText(params.srcURL),
         },
         {
-          label: 'Save Image As...',
+          label: "Save Image As...",
           click: () => {
-            void saveImageFromUrl(params.srcURL).catch(error => rememberLog(`Save image failed: ${error.message}`))
-          }
-        }
-      )
+            void saveImageFromUrl(params.srcURL).catch((error) =>
+              rememberLog(`Save image failed: ${error.message}`),
+            );
+          },
+        },
+      );
     }
 
     if (hasLink) {
-      if (template.length) template.push({ type: 'separator' })
+      if (template.length) template.push({ type: "separator" });
       template.push(
         {
-          label: 'Open Link',
-          click: () => openExternalUrl(params.linkURL)
+          label: "Open Link",
+          click: () => openExternalUrl(params.linkURL),
         },
         {
-          label: 'Copy Link',
-          click: () => clipboard.writeText(params.linkURL)
-        }
-      )
+          label: "Copy Link",
+          click: () => clipboard.writeText(params.linkURL),
+        },
+      );
     }
 
     // Spell-check suggestions for the misspelled word under the caret.
     // Chromium surfaces them on `params.dictionarySuggestions`; we offer the
     // top 5 plus a "Add to dictionary" affordance.
-    const suggestions = Array.isArray(params.dictionarySuggestions) ? params.dictionarySuggestions : []
+    const suggestions = Array.isArray(params.dictionarySuggestions)
+      ? params.dictionarySuggestions
+      : [];
 
     if (isEditable && params.misspelledWord && suggestions.length > 0) {
-      if (template.length) template.push({ type: 'separator' })
+      if (template.length) template.push({ type: "separator" });
 
       for (const suggestion of suggestions.slice(0, 5)) {
         template.push({
           label: suggestion,
-          click: () => window.webContents.replaceMisspelling(suggestion)
-        })
+          click: () => window.webContents.replaceMisspelling(suggestion),
+        });
       }
 
-      template.push({ type: 'separator' })
+      template.push({ type: "separator" });
       template.push({
-        label: 'Add to dictionary',
-        click: () => window.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
-      })
+        label: "Add to dictionary",
+        click: () =>
+          window.webContents.session.addWordToSpellCheckerDictionary(
+            params.misspelledWord,
+          ),
+      });
     }
 
     if (hasSelection || isEditable) {
-      if (template.length) template.push({ type: 'separator' })
+      if (template.length) template.push({ type: "separator" });
       if (isEditable) {
         template.push(
-          { role: 'cut', enabled: params.editFlags.canCut },
-          { role: 'copy', enabled: params.editFlags.canCopy },
-          { role: 'paste', enabled: params.editFlags.canPaste },
-          { type: 'separator' },
-          { role: 'selectAll', enabled: params.editFlags.canSelectAll }
-        )
+          { role: "cut", enabled: params.editFlags.canCut },
+          { role: "copy", enabled: params.editFlags.canCopy },
+          { role: "paste", enabled: params.editFlags.canPaste },
+          { type: "separator" },
+          { role: "selectAll", enabled: params.editFlags.canSelectAll },
+        );
       } else {
-        template.push({ role: 'copy', enabled: params.editFlags.canCopy })
+        template.push({ role: "copy", enabled: params.editFlags.canCopy });
       }
     }
 
     if (!template.length) {
-      template.push({ role: 'selectAll' })
+      template.push({ role: "selectAll" });
     }
 
-    Menu.buildFromTemplate(template).popup({ window })
-  })
+    Menu.buildFromTemplate(template).popup({ window });
+  });
 }
 
 // Microphone capture for the voice composer. The renderer drives mic access
@@ -3283,44 +3872,48 @@ function installContextMenu(window) {
 // 'media'/'audioCapture' permission AND mediaTypes either includes 'audio' OR
 // is empty/absent (the Windows case). Video is still denied.
 function isAudioCapturePermission(permission, details) {
-  if (permission === 'audioCapture') {
-    return true
+  if (permission === "audioCapture") {
+    return true;
   }
-  if (permission !== 'media') {
-    return false
+  if (permission !== "media") {
+    return false;
   }
-  const mediaTypes = details?.mediaTypes
+  const mediaTypes = details?.mediaTypes;
   if (!Array.isArray(mediaTypes) || mediaTypes.length === 0) {
     // Windows: mediaTypes is often empty for a mic request. Don't deny on
     // missing metadata. (A video request would carry mediaTypes:['video'].)
-    return true
+    return true;
   }
-  return mediaTypes.includes('audio') && !mediaTypes.includes('video')
+  return mediaTypes.includes("audio") && !mediaTypes.includes("video");
 }
 
 function installMediaPermissions() {
   // Async request handler: the prompt-style path (most platforms).
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback, details) => {
-    callback(isAudioCapturePermission(permission, details))
-  })
+  session.defaultSession.setPermissionRequestHandler(
+    (_webContents, permission, callback, details) => {
+      callback(isAudioCapturePermission(permission, details));
+    },
+  );
 
   // Synchronous check handler: Chromium consults this for getUserMedia on
   // Windows in addition to (or instead of) the request handler. Without it,
   // the check defaults to false and the mic is denied before the request
   // handler ever runs.
-  session.defaultSession.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
-    if (permission === 'media' || permission === 'audioCapture') {
-      // details.mediaType is a single string here (not the mediaTypes array).
-      const mediaType = details?.mediaType
-      if (mediaType === 'video') {
-        return false
+  session.defaultSession.setPermissionCheckHandler(
+    (_webContents, permission, _origin, details) => {
+      if (permission === "media" || permission === "audioCapture") {
+        // details.mediaType is a single string here (not the mediaTypes array).
+        const mediaType = details?.mediaType;
+        if (mediaType === "video") {
+          return false;
+        }
+
+        return true;
       }
 
-      return true
-    }
-
-    return false
-  })
+      return false;
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -3352,12 +3945,12 @@ function installMediaPermissions() {
 //     "is the user signed in at all?" gate / display signal.
 // ---------------------------------------------------------------------------
 
-const OAUTH_SESSION_PARTITION = 'persist:hermes-remote-oauth'
+const OAUTH_SESSION_PARTITION = "persist:hermes-remote-oauth";
 
 function getOauthSession() {
-  if (oauthSession || !app.isReady()) return oauthSession
-  oauthSession = session.fromPartition(OAUTH_SESSION_PARTITION)
-  return oauthSession
+  if (oauthSession || !app.isReady()) return oauthSession;
+  oauthSession = session.fromPartition(OAUTH_SESSION_PARTITION);
+  return oauthSession;
 }
 
 // Bare + prefixed variants of the session cookies live in
@@ -3365,20 +3958,20 @@ function getOauthSession() {
 // that module for details.
 
 async function hasOauthSessionCookie(baseUrl) {
-  const sess = getOauthSession()
-  if (!sess) return false
-  const parsed = new URL(baseUrl)
+  const sess = getOauthSession();
+  if (!sess) return false;
+  const parsed = new URL(baseUrl);
   try {
     // Query by URL so the cookie jar applies Domain/Path/Secure scoping for us.
-    const cookies = await sess.cookies.get({ url: baseUrl })
-    return cookiesHaveSession(cookies)
+    const cookies = await sess.cookies.get({ url: baseUrl });
+    return cookiesHaveSession(cookies);
   } catch {
     // Fall back to a host match if the URL query path errors.
     try {
-      const cookies = await sess.cookies.get({ domain: parsed.hostname })
-      return cookiesHaveSession(cookies)
+      const cookies = await sess.cookies.get({ domain: parsed.hostname });
+      return cookiesHaveSession(cookies);
     } catch {
-      return false
+      return false;
     }
   }
 }
@@ -3391,34 +3984,34 @@ async function hasOauthSessionCookie(baseUrl) {
 // re-login every ~15 min. Used for the Settings "connected" indicator and as a
 // cheap early-out before attempting a network round-trip in resolveRemoteBackend.
 async function hasLiveOauthSession(baseUrl) {
-  const sess = getOauthSession()
-  if (!sess) return false
-  const parsed = new URL(baseUrl)
+  const sess = getOauthSession();
+  if (!sess) return false;
+  const parsed = new URL(baseUrl);
   try {
-    const cookies = await sess.cookies.get({ url: baseUrl })
-    return cookiesHaveLiveSession(cookies)
+    const cookies = await sess.cookies.get({ url: baseUrl });
+    return cookiesHaveLiveSession(cookies);
   } catch {
     try {
-      const cookies = await sess.cookies.get({ domain: parsed.hostname })
-      return cookiesHaveLiveSession(cookies)
+      const cookies = await sess.cookies.get({ domain: parsed.hostname });
+      return cookiesHaveLiveSession(cookies);
     } catch {
-      return false
+      return false;
     }
   }
 }
 
 async function clearOauthSession(baseUrl) {
-  const sess = getOauthSession()
-  if (!sess) return
+  const sess = getOauthSession();
+  if (!sess) return;
   try {
-    const cookies = await sess.cookies.get(baseUrl ? { url: baseUrl } : {})
+    const cookies = await sess.cookies.get(baseUrl ? { url: baseUrl } : {});
     await Promise.all(
-      cookies.map(c => {
-        const scheme = c.secure ? 'https' : 'http'
-        const cookieUrl = `${scheme}://${c.domain.replace(/^\./, '')}${c.path || '/'}`
-        return sess.cookies.remove(cookieUrl, c.name).catch(() => undefined)
-      })
-    )
+      cookies.map((c) => {
+        const scheme = c.secure ? "https" : "http";
+        const cookieUrl = `${scheme}://${c.domain.replace(/^\./, "")}${c.path || "/"}`;
+        return sess.cookies.remove(cookieUrl, c.name).catch(() => undefined);
+      }),
+    );
   } catch {
     // Best effort — a stale cookie self-expires anyway.
   }
@@ -3432,76 +4025,79 @@ async function clearOauthSession(baseUrl) {
 function openOauthLoginWindow(baseUrl) {
   return new Promise((resolve, reject) => {
     if (!app.isReady()) {
-      reject(new Error('Desktop is not ready to start an OAuth login.'))
-      return
+      reject(new Error("Desktop is not ready to start an OAuth login."));
+      return;
     }
-    const sess = getOauthSession()
+    const sess = getOauthSession();
     if (!sess) {
-      reject(new Error('OAuth session partition is unavailable.'))
-      return
+      reject(new Error("OAuth session partition is unavailable."));
+      return;
     }
 
-    let settled = false
-    let win = null
-    let pollTimer = null
+    let settled = false;
+    let win = null;
+    let pollTimer = null;
 
-    const finish = err => {
-      if (settled) return
-      settled = true
-      if (pollTimer) clearInterval(pollTimer)
+    const finish = (err) => {
+      if (settled) return;
+      settled = true;
+      if (pollTimer) clearInterval(pollTimer);
       try {
-        if (win && !win.isDestroyed()) win.destroy()
+        if (win && !win.isDestroyed()) win.destroy();
       } catch {
         // window already torn down
       }
-      if (err) reject(err)
-      else resolve({ baseUrl, ok: true })
-    }
+      if (err) reject(err);
+      else resolve({ baseUrl, ok: true });
+    };
 
     const checkCookie = async () => {
-      if (settled) return
-      if (await hasOauthSessionCookie(baseUrl)) finish(null)
-    }
+      if (settled) return;
+      if (await hasOauthSessionCookie(baseUrl)) finish(null);
+    };
 
     try {
       win = new BrowserWindow({
         width: 520,
         height: 720,
-        title: 'Sign in to Hermes gateway',
+        title: "Sign in to Hermes gateway",
         autoHideMenuBar: true,
         webPreferences: {
           contextIsolation: true,
           nodeIntegration: false,
           sandbox: true,
           session: sess,
-          webSecurity: true
-        }
-      })
+          webSecurity: true,
+        },
+      });
     } catch (error) {
-      finish(error instanceof Error ? error : new Error(String(error)))
-      return
+      finish(error instanceof Error ? error : new Error(String(error)));
+      return;
     }
 
     // Re-check the cookie jar on every successful navigation (the callback
     // redirect is the moment cookies get set) plus a low-frequency poll as a
     // belt-and-braces fallback for IDPs that finish via in-page JS.
-    win.webContents.on('did-navigate', () => void checkCookie())
-    win.webContents.on('did-redirect-navigation', () => void checkCookie())
-    win.webContents.on('did-frame-navigate', () => void checkCookie())
-    pollTimer = setInterval(() => void checkCookie(), 750)
+    win.webContents.on("did-navigate", () => void checkCookie());
+    win.webContents.on("did-redirect-navigation", () => void checkCookie());
+    win.webContents.on("did-frame-navigate", () => void checkCookie());
+    pollTimer = setInterval(() => void checkCookie(), 750);
 
-    win.on('closed', () => {
-      if (!settled) finish(new Error('Login window closed before authentication completed.'))
-    })
+    win.on("closed", () => {
+      if (!settled)
+        finish(
+          new Error("Login window closed before authentication completed."),
+        );
+    });
 
     // ``next`` is intentionally omitted: the gateway lands on ``/`` after
     // login, which is a valid authenticated page that sets the cookies. We
     // only care that the cookie jar is populated.
-    const loginUrl = `${normalizeRemoteBaseUrl(baseUrl)}/login`
-    win.loadURL(loginUrl).catch(error => {
-      finish(error instanceof Error ? error : new Error(String(error)))
-    })
-  })
+    const loginUrl = `${normalizeRemoteBaseUrl(baseUrl)}/login`;
+    win.loadURL(loginUrl).catch((error) => {
+      finish(error instanceof Error ? error : new Error(String(error)));
+    });
+  });
 }
 
 // JSON request routed through the OAuth session partition so the HttpOnly
@@ -3509,84 +4105,105 @@ function openOauthLoginWindow(baseUrl) {
 // authed REST against a gated gateway, including minting WS tickets.
 function fetchJsonViaOauthSession(url, options = {}) {
   return new Promise((resolve, reject) => {
-    const sess = getOauthSession()
+    const sess = getOauthSession();
     if (!sess) {
-      reject(new Error('OAuth session partition is unavailable.'))
-      return
+      reject(new Error("OAuth session partition is unavailable."));
+      return;
     }
-    let parsed
+    let parsed;
     try {
-      parsed = new URL(url)
+      parsed = new URL(url);
     } catch (error) {
-      reject(new Error(`Invalid URL: ${error.message}`))
-      return
+      reject(new Error(`Invalid URL: ${error.message}`));
+      return;
     }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      reject(new Error(`Unsupported Nexus Agent backend URL protocol: ${parsed.protocol}`))
-      return
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      reject(
+        new Error(
+          `Unsupported Nexus Agent backend URL protocol: ${parsed.protocol}`,
+        ),
+      );
+      return;
     }
-    const body = serializeJsonBody(options.body)
-    const timeoutMs = resolveTimeoutMs(options.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
+    const body = serializeJsonBody(options.body);
+    const timeoutMs = resolveTimeoutMs(
+      options.timeoutMs,
+      DEFAULT_FETCH_TIMEOUT_MS,
+    );
 
     const request = electronNet.request({
-      method: options.method || 'GET',
+      method: options.method || "GET",
       url,
       session: sess,
       useSessionCookies: true,
-      redirect: 'follow'
-    })
-    setJsonRequestHeaders(request)
+      redirect: "follow",
+    });
+    setJsonRequestHeaders(request);
 
-    let timedOut = false
+    let timedOut = false;
     const timer = setTimeout(() => {
-      timedOut = true
+      timedOut = true;
       try {
-        request.abort()
+        request.abort();
       } catch {
         // already finished
       }
-      reject(new Error(`Timed out connecting to Nexus Agent backend after ${timeoutMs}ms`))
-    }, timeoutMs)
+      reject(
+        new Error(
+          `Timed out connecting to Nexus Agent backend after ${timeoutMs}ms`,
+        ),
+      );
+    }, timeoutMs);
 
-    request.on('response', res => {
-      const chunks = []
-      res.on('data', chunk => chunks.push(Buffer.from(chunk)))
-      res.on('end', () => {
-        if (timedOut) return
-        clearTimeout(timer)
-        const text = Buffer.concat(chunks).toString('utf8')
-        const statusCode = res.statusCode || 500
+    request.on("response", (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+      res.on("end", () => {
+        if (timedOut) return;
+        clearTimeout(timer);
+        const text = Buffer.concat(chunks).toString("utf8");
+        const statusCode = res.statusCode || 500;
         if (statusCode >= 400) {
-          const err = new Error(`${statusCode}: ${text || ''}`)
-          err.statusCode = statusCode
-          reject(err)
-          return
+          const err = new Error(`${statusCode}: ${text || ""}`);
+          err.statusCode = statusCode;
+          reject(err);
+          return;
         }
         if (!text) {
-          resolve(null)
-          return
+          resolve(null);
+          return;
         }
-        const looksHtml = /^\s*<(?:!doctype|html)/i.test(text)
-        const contentType = String(res.headers['content-type'] || res.headers['Content-Type'] || '')
-        if (looksHtml || contentType.includes('text/html')) {
-          reject(new Error(`Expected JSON from ${url} but got HTML (status ${statusCode}).`))
-          return
+        const looksHtml = /^\s*<(?:!doctype|html)/i.test(text);
+        const contentType = String(
+          res.headers["content-type"] || res.headers["Content-Type"] || "",
+        );
+        if (looksHtml || contentType.includes("text/html")) {
+          reject(
+            new Error(
+              `Expected JSON from ${url} but got HTML (status ${statusCode}).`,
+            ),
+          );
+          return;
         }
         try {
-          resolve(JSON.parse(text))
+          resolve(JSON.parse(text));
         } catch {
-          reject(new Error(`Invalid JSON from ${url} (status ${statusCode}): ${text.slice(0, 200)}`))
+          reject(
+            new Error(
+              `Invalid JSON from ${url} (status ${statusCode}): ${text.slice(0, 200)}`,
+            ),
+          );
         }
-      })
-    })
-    request.on('error', error => {
-      if (timedOut) return
-      clearTimeout(timer)
-      reject(error)
-    })
-    if (body) request.write(body)
-    request.end()
-  })
+      });
+    });
+    request.on("error", (error) => {
+      if (timedOut) return;
+      clearTimeout(timer);
+      reject(error);
+    });
+    if (body) request.write(body);
+    request.end();
+  });
 }
 
 // Mint a single-use WS ticket for a gated gateway. Returns the ticket string.
@@ -3594,14 +4211,14 @@ function fetchJsonViaOauthSession(url, options = {}) {
 // callers treat that as "needs re-login".
 async function mintGatewayWsTicket(baseUrl) {
   const body = await fetchJsonViaOauthSession(`${baseUrl}/api/auth/ws-ticket`, {
-    method: 'POST',
-    timeoutMs: 8_000
-  })
-  const ticket = body?.ticket
-  if (!ticket || typeof ticket !== 'string') {
-    throw new Error('Gateway did not return a WS ticket.')
+    method: "POST",
+    timeoutMs: 8_000,
+  });
+  const ticket = body?.ticket;
+  if (!ticket || typeof ticket !== "string") {
+    throw new Error("Gateway did not return a WS ticket.");
   }
-  return ticket
+  return ticket;
 }
 
 // Build a fresh WS URL for the *current* connection. Critical for reconnects:
@@ -3617,124 +4234,132 @@ async function freshGatewayWsUrl(profile) {
   // silently lands back on the primary (default) backend and writes sessions to
   // the wrong profile's DB. A null/empty profile resolves to the primary, so
   // legacy callers and single-profile users are unchanged.
-  const connection = await ensureBackend(profile)
-  if (connection.authMode === 'oauth') {
-    const ticket = await mintGatewayWsTicket(connection.baseUrl)
-    return buildGatewayWsUrlWithTicket(connection.baseUrl, ticket)
+  const connection = await ensureBackend(profile);
+  if (connection.authMode === "oauth") {
+    const ticket = await mintGatewayWsTicket(connection.baseUrl);
+    return buildGatewayWsUrlWithTicket(connection.baseUrl, ticket);
   }
   // Local/token: the cached wsUrl already carries the (long-lived) token.
-  return connection.wsUrl
+  return connection.wsUrl;
 }
 
 function encryptDesktopSecret(value) {
-  return encryptDesktopSecretStrict(value, safeStorage)
+  return encryptDesktopSecretStrict(value, safeStorage);
 }
 
 function decryptDesktopSecret(secret) {
-  if (!secret || typeof secret !== 'object') {
-    return ''
+  if (!secret || typeof secret !== "object") {
+    return "";
   }
 
-  const value = String(secret.value || '')
+  const value = String(secret.value || "");
 
   if (!value) {
-    return ''
+    return "";
   }
 
-  if (secret.encoding === 'safeStorage') {
+  if (secret.encoding === "safeStorage") {
     try {
-      return safeStorage.decryptString(Buffer.from(value, 'base64'))
+      return safeStorage.decryptString(Buffer.from(value, "base64"));
     } catch {
-      return ''
+      return "";
     }
   }
 
-  return value
+  return value;
 }
 
 // Validate + normalize the per-profile remote overrides map read from disk.
 // Drops malformed names/entries and keeps only the recognized fields so a
 // hand-edited or stale connection.json can't inject junk into resolution.
 function sanitizeConnectionProfiles(raw) {
-  if (!raw || typeof raw !== 'object') {
-    return {}
+  if (!raw || typeof raw !== "object") {
+    return {};
   }
 
-  const out = {}
+  const out = {};
   for (const [name, entry] of Object.entries(raw)) {
-    if (!entry || typeof entry !== 'object') {
-      continue
+    if (!entry || typeof entry !== "object") {
+      continue;
     }
-    if (name !== 'default' && !PROFILE_NAME_RE.test(name)) {
-      continue
+    if (name !== "default" && !PROFILE_NAME_RE.test(name)) {
+      continue;
     }
 
-    const cleaned = { mode: entry.mode === 'remote' ? 'remote' : 'local' }
-    const url = String(entry.url || '').trim()
+    const cleaned = { mode: entry.mode === "remote" ? "remote" : "local" };
+    const url = String(entry.url || "").trim();
     if (url) {
-      cleaned.url = url
+      cleaned.url = url;
     }
-    cleaned.authMode = normAuthMode(entry.authMode)
-    if (entry.token && typeof entry.token === 'object') {
-      cleaned.token = entry.token
+    cleaned.authMode = normAuthMode(entry.authMode);
+    if (entry.token && typeof entry.token === "object") {
+      cleaned.token = entry.token;
     }
-    out[name] = cleaned
+    out[name] = cleaned;
   }
 
-  return out
+  return out;
 }
 
 function readDesktopConnectionConfig() {
   // Check if file changed on disk since last read (e.g. modified by another
   // process or an external tool).  Our own writes update the cache inline
   // via writeDesktopConnectionConfig, but external changes would be missed.
-  let mtime = null
+  let mtime = null;
   try {
-    mtime = fs.statSync(DESKTOP_CONNECTION_CONFIG_PATH).mtimeMs
+    mtime = fs.statSync(DESKTOP_CONNECTION_CONFIG_PATH).mtimeMs;
   } catch {
-    mtime = null
+    mtime = null;
   }
 
   if (connectionConfigCache && connectionConfigCacheMtime === mtime) {
-    return connectionConfigCache
+    return connectionConfigCache;
   }
 
-  let config = { mode: 'local', remote: {}, profiles: {} }
+  let config = { mode: "local", remote: {}, profiles: {} };
 
   try {
-    const raw = fs.readFileSync(DESKTOP_CONNECTION_CONFIG_PATH, 'utf8')
-    const parsed = JSON.parse(raw)
+    const raw = fs.readFileSync(DESKTOP_CONNECTION_CONFIG_PATH, "utf8");
+    const parsed = JSON.parse(raw);
 
-    if (parsed && typeof parsed === 'object') {
-      const remote = parsed.remote && typeof parsed.remote === 'object' ? parsed.remote : {}
+    if (parsed && typeof parsed === "object") {
+      const remote =
+        parsed.remote && typeof parsed.remote === "object" ? parsed.remote : {};
       // authMode lives on the remote sub-object: 'oauth' (cookie + ws-ticket)
       // or 'token' (legacy static session token). Default to 'token' for
       // backward compatibility with configs written before OAuth support.
-      remote.authMode = remote.authMode === 'oauth' ? 'oauth' : 'token'
+      remote.authMode = remote.authMode === "oauth" ? "oauth" : "token";
       config = {
-        mode: parsed.mode === 'remote' ? 'remote' : 'local',
+        mode: parsed.mode === "remote" ? "remote" : "local",
         remote,
         // Per-profile remote overrides: each profile may point at its own
         // backend (local spawn or its own remote URL). Preserved verbatim so
         // profileRemoteOverride() can resolve them; normalized lazily on save.
-        profiles: sanitizeConnectionProfiles(parsed.profiles)
-      }
+        profiles: sanitizeConnectionProfiles(parsed.profiles),
+      };
     }
   } catch {
     // Missing or malformed connection settings should fall back to local.
   }
 
-  connectionConfigCache = config
-  connectionConfigCacheMtime = mtime
+  connectionConfigCache = config;
+  connectionConfigCacheMtime = mtime;
 
-  return config
+  return config;
 }
 
 function writeDesktopConnectionConfig(config) {
-  fs.mkdirSync(path.dirname(DESKTOP_CONNECTION_CONFIG_PATH), { recursive: true })
-  writeFileAtomic(DESKTOP_CONNECTION_CONFIG_PATH, JSON.stringify(config, null, 2))
-  connectionConfigCache = config
-  connectionConfigCacheMtime = fs.statSync(DESKTOP_CONNECTION_CONFIG_PATH).mtimeMs
+  fs.mkdirSync(path.dirname(DESKTOP_CONNECTION_CONFIG_PATH), {
+    recursive: true,
+  });
+  writeFileAtomic(
+    DESKTOP_CONNECTION_CONFIG_PATH,
+    JSON.stringify(config, null, 2),
+  );
+  connectionConfigCache = config;
+  connectionConfigCacheMtime = fs.statSync(
+    DESKTOP_CONNECTION_CONFIG_PATH,
+  ).mtimeMs;
 }
 
 // Returns the desktop's chosen profile name, or null when unset. "default" is
@@ -3742,57 +4367,65 @@ function writeDesktopConnectionConfig(config) {
 // preference" and preserves the legacy launch (no --profile flag).
 function readActiveDesktopProfile() {
   try {
-    const raw = fs.readFileSync(DESKTOP_PROFILE_CONFIG_PATH, 'utf8')
-    const parsed = JSON.parse(raw)
-    const name = parsed && typeof parsed.profile === 'string' ? parsed.profile.trim() : ''
+    const raw = fs.readFileSync(DESKTOP_PROFILE_CONFIG_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    const name =
+      parsed && typeof parsed.profile === "string" ? parsed.profile.trim() : "";
 
-    if (name && (name === 'default' || PROFILE_NAME_RE.test(name))) {
-      return name
+    if (name && (name === "default" || PROFILE_NAME_RE.test(name))) {
+      return name;
     }
   } catch {
     // Missing or malformed → no preference.
   }
 
-  return null
+  return null;
 }
 
 function writeActiveDesktopProfile(name) {
-  const value = typeof name === 'string' ? name.trim() : ''
+  const value = typeof name === "string" ? name.trim() : "";
 
-  if (value && value !== 'default' && !PROFILE_NAME_RE.test(value)) {
-    throw new Error(`Invalid profile name: ${value}`)
+  if (value && value !== "default" && !PROFILE_NAME_RE.test(value)) {
+    throw new Error(`Invalid profile name: ${value}`);
   }
 
-  fs.mkdirSync(path.dirname(DESKTOP_PROFILE_CONFIG_PATH), { recursive: true })
-  writeFileAtomic(DESKTOP_PROFILE_CONFIG_PATH, JSON.stringify({ profile: value || null }, null, 2))
+  fs.mkdirSync(path.dirname(DESKTOP_PROFILE_CONFIG_PATH), { recursive: true });
+  writeFileAtomic(
+    DESKTOP_PROFILE_CONFIG_PATH,
+    JSON.stringify({ profile: value || null }, null, 2),
+  );
 
-  return value || null
+  return value || null;
 }
 
 // Sanitize a connection config into the renderer-facing shape. With no
 // `profile` this describes the global/default connection (the existing
 // behavior); with a `profile` it describes that profile's per-profile remote
 // override (or an empty "local/inherit" view when the profile has none).
-async function sanitizeDesktopConnectionConfig(config = readDesktopConnectionConfig(), profile = null) {
-  const key = connectionScopeKey(profile)
-  const scoped = key ? config.profiles?.[key] || null : null
-  const block = key ? scoped || {} : config.remote || {}
+async function sanitizeDesktopConnectionConfig(
+  config = readDesktopConnectionConfig(),
+  profile = null,
+) {
+  const key = connectionScopeKey(profile);
+  const scoped = key ? config.profiles?.[key] || null : null;
+  const block = key ? scoped || {} : config.remote || {};
 
-  const remoteToken = decryptDesktopSecret(block.token)
-  const authMode = normAuthMode(block.authMode)
-  const remoteUrl = String(block.url || '')
-  const mode = (key ? scoped?.mode : config.mode) === 'remote' ? 'remote' : 'local'
+  const remoteToken = decryptDesktopSecret(block.token);
+  const authMode = normAuthMode(block.authMode);
+  const remoteUrl = String(block.url || "");
+  const mode =
+    (key ? scoped?.mode : config.mode) === "remote" ? "remote" : "local";
 
-  let remoteOauthConnected = false
-  if (authMode === 'oauth' && remoteUrl) {
+  let remoteOauthConnected = false;
+  if (authMode === "oauth" && remoteUrl) {
     try {
       // Display signal: treat a live RT cookie as "connected" even if the AT
       // cookie has lapsed — the gateway refreshes the AT on the next request,
       // so the session is still usable. The authoritative liveness check is
       // the ws-ticket mint in resolveRemoteBackend at actual connect time.
-      remoteOauthConnected = await hasLiveOauthSession(remoteUrl)
+      remoteOauthConnected = await hasLiveOauthSession(remoteUrl);
     } catch {
-      remoteOauthConnected = false
+      remoteOauthConnected = false;
     }
   }
 
@@ -3807,56 +4440,77 @@ async function sanitizeDesktopConnectionConfig(config = readDesktopConnectionCon
     remoteTokenSet: Boolean(remoteToken),
     // The env override only forces the global/primary connection; a per-profile
     // scope is never overridden by NEXUS_AGENT_REMOTE_URL.
-    envOverride: key ? false : Boolean(process.env.NEXUS_AGENT_REMOTE_URL)
-  }
+    envOverride: key ? false : Boolean(process.env.NEXUS_AGENT_REMOTE_URL),
+  };
 }
 
 // Build + validate a `{ url, authMode, token }` remote block. OAuth gateways
 // authenticate via the login-window session cookie (verified at connect time in
 // resolveRemoteBackend), so only token-auth remotes require a saved token.
 function buildRemoteBlock(remoteUrl, authMode, token) {
-  if (authMode !== 'oauth' && !decryptDesktopSecret(token)) {
-    throw new Error('Remote gateway session token is required.')
+  if (authMode !== "oauth" && !decryptDesktopSecret(token)) {
+    throw new Error("Remote gateway session token is required.");
   }
-  return { url: normalizeRemoteBaseUrl(remoteUrl), authMode, token }
+  return { url: normalizeRemoteBaseUrl(remoteUrl), authMode, token };
 }
 
-function coerceDesktopConnectionConfig(input = {}, existing = readDesktopConnectionConfig(), options = {}) {
-  const persistToken = options.persistToken !== false
-  const key = connectionScopeKey(input.profile)
-  const mode = input.mode === 'remote' ? 'remote' : 'local'
+function coerceDesktopConnectionConfig(
+  input = {},
+  existing = readDesktopConnectionConfig(),
+  options = {},
+) {
+  const persistToken = options.persistToken !== false;
+  const key = connectionScopeKey(input.profile);
+  const mode = input.mode === "remote" ? "remote" : "local";
 
   // The block being edited: a per-profile entry or the global remote block.
-  const existingBlock = key ? existing.profiles?.[key] || {} : existing.remote || {}
-  const remoteUrl = String(input.remoteUrl ?? existingBlock.url ?? '').trim()
+  const existingBlock = key
+    ? existing.profiles?.[key] || {}
+    : existing.remote || {};
+  const remoteUrl = String(input.remoteUrl ?? existingBlock.url ?? "").trim();
   // authMode: explicit input wins; otherwise inherit the saved value, default 'token'.
-  const authMode = resolveAuthMode(input.remoteAuthMode, existingBlock.authMode)
-  const incomingToken = typeof input.remoteToken === 'string' ? input.remoteToken.trim() : ''
+  const authMode = resolveAuthMode(
+    input.remoteAuthMode,
+    existingBlock.authMode,
+  );
+  const incomingToken =
+    typeof input.remoteToken === "string" ? input.remoteToken.trim() : "";
   const nextToken = incomingToken
     ? persistToken
       ? encryptDesktopSecret(incomingToken)
-      : { encoding: 'plain', value: incomingToken }
-    : existingBlock.token
+      : { encoding: "plain", value: incomingToken }
+    : existingBlock.token;
 
   if (key) {
     // Per-profile scope: a remote entry pins this profile to its own backend; a
     // local entry clears the override so the profile inherits the default.
-    const profiles = { ...(existing.profiles || {}) }
-    if (mode === 'remote') {
-      profiles[key] = { mode: 'remote', ...buildRemoteBlock(remoteUrl, authMode, nextToken) }
+    const profiles = { ...(existing.profiles || {}) };
+    if (mode === "remote") {
+      profiles[key] = {
+        mode: "remote",
+        ...buildRemoteBlock(remoteUrl, authMode, nextToken),
+      };
     } else {
-      delete profiles[key]
+      delete profiles[key];
     }
-    return { mode: existing.mode === 'remote' ? 'remote' : 'local', remote: existing.remote || {}, profiles }
+    return {
+      mode: existing.mode === "remote" ? "remote" : "local",
+      remote: existing.remote || {},
+      profiles,
+    };
   }
 
   const nextRemote =
-    mode === 'remote'
+    mode === "remote"
       ? buildRemoteBlock(remoteUrl, authMode, nextToken)
-      : { url: remoteUrl ? normalizeRemoteBaseUrl(remoteUrl) : remoteUrl, authMode, token: nextToken }
+      : {
+          url: remoteUrl ? normalizeRemoteBaseUrl(remoteUrl) : remoteUrl,
+          authMode,
+          token: nextToken,
+        };
 
   // Preserve per-profile overrides when saving the global connection.
-  return { mode, remote: nextRemote, profiles: existing.profiles || {} }
+  return { mode, remote: nextRemote, profiles: existing.profiles || {} };
 }
 
 // Build a remote backend connection descriptor from an already-resolved remote
@@ -3865,9 +4519,9 @@ function coerceDesktopConnectionConfig(input = {}, existing = readDesktopConnect
 // is the DECRYPTED static token (or null in OAuth mode). `source` is a label
 // for diagnostics ('profile' | 'env' | 'settings').
 async function buildRemoteConnection(rawUrl, authMode, token, source) {
-  const baseUrl = normalizeRemoteBaseUrl(rawUrl)
+  const baseUrl = normalizeRemoteBaseUrl(rawUrl);
 
-  if (authMode === 'oauth') {
+  if (authMode === "oauth") {
     // OAuth gateway: auth comes from the session cookies in the OAuth
     // partition. Liveness is NOT "is the access-token cookie present?" —
     // Portal issues a 24h rotating refresh token (hermes #37247), and the
@@ -3878,51 +4532,52 @@ async function buildRemoteConnection(rawUrl, authMode, token, source) {
     // the authoritative liveness check.
     if (!(await hasLiveOauthSession(baseUrl))) {
       const err = new Error(
-        'Remote Hermes gateway uses OAuth, but you are not signed in. ' +
-          'Open Settings → Gateway and click "Sign in", or switch back to Local.'
-      )
-      err.needsOauthLogin = true
-      throw err
+        "Remote Hermes gateway uses OAuth, but you are not signed in. " +
+          'Open Settings → Gateway and click "Sign in", or switch back to Local.',
+      );
+      err.needsOauthLogin = true;
+      throw err;
     }
 
-    let ticket
+    let ticket;
     try {
-      ticket = await mintGatewayWsTicket(baseUrl)
+      ticket = await mintGatewayWsTicket(baseUrl);
     } catch (error) {
       const err = new Error(
-        'Your remote gateway session has expired. ' + 'Open Settings → Gateway and click "Sign in" again.'
-      )
-      err.needsOauthLogin = true
-      err.cause = error
-      throw err
+        "Your remote gateway session has expired. " +
+          'Open Settings → Gateway and click "Sign in" again.',
+      );
+      err.needsOauthLogin = true;
+      err.cause = error;
+      throw err;
     }
 
     return {
       baseUrl,
-      mode: 'remote',
+      mode: "remote",
       source,
-      authMode: 'oauth',
+      authMode: "oauth",
       // No static token in OAuth mode; REST is cookie-authed via the partition.
       token: null,
-      wsUrl: buildGatewayWsUrlWithTicket(baseUrl, ticket)
-    }
+      wsUrl: buildGatewayWsUrlWithTicket(baseUrl, ticket),
+    };
   }
 
   if (!token) {
     throw new Error(
-      'Remote Hermes gateway is selected, but no session token is saved. ' +
-        'Open Settings → Gateway and save a token, or switch back to Local.'
-    )
+      "Remote Hermes gateway is selected, but no session token is saved. " +
+        "Open Settings → Gateway and save a token, or switch back to Local.",
+    );
   }
 
   return {
     baseUrl,
-    mode: 'remote',
+    mode: "remote",
     source,
-    authMode: 'token',
+    authMode: "token",
     token,
-    wsUrl: buildGatewayWsUrl(baseUrl, token)
-  }
+    wsUrl: buildGatewayWsUrl(baseUrl, token),
+  };
 }
 
 // Resolve the remote backend for a given profile, or null when that profile
@@ -3933,37 +4588,46 @@ async function buildRemoteConnection(rawUrl, authMode, token, source) {
 // A null/empty profile resolves the env/global remote, so legacy callers and
 // the connection test (which pass no profile) are unchanged.
 async function resolveRemoteBackend(profile) {
-  const config = readDesktopConnectionConfig()
+  const config = readDesktopConnectionConfig();
 
   // 1. Per-profile override — "a profile with its own remote host". Wins even
   //    over the env override so an explicitly-configured profile always
   //    reaches its intended backend.
-  const override = profileRemoteOverride(config, profile)
+  const override = profileRemoteOverride(config, profile);
   if (override) {
-    const token = override.authMode === 'oauth' ? null : decryptDesktopSecret(override.token)
-    return buildRemoteConnection(override.url, override.authMode, token, 'profile')
+    const token =
+      override.authMode === "oauth"
+        ? null
+        : decryptDesktopSecret(override.token);
+    return buildRemoteConnection(
+      override.url,
+      override.authMode,
+      token,
+      "profile",
+    );
   }
 
   // 2. Env override (global, token-auth only).
-  const rawEnvUrl = process.env.NEXUS_AGENT_REMOTE_URL
-  const rawEnvToken = process.env.NEXUS_AGENT_REMOTE_TOKEN
+  const rawEnvUrl = process.env.NEXUS_AGENT_REMOTE_URL;
+  const rawEnvToken = process.env.NEXUS_AGENT_REMOTE_TOKEN;
   if (rawEnvUrl) {
     if (!rawEnvToken) {
       throw new Error(
-        'NEXUS_AGENT_REMOTE_URL is set but NEXUS_AGENT_REMOTE_TOKEN is not. ' +
-          'Both must be provided to connect to a remote Nexus Agent backend.'
-      )
+        "NEXUS_AGENT_REMOTE_URL is set but NEXUS_AGENT_REMOTE_TOKEN is not. " +
+          "Both must be provided to connect to a remote Nexus Agent backend.",
+      );
     }
-    return buildRemoteConnection(rawEnvUrl, 'token', rawEnvToken, 'env')
+    return buildRemoteConnection(rawEnvUrl, "token", rawEnvToken, "env");
   }
 
   // 3. Global remote.
-  if (config.mode !== 'remote') {
-    return null
+  if (config.mode !== "remote") {
+    return null;
   }
-  const authMode = normAuthMode(config.remote?.authMode)
-  const token = authMode === 'oauth' ? null : decryptDesktopSecret(config.remote?.token)
-  return buildRemoteConnection(config.remote?.url, authMode, token, 'settings')
+  const authMode = normAuthMode(config.remote?.authMode);
+  const token =
+    authMode === "oauth" ? null : decryptDesktopSecret(config.remote?.token);
+  return buildRemoteConnection(config.remote?.url, authMode, token, "settings");
 }
 
 // A remote profile's sessions live on its remote host's state.db, not on a local
@@ -3971,12 +4635,14 @@ async function resolveRemoteBackend(profile) {
 // not the local-disk fast path. These three helpers drive that (see
 // interceptSessionReadForRemote).
 function profileHasRemoteOverride(profile) {
-  return Boolean(profileRemoteOverride(readDesktopConnectionConfig(), profile))
+  return Boolean(profileRemoteOverride(readDesktopConnectionConfig(), profile));
 }
 
 function configuredRemoteProfileNames() {
-  const config = readDesktopConnectionConfig()
-  return Object.keys(config.profiles || {}).filter(name => profileRemoteOverride(config, name))
+  const config = readDesktopConnectionConfig();
+  return Object.keys(config.profiles || {}).filter((name) =>
+    profileRemoteOverride(config, name),
+  );
 }
 
 // True when the app is in app-global remote mode (Settings → "All profiles" →
@@ -3984,24 +4650,24 @@ function configuredRemoteProfileNames() {
 // ?profile=. Distinct from per-profile overrides — here there's one host for all.
 function globalRemoteActive() {
   if (process.env.NEXUS_AGENT_REMOTE_URL) {
-    return true
+    return true;
   }
-  return readDesktopConnectionConfig().mode === 'remote'
+  return readDesktopConnectionConfig().mode === "remote";
 }
 
 // GET a profile's resolved backend (remote pool or local primary), parsed JSON.
 async function fetchJsonForProfile(profile, path) {
-  return requestJsonForProfile(profile, path, 'GET')
+  return requestJsonForProfile(profile, path, "GET");
 }
 
 // Issue an arbitrary method against a profile's resolved backend, parsed JSON.
 async function requestJsonForProfile(profile, path, method, body) {
-  const conn = await ensureBackend(profile)
-  const url = `${conn.baseUrl}${path}`
-  const opts = { method, body, timeoutMs: DEFAULT_FETCH_TIMEOUT_MS }
-  return conn.authMode === 'oauth'
+  const conn = await ensureBackend(profile);
+  const url = `${conn.baseUrl}${path}`;
+  const opts = { method, body, timeoutMs: DEFAULT_FETCH_TIMEOUT_MS };
+  return conn.authMode === "oauth"
     ? fetchJsonViaOauthSession(url, opts)
-    : fetchJson(url, conn.token, opts)
+    : fetchJson(url, conn.token, opts);
 }
 
 async function probeRemoteAuthMode(rawUrl) {
@@ -4017,24 +4683,26 @@ async function probeRemoteAuthMode(rawUrl) {
   // OAuth login button vs a session-token entry box. Network/parse failures
   // surface as ``reachable: false`` rather than throwing, so a half-typed or
   // unreachable URL degrades to "can't tell yet" instead of a hard error.
-  const baseUrl = normalizeRemoteBaseUrl(rawUrl)
+  const baseUrl = normalizeRemoteBaseUrl(rawUrl);
 
-  let status
+  let status;
   try {
-    status = await fetchPublicJson(`${baseUrl}/api/status`, { timeoutMs: 8_000 })
+    status = await fetchPublicJson(`${baseUrl}/api/status`, {
+      timeoutMs: 8_000,
+    });
   } catch (error) {
     return {
       baseUrl,
       reachable: false,
-      authMode: 'unknown',
+      authMode: "unknown",
       providers: [],
       version: null,
-      error: error instanceof Error ? error.message : String(error)
-    }
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 
-  const authRequired = authModeFromStatus(status) === 'oauth'
-  let providers = []
+  const authRequired = authModeFromStatus(status) === "oauth";
+  let providers = [];
 
   if (authRequired) {
     // Best-effort: a gated gateway exposes the registered providers so the
@@ -4043,16 +4711,18 @@ async function probeRemoteAuthMode(rawUrl) {
     // an OAuth-redirect one (``supports_password``). A failure here doesn't
     // change the auth mode, so swallow it.
     try {
-      const body = await fetchPublicJson(`${baseUrl}/api/auth/providers`, { timeoutMs: 8_000 })
+      const body = await fetchPublicJson(`${baseUrl}/api/auth/providers`, {
+        timeoutMs: 8_000,
+      });
       if (Array.isArray(body?.providers)) {
         providers = body.providers
-          .filter(p => p && typeof p === 'object')
-          .map(p => ({
-            name: String(p.name || ''),
-            displayName: String(p.display_name || p.name || ''),
-            supportsPassword: Boolean(p.supports_password)
+          .filter((p) => p && typeof p === "object")
+          .map((p) => ({
+            name: String(p.name || ""),
+            displayName: String(p.display_name || p.name || ""),
+            supportsPassword: Boolean(p.supports_password),
           }))
-          .filter(p => p.name)
+          .filter((p) => p.name);
       }
     } catch {
       // Provider listing is optional metadata; the auth mode is already known.
@@ -4062,40 +4732,49 @@ async function probeRemoteAuthMode(rawUrl) {
   return {
     baseUrl,
     reachable: true,
-    authMode: authRequired ? 'oauth' : 'token',
+    authMode: authRequired ? "oauth" : "token",
     providers,
     version: status?.version || null,
-    error: null
-  }
+    error: null,
+  };
 }
 
 async function testDesktopConnectionConfig(input = {}) {
-  const config = coerceDesktopConnectionConfig(input, readDesktopConnectionConfig(), { persistToken: false })
-  const key = connectionScopeKey(input.profile)
+  const config = coerceDesktopConnectionConfig(
+    input,
+    readDesktopConnectionConfig(),
+    { persistToken: false },
+  );
+  const key = connectionScopeKey(input.profile);
   // The block under test: a per-profile entry or the global remote. Coerce has
   // already normalized the URL and resolved token inheritance for the scope.
-  const block = key ? config.profiles?.[key] || null : config.remote
-  const wantRemote = block?.mode === 'remote' || (!key && config.mode === 'remote') || (input.mode === 'remote' && block)
+  const block = key ? config.profiles?.[key] || null : config.remote;
+  const wantRemote =
+    block?.mode === "remote" ||
+    (!key && config.mode === "remote") ||
+    (input.mode === "remote" && block);
   // ``/api/status`` is public on every gateway (no creds needed), so a
   // reachability test works for local, token, and oauth modes alike — we only
   // need a base URL. For a remote config we normalize the URL from the input;
   // for local we fall back to the resolved/started backend.
-  let baseUrl
-  let token = null
-  let authMode = 'token'
+  let baseUrl;
+  let token = null;
+  let authMode = "token";
   if (wantRemote && block?.url) {
-    baseUrl = normalizeRemoteBaseUrl(block.url)
-    authMode = normAuthMode(block.authMode)
-    if (authMode !== 'oauth') {
-      token = decryptDesktopSecret(block.token)
+    baseUrl = normalizeRemoteBaseUrl(block.url);
+    authMode = normAuthMode(block.authMode);
+    if (authMode !== "oauth") {
+      token = decryptDesktopSecret(block.token);
     }
   } else {
-    const remote = (await resolveRemoteBackend(key)) || (await startHermes())
-    baseUrl = remote.baseUrl
-    token = remote.token
-    authMode = normAuthMode(remote.authMode)
+    const remote = (await resolveRemoteBackend(key)) || (await startHermes());
+    baseUrl = remote.baseUrl;
+    token = remote.token;
+    authMode = normAuthMode(remote.authMode);
   }
-  const status = await fetchJson(`${baseUrl}/api/status`, token, { timeoutMs: 8_000 })
+  const status = await fetchJson(`${baseUrl}/api/status`, token, {
+    timeoutMs: 8_000,
+  });
 
   // The HTTP status check above proves the backend is reachable, but the chat
   // surface only works once the renderer's live WebSocket to ``/api/ws``
@@ -4104,49 +4783,53 @@ async function testDesktopConnectionConfig(input = {}) {
   // false-positive "reachable" while the real boot still failed with "Could not
   // connect to Hermes gateway". Mirror the renderer's connect here so the test
   // reflects the full path the app actually uses.
-  const wsUrl = await resolveTestWsUrl(baseUrl, authMode, token, { mintTicket: mintGatewayWsTicket })
+  const wsUrl = await resolveTestWsUrl(baseUrl, authMode, token, {
+    mintTicket: mintGatewayWsTicket,
+  });
   // Skip the WS leg only when the runtime genuinely lacks a WebSocket (so an
   // older Electron/Node never fails the test spuriously); Electron's main
   // process ships a global WebSocket on every supported version.
-  if (wsUrl && typeof globalThis.WebSocket === 'function') {
-    const probe = await probeGatewayWebSocket(wsUrl, { WebSocketImpl: globalThis.WebSocket })
+  if (wsUrl && typeof globalThis.WebSocket === "function") {
+    const probe = await probeGatewayWebSocket(wsUrl, {
+      WebSocketImpl: globalThis.WebSocket,
+    });
     if (!probe.ok) {
       throw new Error(
         `Reached the gateway over HTTP, but the live WebSocket (/api/ws) connection failed: ${probe.reason} ` +
-          'The HTTP check can pass while the WebSocket is blocked by a proxy, firewall, or gateway auth/origin guard.'
-      )
+          "The HTTP check can pass while the WebSocket is blocked by a proxy, firewall, or gateway auth/origin guard.",
+      );
     }
   }
 
   return {
     ok: true,
     baseUrl,
-    version: status?.version || null
-  }
+    version: status?.version || null,
+  };
 }
 
 function resetBootProgressForReconnect() {
   updateBootProgress(
     {
       error: null,
-      message: 'Restarting desktop connection',
-      phase: 'backend.resolve',
+      message: "Restarting desktop connection",
+      phase: "backend.resolve",
       progress: 4,
-      running: true
+      running: true,
     },
-    { allowDecrease: true }
-  )
+    { allowDecrease: true },
+  );
 }
 
 function resetHermesConnection() {
-  connectionPromise = null
+  connectionPromise = null;
 
   if (hermesProcess && !hermesProcess.killed) {
-    hermesProcess.kill('SIGTERM')
+    hermesProcess.kill("SIGTERM");
   }
 
-  hermesProcess = null
-  resetBootProgressForReconnect()
+  hermesProcess = null;
+  resetBootProgressForReconnect();
 }
 
 // Re-home the primary backend: reset connection state, then wait for the live
@@ -4155,34 +4838,34 @@ function resetHermesConnection() {
 // connection-config and profile switch flows.
 async function teardownPrimaryBackendAndWait() {
   // Capture the reference before resetHermesConnection() nulls hermesProcess.
-  const dying = hermesProcess && !hermesProcess.killed ? hermesProcess : null
-  resetHermesConnection()
+  const dying = hermesProcess && !hermesProcess.killed ? hermesProcess : null;
+  resetHermesConnection();
 
   if (!dying) {
-    return
+    return;
   }
 
-  await new Promise(resolve => {
+  await new Promise((resolve) => {
     const timer = setTimeout(() => {
       try {
-        dying.kill('SIGKILL')
+        dying.kill("SIGKILL");
       } catch {
         // Already gone.
       }
-      resolve()
-    }, 5000)
-    dying.once('exit', () => {
-      clearTimeout(timer)
-      resolve()
-    })
-  })
+      resolve();
+    }, 5000);
+    dying.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
 }
 
 // The profile the primary (window) backend runs as. readActiveDesktopProfile()
 // returns the desktop's stored preference, or null when unset (legacy launch
 // that defers to active_profile / default).
 function primaryProfileKey() {
-  return readActiveDesktopProfile() || 'default'
+  return readActiveDesktopProfile() || "default";
 }
 
 // Resolve a backend connection for the given profile. Routes the primary
@@ -4190,38 +4873,47 @@ function primaryProfileKey() {
 // mode), and any OTHER profile to a lazily-spawned pool backend. An empty /
 // unknown profile resolves to the primary, so all legacy callers are unchanged.
 async function ensureBackend(profile) {
-  const key = profile && String(profile).trim() ? String(profile).trim() : primaryProfileKey()
+  const key =
+    profile && String(profile).trim()
+      ? String(profile).trim()
+      : primaryProfileKey();
 
   if (key === primaryProfileKey()) {
-    return startHermes()
+    return startHermes();
   }
 
-  const existing = backendPool.get(key)
+  const existing = backendPool.get(key);
   if (existing) {
-    existing.lastActiveAt = Date.now()
-    return existing.connectionPromise
+    existing.lastActiveAt = Date.now();
+    return existing.connectionPromise;
   }
 
-  evictLruPoolBackends(POOL_MAX_BACKENDS - 1)
+  evictLruPoolBackends(POOL_MAX_BACKENDS - 1);
 
-  const entry = { process: null, port: null, token: null, connectionPromise: null, lastActiveAt: Date.now() }
-  entry.connectionPromise = spawnPoolBackend(key, entry).catch(error => {
-    backendPool.delete(key)
-    throw error
-  })
-  backendPool.set(key, entry)
-  startPoolIdleReaper()
-  return entry.connectionPromise
+  const entry = {
+    process: null,
+    port: null,
+    token: null,
+    connectionPromise: null,
+    lastActiveAt: Date.now(),
+  };
+  entry.connectionPromise = spawnPoolBackend(key, entry).catch((error) => {
+    backendPool.delete(key);
+    throw error;
+  });
+  backendPool.set(key, entry);
+  startPoolIdleReaper();
+  return entry.connectionPromise;
 }
 
 // Mark a pool profile as recently used so the idle reaper spares it. The
 // renderer calls this when it opens a profile's chat WS and periodically while
 // streaming, since the main process can't see the direct renderer↔backend WS.
 function touchPoolBackend(profile) {
-  const key = profile && String(profile).trim() ? String(profile).trim() : null
-  if (!key) return
-  const entry = backendPool.get(key)
-  if (entry) entry.lastActiveAt = Date.now()
+  const key = profile && String(profile).trim() ? String(profile).trim() : null;
+  if (!key) return;
+  const entry = backendPool.get(key);
+  if (entry) entry.lastActiveAt = Date.now();
 }
 
 // Evict least-recently-used pool backends until at most `keep` remain — but only
@@ -4229,36 +4921,42 @@ function touchPoolBackend(profile) {
 // window). When every backend is actively kept alive we let the pool exceed the
 // soft cap rather than kill a running session.
 function evictLruPoolBackends(keep) {
-  if (backendPool.size <= keep) return
-  const now = Date.now()
+  if (backendPool.size <= keep) return;
+  const now = Date.now();
   const evictable = [...backendPool.entries()]
-    .filter(([, entry]) => now - (entry.lastActiveAt || 0) > POOL_KEEPALIVE_FRESH_MS)
-    .sort((a, b) => (a[1].lastActiveAt || 0) - (b[1].lastActiveAt || 0))
-  let removable = backendPool.size - Math.max(0, keep)
+    .filter(
+      ([, entry]) => now - (entry.lastActiveAt || 0) > POOL_KEEPALIVE_FRESH_MS,
+    )
+    .sort((a, b) => (a[1].lastActiveAt || 0) - (b[1].lastActiveAt || 0));
+  let removable = backendPool.size - Math.max(0, keep);
   for (const [profile] of evictable) {
-    if (removable <= 0) break
-    rememberLog(`Evicting idle profile backend "${profile}" (LRU cap ${POOL_MAX_BACKENDS})`)
-    stopPoolBackend(profile)
-    removable -= 1
+    if (removable <= 0) break;
+    rememberLog(
+      `Evicting idle profile backend "${profile}" (LRU cap ${POOL_MAX_BACKENDS})`,
+    );
+    stopPoolBackend(profile);
+    removable -= 1;
   }
 }
 
 function startPoolIdleReaper() {
-  if (poolIdleReaper) return
+  if (poolIdleReaper) return;
   poolIdleReaper = setInterval(() => {
-    const now = Date.now()
+    const now = Date.now();
     for (const [profile, entry] of [...backendPool.entries()]) {
       if (now - (entry.lastActiveAt || 0) > POOL_IDLE_MS) {
-        rememberLog(`Reaping idle profile backend "${profile}" (idle > ${Math.round(POOL_IDLE_MS / 1000)}s)`)
-        stopPoolBackend(profile)
+        rememberLog(
+          `Reaping idle profile backend "${profile}" (idle > ${Math.round(POOL_IDLE_MS / 1000)}s)`,
+        );
+        stopPoolBackend(profile);
       }
     }
     if (backendPool.size === 0 && poolIdleReaper) {
-      clearInterval(poolIdleReaper)
-      poolIdleReaper = null
+      clearInterval(poolIdleReaper);
+      poolIdleReaper = null;
     }
-  }, 60_000)
-  if (typeof poolIdleReaper.unref === 'function') poolIdleReaper.unref()
+  }, 60_000);
+  if (typeof poolIdleReaper.unref === "function") poolIdleReaper.unref();
 }
 
 // Spawn an additional dashboard backend pinned to a named profile. Mirrors the
@@ -4271,27 +4969,38 @@ async function spawnPoolBackend(profile, entry) {
   // remote is reachable and hand back its connection descriptor. The pool
   // entry keeps `entry.process === null`, which stopPoolBackend/evict already
   // tolerate.
-  const remote = await resolveRemoteBackend(profile)
+  const remote = await resolveRemoteBackend(profile);
   if (remote) {
-    await waitForHermes(remote.baseUrl, remote.token)
+    await waitForHermes(remote.baseUrl, remote.token);
     return {
       ...remote,
       profile,
       logs: hermesLog.slice(-80),
-      ...getWindowState()
-    }
+      ...getWindowState(),
+    };
   }
 
-  const port = await pickPort()
-  const token = crypto.randomBytes(32).toString('base64url')
+  const port = await pickPort();
+  const token = crypto.randomBytes(32).toString("base64url");
   // --profile wins over the inherited NEXUS_AGENT_HOME env (see _apply_profile_override
   // step 3 in hermes_cli/main.py), so the child re-homes to this profile.
-  const dashboardArgs = ['--profile', profile, 'dashboard', '--no-open', '--host', '127.0.0.1', '--port', String(port)]
-  const backend = await ensureRuntime(resolveHermesBackend(dashboardArgs))
-  const hermesCwd = resolveHermesCwd()
-  const webDist = resolveWebDist()
+  const dashboardArgs = [
+    "--profile",
+    profile,
+    "dashboard",
+    "--no-open",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(port),
+  ];
+  const backend = await ensureRuntime(resolveHermesBackend(dashboardArgs));
+  const hermesCwd = resolveHermesCwd();
+  const webDist = resolveWebDist();
 
-  rememberLog(`Starting Nexus Agent backend for profile "${profile}" via ${backend.label}`)
+  rememberLog(
+    `Starting Nexus Agent backend for profile "${profile}" via ${backend.label}`,
+  );
 
   const child = spawn(backend.command, backend.args, {
     cwd: backend.cwd || hermesCwd,
@@ -4300,60 +5009,68 @@ async function spawnPoolBackend(profile, entry) {
       NEXUS_AGENT_HOME,
       ...backend.env,
       HERMES_DASHBOARD_SESSION_TOKEN: token,
-      HERMES_WEB_DIST: webDist
+      HERMES_WEB_DIST: webDist,
     },
     shell: backend.shell,
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
-  entry.process = child
-  entry.port = port
-  entry.token = token
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  entry.process = child;
+  entry.port = port;
+  entry.token = token;
 
-  child.stdout.on('data', rememberLog)
-  child.stderr.on('data', rememberLog)
+  child.stdout.on("data", rememberLog);
+  child.stderr.on("data", rememberLog);
 
-  let ready = false
-  let rejectStart = null
+  let ready = false;
+  let rejectStart = null;
   const startFailed = new Promise((_resolve, reject) => {
-    rejectStart = reject
-  })
-  child.once('error', error => {
-    rememberLog(`Nexus Agent backend for profile "${profile}" failed to start: ${error.message}`)
-    backendPool.delete(profile)
-    rejectStart?.(error)
-  })
-  child.once('exit', (code, signal) => {
-    rememberLog(`Nexus Agent backend for profile "${profile}" exited (${signal || code})`)
-    backendPool.delete(profile)
+    rejectStart = reject;
+  });
+  child.once("error", (error) => {
+    rememberLog(
+      `Nexus Agent backend for profile "${profile}" failed to start: ${error.message}`,
+    );
+    backendPool.delete(profile);
+    rejectStart?.(error);
+  });
+  child.once("exit", (code, signal) => {
+    rememberLog(
+      `Nexus Agent backend for profile "${profile}" exited (${signal || code})`,
+    );
+    backendPool.delete(profile);
     if (!ready) {
-      rejectStart?.(new Error(`Nexus Agent backend for profile "${profile}" exited before it became ready (${signal || code}).`))
+      rejectStart?.(
+        new Error(
+          `Nexus Agent backend for profile "${profile}" exited before it became ready (${signal || code}).`,
+        ),
+      );
     }
-  })
+  });
 
-  const baseUrl = `http://127.0.0.1:${port}`
-  await Promise.race([waitForHermes(baseUrl, token), startFailed])
-  ready = true
+  const baseUrl = `http://127.0.0.1:${port}`;
+  await Promise.race([waitForHermes(baseUrl, token), startFailed]);
+  ready = true;
 
   return {
     baseUrl,
-    mode: 'local',
-    source: 'local',
-    authMode: 'token',
+    mode: "local",
+    source: "local",
+    authMode: "token",
     token,
     profile,
     wsUrl: `ws://127.0.0.1:${port}/api/ws?token=${encodeURIComponent(token)}`,
     logs: hermesLog.slice(-80),
-    ...getWindowState()
-  }
+    ...getWindowState(),
+  };
 }
 
 function stopPoolBackend(profile) {
-  const entry = backendPool.get(profile)
-  if (!entry) return
-  backendPool.delete(profile)
+  const entry = backendPool.get(profile);
+  if (!entry) return;
+  backendPool.delete(profile);
   if (entry.process && !entry.process.killed) {
     try {
-      entry.process.kill('SIGTERM')
+      entry.process.kill("SIGTERM");
     } catch {
       // Already gone.
     }
@@ -4362,7 +5079,7 @@ function stopPoolBackend(profile) {
 
 function stopAllPoolBackends() {
   for (const profile of [...backendPool.keys()]) {
-    stopPoolBackend(profile)
+    stopPoolBackend(profile);
   }
 }
 
@@ -4374,57 +5091,80 @@ async function startHermes() {
   // restarting a 5-10 minute install loop while the user is still reading
   // the failure overlay.
   if (bootstrapFailure) {
-    throw bootstrapFailure
+    throw bootstrapFailure;
   }
-  if (connectionPromise) return connectionPromise
+  if (connectionPromise) return connectionPromise;
 
   connectionPromise = (async () => {
-    await advanceBootProgress('backend.resolve', 'Resolving Nexus Agent backend', 8)
+    await advanceBootProgress(
+      "backend.resolve",
+      "Resolving Nexus Agent backend",
+      8,
+    );
     // Resolve for the desktop's primary profile so a per-profile remote
     // override on the active profile is honored (falls back to env / global).
-    const remote = await resolveRemoteBackend(primaryProfileKey())
+    const remote = await resolveRemoteBackend(primaryProfileKey());
     if (remote) {
-      await advanceBootProgress('backend.remote', `Connecting to remote Nexus Agent backend at ${remote.baseUrl}`, 24)
-      await waitForHermes(remote.baseUrl, remote.token)
+      await advanceBootProgress(
+        "backend.remote",
+        `Connecting to remote Nexus Agent backend at ${remote.baseUrl}`,
+        24,
+      );
+      await waitForHermes(remote.baseUrl, remote.token);
       updateBootProgress({
-        phase: 'backend.ready',
-        message: 'Remote Nexus Agent backend is ready',
+        phase: "backend.ready",
+        message: "Remote Nexus Agent backend is ready",
         progress: 94,
         running: true,
-        error: null
-      })
+        error: null,
+      });
       return {
         baseUrl: remote.baseUrl,
-        mode: 'remote',
+        mode: "remote",
         source: remote.source,
-        authMode: remote.authMode || 'token',
+        authMode: remote.authMode || "token",
         token: remote.token,
         wsUrl: remote.wsUrl,
         logs: hermesLog.slice(-80),
-        ...getWindowState()
-      }
+        ...getWindowState(),
+      };
     }
 
-    await advanceBootProgress('backend.port', 'Finding an open local port', 16)
-    const port = await pickPort()
-    const token = crypto.randomBytes(32).toString('base64url')
-    const dashboardArgs = ['dashboard', '--no-open', '--host', '127.0.0.1', '--port', String(port)]
+    await advanceBootProgress("backend.port", "Finding an open local port", 16);
+    const port = await pickPort();
+    const token = crypto.randomBytes(32).toString("base64url");
+    const dashboardArgs = [
+      "dashboard",
+      "--no-open",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+    ];
     // Pin the desktop's chosen profile via the global --profile flag. This is
     // deterministic (it wins over the sticky ~/.hermes/active_profile file) and
     // resolves NEXUS_AGENT_HOME the same way `hermes -p <name>` does on the CLI. An
     // unset preference keeps the legacy launch so existing installs are
     // unaffected.
-    const activeProfile = readActiveDesktopProfile()
+    const activeProfile = readActiveDesktopProfile();
     if (activeProfile) {
-      dashboardArgs.unshift('--profile', activeProfile)
+      dashboardArgs.unshift("--profile", activeProfile);
     }
-    await advanceBootProgress('backend.runtime', 'Resolving Hermes runtime', 28)
-    const backend = await ensureRuntime(resolveHermesBackend(dashboardArgs))
-    const hermesCwd = resolveHermesCwd()
-    const webDist = resolveWebDist()
+    await advanceBootProgress(
+      "backend.runtime",
+      "Resolving Hermes runtime",
+      28,
+    );
+    const backend = await ensureRuntime(resolveHermesBackend(dashboardArgs));
+    const hermesCwd = resolveHermesCwd();
+    const webDist = resolveWebDist();
 
-    await advanceBootProgress('backend.spawn', `Starting Nexus Agent backend via ${backend.label}`, 84)
-    rememberLog(`Starting Nexus Agent backend via ${backend.label}`)
+    await advanceBootProgress(
+      "backend.spawn",
+      `Starting Nexus Agent backend via ${backend.label}`,
+      84,
+    );
+    rememberLog(`Starting Nexus Agent backend via ${backend.label}`);
 
     hermesProcess = spawn(backend.command, backend.args, {
       cwd: backend.cwd || hermesCwd,
@@ -4442,239 +5182,291 @@ async function startHermes() {
         ...backend.env,
         HERMES_DASHBOARD_SESSION_TOKEN: token,
         AGENT_GATEWAY_SESSION_TOKEN: token,
-        HERMES_WEB_DIST: webDist
+        HERMES_WEB_DIST: webDist,
       },
       shell: backend.shell,
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
+      stdio: ["ignore", "pipe", "pipe"],
+    });
 
-    hermesProcess.stdout.on('data', rememberLog)
-    hermesProcess.stderr.on('data', rememberLog)
-    let backendReady = false
-    let rejectBackendStart = null
+    hermesProcess.stdout.on("data", rememberLog);
+    hermesProcess.stderr.on("data", rememberLog);
+    let backendReady = false;
+    let rejectBackendStart = null;
     const backendStartFailed = new Promise((_resolve, reject) => {
-      rejectBackendStart = reject
-    })
-    hermesProcess.once('error', error => {
-      rememberLog(`Nexus Agent backend failed to start: ${error.message}`)
+      rejectBackendStart = reject;
+    });
+    hermesProcess.once("error", (error) => {
+      rememberLog(`Nexus Agent backend failed to start: ${error.message}`);
       updateBootProgress(
         {
           error: error.message,
           message: `Nexus Agent backend failed to start: ${error.message}`,
-          phase: 'backend.error',
-          running: false
+          phase: "backend.error",
+          running: false,
         },
-        { allowDecrease: true }
-      )
-      hermesProcess = null
-      connectionPromise = null
-      sendBackendExit({ code: null, signal: null, error: error.message })
-      rejectBackendStart?.(error)
-    })
-    hermesProcess.once('exit', (code, signal) => {
-      rememberLog(`Nexus Agent backend exited (${signal || code})`)
-      hermesProcess = null
-      connectionPromise = null
-      sendBackendExit({ code, signal })
+        { allowDecrease: true },
+      );
+      hermesProcess = null;
+      connectionPromise = null;
+      sendBackendExit({ code: null, signal: null, error: error.message });
+      rejectBackendStart?.(error);
+    });
+    hermesProcess.once("exit", (code, signal) => {
+      rememberLog(`Nexus Agent backend exited (${signal || code})`);
+      hermesProcess = null;
+      connectionPromise = null;
+      sendBackendExit({ code, signal });
       if (!backendReady) {
-        const message = `Nexus Agent backend exited before it became ready (${signal || code}).`
+        const message = `Nexus Agent backend exited before it became ready (${signal || code}).`;
         updateBootProgress(
           {
             error: message,
             message,
-            phase: 'backend.error',
-            running: false
+            phase: "backend.error",
+            running: false,
           },
-          { allowDecrease: true }
-        )
+          { allowDecrease: true },
+        );
         rejectBackendStart?.(
           new Error(
-            `Nexus Agent backend exited before it became ready (${signal || code}). Log: ${DESKTOP_LOG_PATH}\n${recentHermesLog()}`
-          )
-        )
+            `Nexus Agent backend exited before it became ready (${signal || code}). Log: ${DESKTOP_LOG_PATH}\n${recentHermesLog()}`,
+          ),
+        );
       }
-    })
+    });
 
-    const baseUrl = `http://127.0.0.1:${port}`
-    await advanceBootProgress('backend.wait', 'Waiting for Nexus Agent backend to become ready', 90)
-    await Promise.race([waitForHermes(baseUrl, token), backendStartFailed])
-    backendReady = true
+    const baseUrl = `http://127.0.0.1:${port}`;
+    await advanceBootProgress(
+      "backend.wait",
+      "Waiting for Nexus Agent backend to become ready",
+      90,
+    );
+    await Promise.race([waitForHermes(baseUrl, token), backendStartFailed]);
+    backendReady = true;
     updateBootProgress({
-      phase: 'backend.ready',
-      message: 'Nexus Agent backend is ready. Finalizing desktop startup',
+      phase: "backend.ready",
+      message: "Nexus Agent backend is ready. Finalizing desktop startup",
       progress: 94,
       running: true,
-      error: null
-    })
+      error: null,
+    });
 
     return {
       baseUrl,
-      mode: 'local',
-      source: 'local',
-      authMode: 'token',
+      mode: "local",
+      source: "local",
+      authMode: "token",
       token,
       wsUrl: `ws://127.0.0.1:${port}/api/ws?token=${encodeURIComponent(token)}`,
       logs: hermesLog.slice(-80),
-      ...getWindowState()
-    }
-  })().catch(error => {
-    const message = error instanceof Error ? error.message : String(error)
+      ...getWindowState(),
+    };
+  })().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
     updateBootProgress(
       {
         error: message,
         message: `Desktop boot failed: ${message}`,
-        phase: 'backend.error',
-        running: false
+        phase: "backend.error",
+        running: false,
       },
-      { allowDecrease: true }
-    )
-    connectionPromise = null
-    throw error
-  })
+      { allowDecrease: true },
+    );
+    connectionPromise = null;
+    throw error;
+  });
 
-  return connectionPromise
+  return connectionPromise;
 }
 
 function createWindow() {
-  const icon = getAppIconPath()
+  const icon = getAppIconPath();
   mainWindow = new BrowserWindow({
     width: 1220,
     height: 800,
     minWidth: 900,
     minHeight: 620,
-    title: 'Hermes',
+    title: "Hermes",
     // Frameless title bar on every platform so the renderer can paint the
     // "hide sidebar" button (and other left-side titlebar tools) flush with
     // the top edge — matching the macOS layout where the traffic lights sit
     // inside the same band. On Windows/Linux, titleBarOverlay tells Electron
     // to paint native min/max/close in the top-right of the renderer; on
     // macOS it just reserves a content inset alongside the traffic lights.
-    titleBarStyle: 'hidden',
+    titleBarStyle: "hidden",
     titleBarOverlay: getTitleBarOverlayOptions(),
     trafficLightPosition: IS_MAC ? WINDOW_BUTTON_POSITION : undefined,
-    vibrancy: IS_MAC ? 'sidebar' : undefined,
+    vibrancy: IS_MAC ? "sidebar" : undefined,
     icon,
-    backgroundColor: '#f7f7f7',
+    backgroundColor: "#f7f7f7",
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       webviewTag: true,
       sandbox: true,
       nodeIntegration: false,
-      devTools: true
-    }
-  })
+      devTools: true,
+    },
+  });
 
   if (IS_MAC) {
-    mainWindow.setWindowButtonPosition?.(WINDOW_BUTTON_POSITION)
+    mainWindow.setWindowButtonPosition?.(WINDOW_BUTTON_POSITION);
     if (icon) {
-      app.dock?.setIcon(icon)
+      app.dock?.setIcon(icon);
     }
   }
 
   if (!IS_MAC) {
     if (!nativeThemeListenerInstalled) {
-      nativeThemeListenerInstalled = true
-      nativeTheme.on('updated', () => {
-        mainWindow?.setTitleBarOverlay?.(getTitleBarOverlayOptions())
-      })
+      nativeThemeListenerInstalled = true;
+      nativeTheme.on("updated", () => {
+        mainWindow?.setTitleBarOverlay?.(getTitleBarOverlayOptions());
+      });
     }
   }
 
-  mainWindow.on('will-enter-full-screen', () => sendWindowStateChanged(true))
-  mainWindow.on('enter-full-screen', () => sendWindowStateChanged(true))
-  mainWindow.on('will-leave-full-screen', () => sendWindowStateChanged(false))
-  mainWindow.on('leave-full-screen', () => sendWindowStateChanged(false))
+  mainWindow.on("will-enter-full-screen", () => sendWindowStateChanged(true));
+  mainWindow.on("enter-full-screen", () => sendWindowStateChanged(true));
+  mainWindow.on("will-leave-full-screen", () => sendWindowStateChanged(false));
+  mainWindow.on("leave-full-screen", () => sendWindowStateChanged(false));
 
-  installPreviewShortcut(mainWindow)
-  installDevToolsShortcut(mainWindow)
-  installZoomShortcuts(mainWindow)
-  installContextMenu(mainWindow)
-  mainWindow.webContents.setWindowOpenHandler(details => {
-    openExternalUrl(details.url)
+  // In lightweight mode, closing the window destroys the renderer to free
+  // memory while the backend keeps running. Intercept 'close' to prevent the
+  // default quit-on-close behavior on non-macOS platforms.
+  mainWindow.on("close", (event) => {
+    if (!quitting && lightweightMode) {
+      event.preventDefault();
+      mainWindow.destroy();
+      mainWindow = null;
+    }
+  });
 
-    return { action: 'deny' }
-  })
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    if ((DEV_SERVER && url.startsWith(DEV_SERVER)) || (!DEV_SERVER && url.startsWith('file:'))) {
-      return
+  installPreviewShortcut(mainWindow);
+  installDevToolsShortcut(mainWindow);
+  installZoomShortcuts(mainWindow);
+  installContextMenu(mainWindow);
+  mainWindow.webContents.setWindowOpenHandler((details) => {
+    openExternalUrl(details.url);
+
+    return { action: "deny" };
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (
+      (DEV_SERVER && url.startsWith(DEV_SERVER)) ||
+      (!DEV_SERVER && url.startsWith("file:"))
+    ) {
+      return;
     }
 
-    event.preventDefault()
-    openExternalUrl(url)
-  })
+    event.preventDefault();
+    openExternalUrl(url);
+  });
 
-  mainWindow.webContents.on('render-process-gone', (_event, details) => {
-    rememberLog(`[renderer] render-process-gone reason=${details?.reason} exitCode=${details?.exitCode}`)
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    rememberLog(
+      `[renderer] render-process-gone reason=${details?.reason} exitCode=${details?.exitCode}`,
+    );
 
-    if (details?.reason === 'crashed' || details?.reason === 'oom') {
-      const now = Date.now()
-      rendererReloadTimes = rendererReloadTimes.filter(t => now - t < RENDERER_RELOAD_WINDOW_MS)
+    if (details?.reason === "crashed" || details?.reason === "oom") {
+      const now = Date.now();
+      rendererReloadTimes = rendererReloadTimes.filter(
+        (t) => now - t < RENDERER_RELOAD_WINDOW_MS,
+      );
 
       if (rendererReloadTimes.length >= RENDERER_RELOAD_MAX) {
         rememberLog(
-          `[renderer] suppressing reload: ${rendererReloadTimes.length} crashes within ${RENDERER_RELOAD_WINDOW_MS}ms (likely a crash loop)`
-        )
+          `[renderer] suppressing reload: ${rendererReloadTimes.length} crashes within ${RENDERER_RELOAD_WINDOW_MS}ms (likely a crash loop)`,
+        );
 
-        return
+        return;
       }
 
-      rendererReloadTimes.push(now)
+      rendererReloadTimes.push(now);
       setImmediate(() => {
-        if (!mainWindow || mainWindow.isDestroyed()) return
+        if (!mainWindow || mainWindow.isDestroyed()) return;
         try {
-          mainWindow.webContents.reload()
+          mainWindow.webContents.reload();
         } catch (err) {
-          rememberLog(`[renderer] reload after crash failed: ${err?.message || err}`)
+          rememberLog(
+            `[renderer] reload after crash failed: ${err?.message || err}`,
+          );
         }
-      })
+      });
     }
-  })
+  });
 
-  mainWindow.webContents.on('unresponsive', () => rememberLog('[renderer] webContents became unresponsive'))
+  mainWindow.webContents.on("unresponsive", () =>
+    rememberLog("[renderer] webContents became unresponsive"),
+  );
 
   // Electron always passes the event first. The canonical (Electron 36+) shape
   // is (event, messageDetails); the deprecated positional shape is
   // (event, level, message, line, sourceId). Handle both. `level` is numeric
   // (0..3), where 3 === error.
-  mainWindow.webContents.on('console-message', (_event, detailsOrLevel, message, line, sourceId) => {
-    const details = detailsOrLevel && typeof detailsOrLevel === 'object' ? detailsOrLevel : null
-    const level = details ? details.level : detailsOrLevel
+  mainWindow.webContents.on(
+    "console-message",
+    (_event, detailsOrLevel, message, line, sourceId) => {
+      const details =
+        detailsOrLevel && typeof detailsOrLevel === "object"
+          ? detailsOrLevel
+          : null;
+      const level = details ? details.level : detailsOrLevel;
 
-    if (level !== 3) return
+      if (level !== 3) return;
 
-    const text = details ? details.message : message
-    const src = details ? details.sourceUrl : sourceId
-    const lineNo = details ? details.lineNumber : line
-    rememberLog(`[renderer console] ${text} (${src}:${lineNo})`)
-  })
+      const text = details ? details.message : message;
+      const src = details ? details.sourceUrl : sourceId;
+      const lineNo = details ? details.lineNumber : line;
+      rememberLog(`[renderer console] ${text} (${src}:${lineNo})`);
+    },
+  );
 
   if (DEV_SERVER) {
-    mainWindow.loadURL(DEV_SERVER)
+    mainWindow.loadURL(DEV_SERVER);
   } else {
-    mainWindow.loadURL(pathToFileURL(resolveRendererIndex()).toString())
+    mainWindow.loadURL(pathToFileURL(resolveRendererIndex()).toString());
   }
 
-  mainWindow.webContents.once('did-finish-load', () => {
-    broadcastBootProgress()
-    sendWindowStateChanged()
-    startHermes().catch(error => rememberLog(error.stack || error.message))
-  })
+  mainWindow.webContents.once("did-finish-load", () => {
+    if (restoringFromLightweight) {
+      // Backend is already running — skip the boot progress overlay and
+      // jump straight to the "ready" state so the renderer connects the
+      // WebSocket and refreshes sessions without showing "Starting…".
+      restoringFromLightweight = false;
+      updateBootProgress({
+        phase: "backend.ready",
+        message: "Nexus Agent backend is ready",
+        progress: 100,
+        running: true,
+        error: null,
+      });
+    } else {
+      broadcastBootProgress();
+    }
+    sendWindowStateChanged();
+    startHermes().catch((error) => rememberLog(error.stack || error.message));
+  });
 }
 
-ipcMain.handle('nexus:connection', async (_event, profile) => ensureBackend(profile))
-ipcMain.handle('nexus:backend:touch', async (_event, profile) => {
-  touchPoolBackend(profile)
-  return { ok: true }
-})
-ipcMain.handle('nexus:gateway:ws-url', async (_event, profile) => freshGatewayWsUrl(profile))
-ipcMain.handle('nexus:bootstrap:reset', async () => {
+ipcMain.handle("nexus:connection", async (_event, profile) =>
+  ensureBackend(profile),
+);
+ipcMain.handle("nexus:backend:touch", async (_event, profile) => {
+  touchPoolBackend(profile);
+  return { ok: true };
+});
+ipcMain.handle("nexus:gateway:ws-url", async (_event, profile) =>
+  freshGatewayWsUrl(profile),
+);
+ipcMain.handle("nexus:bootstrap:reset", async () => {
   // Renderer's "Reload and retry" path. Clear the latched failure and
   // reset connection state so the next startHermes() call restarts the
   // full backend flow (including a fresh runBootstrap pass).
-  rememberLog('[bootstrap] reset requested by renderer; clearing latched failure')
-  bootstrapFailure = null
-  connectionPromise = null
+  rememberLog(
+    "[bootstrap] reset requested by renderer; clearing latched failure",
+  );
+  bootstrapFailure = null;
+  connectionPromise = null;
   bootstrapState = {
     active: false,
     manifest: null,
@@ -4683,116 +5475,139 @@ ipcMain.handle('nexus:bootstrap:reset', async () => {
     log: [],
     startedAt: null,
     completedAt: null,
-    unsupportedPlatform: null
-  }
-  return { ok: true }
-})
-ipcMain.handle('nexus:bootstrap:repair', async () => {
+    unsupportedPlatform: null,
+  };
+  return { ok: true };
+});
+ipcMain.handle("nexus:bootstrap:repair", async () => {
   // Forceful repair: drop the bootstrap-complete marker so the next
   // startHermes() re-runs the full installer (refreshing a broken/partial
   // venv), and clear any latched failure + live connection. The renderer
   // reloads afterwards to re-drive the boot flow from scratch.
-  rememberLog('[bootstrap] repair requested by renderer; clearing marker + latched failure')
+  rememberLog(
+    "[bootstrap] repair requested by renderer; clearing marker + latched failure",
+  );
   try {
     if (fileExists(BOOTSTRAP_COMPLETE_MARKER)) {
-      fs.rmSync(BOOTSTRAP_COMPLETE_MARKER, { force: true })
+      fs.rmSync(BOOTSTRAP_COMPLETE_MARKER, { force: true });
     }
   } catch (error) {
-    rememberLog(`[bootstrap] failed to remove marker during repair: ${error.message}`)
+    rememberLog(
+      `[bootstrap] failed to remove marker during repair: ${error.message}`,
+    );
   }
-  bootstrapFailure = null
-  resetHermesConnection()
-  return { ok: true }
-})
-ipcMain.handle('nexus:bootstrap:cancel', async () => {
+  bootstrapFailure = null;
+  resetHermesConnection();
+  return { ok: true };
+});
+ipcMain.handle("nexus:bootstrap:cancel", async () => {
   // Renderer's Cancel button during first-launch install. Abort the running
   // install script (SIGTERM via the runner's abortSignal). runBootstrap
   // resolves with { cancelled: true }, which surfaces the recovery overlay.
   if (bootstrapAbortController) {
     try {
-      bootstrapAbortController.abort()
+      bootstrapAbortController.abort();
     } catch {
-      void 0
+      void 0;
     }
-    return { ok: true, cancelled: true }
+    return { ok: true, cancelled: true };
   }
-  return { ok: false, cancelled: false }
-})
-ipcMain.handle('nexus:boot-progress:get', async () => bootProgressState)
-ipcMain.handle('nexus:bootstrap:get', async () => getBootstrapState())
-ipcMain.handle('nexus:connection-config:get', async (_event, profile) =>
-  sanitizeDesktopConnectionConfig(readDesktopConnectionConfig(), profile)
-)
-ipcMain.handle('nexus:connection-config:test', async (_event, payload) => testDesktopConnectionConfig(payload))
-ipcMain.handle('nexus:connection-config:probe', async (_event, rawUrl) => probeRemoteAuthMode(rawUrl))
-ipcMain.handle('nexus:connection-config:oauth-login', async (_event, rawUrl) => {
-  // Open the gateway's OAuth login window and wait for the session cookie to
-  // land in the OAuth partition. The caller (settings UI) typically saves the
-  // remote config with authMode='oauth' first, then calls this. We normalize
-  // the URL defensively so a login can be driven from a raw URL too.
-  const baseUrl = normalizeRemoteBaseUrl(rawUrl)
-  await openOauthLoginWindow(baseUrl)
-  return { ok: true, baseUrl, connected: await hasOauthSessionCookie(baseUrl) }
-})
-ipcMain.handle('nexus:connection-config:oauth-logout', async (_event, rawUrl) => {
-  const baseUrl = rawUrl ? normalizeRemoteBaseUrl(rawUrl) : ''
-  await clearOauthSession(baseUrl || undefined)
-  // Report against the SAME liveness notion the Settings indicator uses
-  // (AT-or-RT) so a logout that left any session cookie behind is reflected
-  // as still-connected rather than silently signed-out.
-  return { ok: true, connected: baseUrl ? await hasLiveOauthSession(baseUrl) : false }
-})
-ipcMain.handle('nexus:connection-config:save', async (_event, payload) => {
-  const config = coerceDesktopConnectionConfig(payload)
-  writeDesktopConnectionConfig(config)
+  return { ok: false, cancelled: false };
+});
+ipcMain.handle("nexus:boot-progress:get", async () => bootProgressState);
+ipcMain.handle("nexus:bootstrap:get", async () => getBootstrapState());
+ipcMain.handle("nexus:connection-config:get", async (_event, profile) =>
+  sanitizeDesktopConnectionConfig(readDesktopConnectionConfig(), profile),
+);
+ipcMain.handle("nexus:connection-config:test", async (_event, payload) =>
+  testDesktopConnectionConfig(payload),
+);
+ipcMain.handle("nexus:connection-config:probe", async (_event, rawUrl) =>
+  probeRemoteAuthMode(rawUrl),
+);
+ipcMain.handle(
+  "nexus:connection-config:oauth-login",
+  async (_event, rawUrl) => {
+    // Open the gateway's OAuth login window and wait for the session cookie to
+    // land in the OAuth partition. The caller (settings UI) typically saves the
+    // remote config with authMode='oauth' first, then calls this. We normalize
+    // the URL defensively so a login can be driven from a raw URL too.
+    const baseUrl = normalizeRemoteBaseUrl(rawUrl);
+    await openOauthLoginWindow(baseUrl);
+    return {
+      ok: true,
+      baseUrl,
+      connected: await hasOauthSessionCookie(baseUrl),
+    };
+  },
+);
+ipcMain.handle(
+  "nexus:connection-config:oauth-logout",
+  async (_event, rawUrl) => {
+    const baseUrl = rawUrl ? normalizeRemoteBaseUrl(rawUrl) : "";
+    await clearOauthSession(baseUrl || undefined);
+    // Report against the SAME liveness notion the Settings indicator uses
+    // (AT-or-RT) so a logout that left any session cookie behind is reflected
+    // as still-connected rather than silently signed-out.
+    return {
+      ok: true,
+      connected: baseUrl ? await hasLiveOauthSession(baseUrl) : false,
+    };
+  },
+);
+ipcMain.handle("nexus:connection-config:save", async (_event, payload) => {
+  const config = coerceDesktopConnectionConfig(payload);
+  writeDesktopConnectionConfig(config);
 
-  return sanitizeDesktopConnectionConfig(config, payload?.profile)
-})
-ipcMain.handle('nexus:connection-config:apply', async (_event, payload) => {
-  const config = coerceDesktopConnectionConfig(payload)
-  writeDesktopConnectionConfig(config)
+  return sanitizeDesktopConnectionConfig(config, payload?.profile);
+});
+ipcMain.handle("nexus:connection-config:apply", async (_event, payload) => {
+  const config = coerceDesktopConnectionConfig(payload);
+  writeDesktopConnectionConfig(config);
 
-  const key = connectionScopeKey(payload?.profile)
+  const key = connectionScopeKey(payload?.profile);
 
   if (key && key !== primaryProfileKey()) {
     // Editing a NON-primary profile's connection: don't disturb the window's
     // primary backend. Drop the profile's pooled backend so the next switch
     // re-resolves against the new remote/local target.
-    stopPoolBackend(key)
+    stopPoolBackend(key);
   } else {
     // Global connection, or the primary profile's connection: re-home the
     // window backend by tearing it down and reloading the renderer.
-    await teardownPrimaryBackendAndWait()
-    mainWindow?.reload()
+    await teardownPrimaryBackendAndWait();
+    mainWindow?.reload();
   }
 
-  return sanitizeDesktopConnectionConfig(config, payload?.profile)
-})
+  return sanitizeDesktopConnectionConfig(config, payload?.profile);
+});
 
-ipcMain.handle('nexus:profile:get', async () => ({ profile: readActiveDesktopProfile() }))
-ipcMain.handle('nexus:profile:set', async (_event, name) => {
-  const next = writeActiveDesktopProfile(name)
+ipcMain.handle("nexus:profile:get", async () => ({
+  profile: readActiveDesktopProfile(),
+}));
+ipcMain.handle("nexus:profile:set", async (_event, name) => {
+  const next = writeActiveDesktopProfile(name);
 
   // Switching profiles is a backend re-home: relaunch the dashboard under the
   // new NEXUS_AGENT_HOME. Pool backends keep their own homes, so only the primary
   // is torn down.
-  await teardownPrimaryBackendAndWait()
-  mainWindow?.reload()
+  await teardownPrimaryBackendAndWait();
+  mainWindow?.reload();
 
-  return { profile: next }
-})
+  return { profile: next };
+});
 
-ipcMain.on('nexus:previewShortcutActive', (_event, active) => {
-  previewShortcutActive = Boolean(active)
-})
+ipcMain.on("nexus:previewShortcutActive", (_event, active) => {
+  previewShortcutActive = Boolean(active);
+});
 
-ipcMain.handle('nexus:requestMicrophoneAccess', async () => {
-  if (!IS_MAC || typeof systemPreferences.askForMediaAccess !== 'function') {
-    return true
+ipcMain.handle("nexus:requestMicrophoneAccess", async () => {
+  if (!IS_MAC || typeof systemPreferences.askForMediaAccess !== "function") {
+    return true;
   }
 
-  return systemPreferences.askForMediaAccess('microphone')
-})
+  return systemPreferences.askForMediaAccess("microphone");
+});
 
 // Re-route remote-profile session requests to the owning remote backend. Returns
 // `undefined` when not interceptable (caller takes the normal local path), else
@@ -4804,29 +5619,31 @@ ipcMain.handle('nexus:requestMicrophoneAccess', async () => {
 //   DELETE /api/sessions/{id}            → delete on remote
 //   PATCH  /api/sessions/{id}            → rename/archive on remote
 async function interceptSessionRequestForRemote(request) {
-  if (typeof request?.path !== 'string') {
-    return undefined
+  if (typeof request?.path !== "string") {
+    return undefined;
   }
-  const method = (request.method || 'GET').toUpperCase()
+  const method = (request.method || "GET").toUpperCase();
 
-  let parsed
+  let parsed;
   try {
-    parsed = new URL(request.path, 'http://x')
+    parsed = new URL(request.path, "http://x");
   } catch {
-    return undefined
+    return undefined;
   }
-  const { pathname, searchParams } = parsed
+  const { pathname, searchParams } = parsed;
 
-  if (method === 'GET' && pathname === '/api/profiles/sessions') {
-    const remoteProfiles = configuredRemoteProfileNames()
+  if (method === "GET" && pathname === "/api/profiles/sessions") {
+    const remoteProfiles = configuredRemoteProfileNames();
     if (remoteProfiles.length === 0) {
-      return undefined // no remote profiles → local fast path
+      return undefined; // no remote profiles → local fast path
     }
-    const requested = (searchParams.get('profile') || 'all').trim() || 'all'
-    if (requested !== 'all') {
-      return profileHasRemoteOverride(requested) ? remoteSessionList(requested, searchParams) : undefined
+    const requested = (searchParams.get("profile") || "all").trim() || "all";
+    if (requested !== "all") {
+      return profileHasRemoteOverride(requested)
+        ? remoteSessionList(requested, searchParams)
+        : undefined;
     }
-    return mergeRemoteProfileSessions(searchParams, remoteProfiles)
+    return mergeRemoteProfileSessions(searchParams, remoteProfiles);
   }
 
   // Per-session read/mutation. Owner is in ?profile= (reads) or request.profile
@@ -4836,47 +5653,57 @@ async function interceptSessionRequestForRemote(request) {
   //  - global remote mode: ONE backend serves every profile via ?profile=, so
   //    route there and KEEP the profile param so it opens the right state.db.
   if (/^\/api\/sessions\/[^/]+(\/messages)?$/.test(pathname)) {
-    const profile = (searchParams.get('profile') || request.profile || '').trim()
+    const profile = (
+      searchParams.get("profile") ||
+      request.profile ||
+      ""
+    ).trim();
     if (!profile) {
-      return undefined
+      return undefined;
     }
     if (profileHasRemoteOverride(profile)) {
-      if (method === 'GET') {
-        return fetchJsonForProfile(profile, pathname)
+      if (method === "GET") {
+        return fetchJsonForProfile(profile, pathname);
       }
-      const body = request.body && typeof request.body === 'object' ? { ...request.body } : request.body
-      if (body) delete body.profile
-      return requestJsonForProfile(profile, pathname, method, body)
+      const body =
+        request.body && typeof request.body === "object"
+          ? { ...request.body }
+          : request.body;
+      if (body) delete body.profile;
+      return requestJsonForProfile(profile, pathname, method, body);
     }
     if (globalRemoteActive()) {
       // Single global backend: keep ?profile= so it opens the right state.db.
-      const sep = pathname.includes('?') ? '&' : '?'
-      const path = `${pathname}${sep}profile=${encodeURIComponent(profile)}`
-      if (method === 'GET') {
-        return fetchJsonForProfile(null, path)
+      const sep = pathname.includes("?") ? "&" : "?";
+      const path = `${pathname}${sep}profile=${encodeURIComponent(profile)}`;
+      if (method === "GET") {
+        return fetchJsonForProfile(null, path);
       }
-      const body = request.body && typeof request.body === 'object' ? { ...request.body, profile } : { profile }
-      return requestJsonForProfile(null, path, method, body)
+      const body =
+        request.body && typeof request.body === "object"
+          ? { ...request.body, profile }
+          : { profile };
+      return requestJsonForProfile(null, path, method, body);
     }
-    return undefined
+    return undefined;
   }
 
-  return undefined
+  return undefined;
 }
 
-const rowsOf = data => (Array.isArray(data?.sessions) ? data.sessions : [])
+const rowsOf = (data) => (Array.isArray(data?.sessions) ? data.sessions : []);
 
 // A remote profile's session list, read from its remote host and tagged with the
 // desktop-facing profile name (the remote's /api/sessions doesn't know it).
 async function remoteSessionList(profile, searchParams) {
-  const qs = new URLSearchParams(searchParams)
-  qs.delete('profile') // remote serves its own db; no cross-profile read there
-  const data = await fetchJsonForProfile(profile, `/api/sessions?${qs}`)
+  const qs = new URLSearchParams(searchParams);
+  qs.delete("profile"); // remote serves its own db; no cross-profile read there
+  const data = await fetchJsonForProfile(profile, `/api/sessions?${qs}`);
   for (const s of rowsOf(data)) {
-    s.profile = profile
-    s.is_default_profile = false
+    s.profile = profile;
+    s.is_default_profile = false;
   }
-  return { ...data, sessions: rowsOf(data) }
+  return { ...data, sessions: rowsOf(data) };
 }
 
 // Unified list: primary's local aggregate, with each remote profile's stale local
@@ -4884,334 +5711,379 @@ async function remoteSessionList(profile, searchParams) {
 // re-windowed to the requested page. A dead remote contributes nothing rather
 // than breaking the sidebar.
 async function mergeRemoteProfileSessions(searchParams, remoteProfiles) {
-  const limit = Math.max(1, Number(searchParams.get('limit')) || 20)
-  const offset = Math.max(0, Number(searchParams.get('offset')) || 0)
-  const order = searchParams.get('order') === 'created' ? 'started_at' : 'last_active'
+  const limit = Math.max(1, Number(searchParams.get("limit")) || 20);
+  const offset = Math.max(0, Number(searchParams.get("offset")) || 0);
+  const order =
+    searchParams.get("order") === "created" ? "started_at" : "last_active";
 
-  const primary = await ensureBackend(null)
-  const base = await fetchJson(`${primary.baseUrl}/api/profiles/sessions?${searchParams}`, primary.token, {
-    method: 'GET',
-    timeoutMs: DEFAULT_FETCH_TIMEOUT_MS
-  }).catch(() => ({ sessions: [], total: 0, profile_totals: {} }))
+  const primary = await ensureBackend(null);
+  const base = await fetchJson(
+    `${primary.baseUrl}/api/profiles/sessions?${searchParams}`,
+    primary.token,
+    {
+      method: "GET",
+      timeoutMs: DEFAULT_FETCH_TIMEOUT_MS,
+    },
+  ).catch(() => ({ sessions: [], total: 0, profile_totals: {} }));
 
   // Over-fetch each remote from offset 0 (limit+offset rows) so the merged window
   // is correct for this page — mirrors the primary's per-profile over-fetch.
-  const remoteParams = new URLSearchParams(searchParams)
-  remoteParams.set('limit', String(limit + offset))
-  remoteParams.set('offset', '0')
+  const remoteParams = new URLSearchParams(searchParams);
+  remoteParams.set("limit", String(limit + offset));
+  remoteParams.set("offset", "0");
 
-  const remoteSet = new Set(remoteProfiles)
-  const merged = rowsOf(base).filter(s => !remoteSet.has(s?.profile))
-  const profileTotals = { ...(base.profile_totals || {}) }
-  let total = (Number(base.total) || 0) - remoteProfiles.reduce((n, p) => n + (profileTotals[p] || 0), 0)
+  const remoteSet = new Set(remoteProfiles);
+  const merged = rowsOf(base).filter((s) => !remoteSet.has(s?.profile));
+  const profileTotals = { ...(base.profile_totals || {}) };
+  let total =
+    (Number(base.total) || 0) -
+    remoteProfiles.reduce((n, p) => n + (profileTotals[p] || 0), 0);
 
   // Swap each remote profile's stale local rows/total for the remote's real ones.
-  await Promise.all(remoteProfiles.map(async name => {
-    const list = await remoteSessionList(name, remoteParams).catch(() => null)
-    if (!list) {
-      delete profileTotals[name] // dead remote → drop its stale local total too
-      return
-    }
-    const rows = rowsOf(list)
-    merged.push(...rows)
-    profileTotals[name] = Number(list.total) || rows.length
-    total += profileTotals[name]
-  }))
+  await Promise.all(
+    remoteProfiles.map(async (name) => {
+      const list = await remoteSessionList(name, remoteParams).catch(
+        () => null,
+      );
+      if (!list) {
+        delete profileTotals[name]; // dead remote → drop its stale local total too
+        return;
+      }
+      const rows = rowsOf(list);
+      merged.push(...rows);
+      profileTotals[name] = Number(list.total) || rows.length;
+      total += profileTotals[name];
+    }),
+  );
 
-  const recency = s => s?.[order] ?? s?.started_at ?? 0
-  merged.sort((a, b) => recency(b) - recency(a))
-  return { ...base, sessions: merged.slice(offset, offset + limit), total, profile_totals: profileTotals }
+  const recency = (s) => s?.[order] ?? s?.started_at ?? 0;
+  merged.sort((a, b) => recency(b) - recency(a));
+  return {
+    ...base,
+    sessions: merged.slice(offset, offset + limit),
+    total,
+    profile_totals: profileTotals,
+  };
 }
 
-ipcMain.handle('nexus:api', async (_event, request) => {
+ipcMain.handle("nexus:api", async (_event, request) => {
   // Remote-profile session requests would otherwise hit the local primary off
   // each profile's on-disk state.db — fine for local profiles, but a remote
   // profile's sessions live on its remote host, so the UI's IDs 404 (or mutations
   // no-op) the moment they run there. Route reads + mutations to the remote.
-  const rerouted = await interceptSessionRequestForRemote(request)
+  const rerouted = await interceptSessionRequestForRemote(request);
   if (rerouted !== undefined) {
-    return rerouted
+    return rerouted;
   }
 
-  const connection = await ensureBackend(request?.profile)
-  const timeoutMs = resolveTimeoutMs(request?.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
-  const url = `${connection.baseUrl}${request.path}`
+  const connection = await ensureBackend(request?.profile);
+  const timeoutMs = resolveTimeoutMs(
+    request?.timeoutMs,
+    DEFAULT_FETCH_TIMEOUT_MS,
+  );
+  const url = `${connection.baseUrl}${request.path}`;
   // OAuth gateways authenticate REST via the HttpOnly session cookie held in
   // the OAuth partition — route through Electron's net stack bound to that
   // session so the cookie attaches automatically. Token/local modes keep using
   // the static session-token header.
   const logApiError = (err) => {
-    rememberLog(`API ${request?.method || 'GET'} ${request.path} → ${err.message}`)
-    throw err
-  }
-  if (connection.authMode === 'oauth') {
+    rememberLog(
+      `API ${request?.method || "GET"} ${request.path} → ${err.message}`,
+    );
+    throw err;
+  };
+  if (connection.authMode === "oauth") {
     return fetchJsonViaOauthSession(url, {
       method: request?.method,
       body: request?.body,
-      timeoutMs
-    }).catch(logApiError)
+      timeoutMs,
+    }).catch(logApiError);
   }
   return fetchJson(url, connection.token, {
     method: request?.method,
     body: request?.body,
-    timeoutMs
-  }).catch(logApiError)
-})
+    timeoutMs,
+  }).catch(logApiError);
+});
 
-ipcMain.handle('nexus:notify', (_event, payload) => {
-  if (!Notification.isSupported()) return false
+ipcMain.handle("nexus:notify", (_event, payload) => {
+  if (!Notification.isSupported()) return false;
   new Notification({
-    title: payload?.title || 'Hermes',
-    body: payload?.body || '',
-    silent: Boolean(payload?.silent)
-  }).show()
-  return true
-})
+    title: payload?.title || "Hermes",
+    body: payload?.body || "",
+    silent: Boolean(payload?.silent),
+  }).show();
+  return true;
+});
 
-ipcMain.handle('nexus:readFileDataUrl', async (_event, filePath) => {
+ipcMain.handle("nexus:readFileDataUrl", async (_event, filePath) => {
   const { resolvedPath } = await resolveReadableFileForIpc(filePath, {
     maxBytes: DATA_URL_READ_MAX_BYTES,
-    purpose: 'File preview'
-  })
-  const data = await fs.promises.readFile(resolvedPath)
-  return `data:${mimeTypeForPath(resolvedPath)};base64,${data.toString('base64')}`
-})
+    purpose: "File preview",
+  });
+  const data = await fs.promises.readFile(resolvedPath);
+  return `data:${mimeTypeForPath(resolvedPath)};base64,${data.toString("base64")}`;
+});
 
-ipcMain.handle('nexus:readFileText', async (_event, filePath) => {
+ipcMain.handle("nexus:readFileText", async (_event, filePath) => {
   const { resolvedPath, stat } = await resolveReadableFileForIpc(filePath, {
     maxBytes: TEXT_PREVIEW_SOURCE_MAX_BYTES,
-    purpose: 'Text preview'
-  })
-  const ext = path.extname(resolvedPath).toLowerCase()
-  const handle = await fs.promises.open(resolvedPath, 'r')
-  const bytesToRead = Math.min(stat.size, TEXT_PREVIEW_MAX_BYTES)
+    purpose: "Text preview",
+  });
+  const ext = path.extname(resolvedPath).toLowerCase();
+  const handle = await fs.promises.open(resolvedPath, "r");
+  const bytesToRead = Math.min(stat.size, TEXT_PREVIEW_MAX_BYTES);
 
   try {
-    const buffer = Buffer.alloc(bytesToRead)
-    const { bytesRead } = await handle.read(buffer, 0, bytesToRead, 0)
+    const buffer = Buffer.alloc(bytesToRead);
+    const { bytesRead } = await handle.read(buffer, 0, bytesToRead, 0);
 
     return {
       binary: looksBinary(buffer.subarray(0, Math.min(bytesRead, 4096))),
       byteSize: stat.size,
-      language: PREVIEW_LANGUAGE_BY_EXT[ext] || 'text',
+      language: PREVIEW_LANGUAGE_BY_EXT[ext] || "text",
       mimeType: mimeTypeForPath(resolvedPath),
       path: resolvedPath,
-      text: buffer.subarray(0, bytesRead).toString('utf8'),
-      truncated: stat.size > TEXT_PREVIEW_MAX_BYTES
-    }
+      text: buffer.subarray(0, bytesRead).toString("utf8"),
+      truncated: stat.size > TEXT_PREVIEW_MAX_BYTES,
+    };
   } finally {
-    await handle.close()
+    await handle.close();
   }
-})
+});
 
-ipcMain.handle('nexus:selectPaths', async (_event, options = {}) => {
-  const properties = options?.directories ? ['openDirectory'] : ['openFile']
-  if (options?.multiple !== false) properties.push('multiSelections')
+ipcMain.handle("nexus:selectPaths", async (_event, options = {}) => {
+  const properties = options?.directories ? ["openDirectory"] : ["openFile"];
+  if (options?.multiple !== false) properties.push("multiSelections");
 
-  let resolvedDefaultPath
+  let resolvedDefaultPath;
   if (options?.defaultPath) {
     try {
-      resolvedDefaultPath = path.resolve(String(options.defaultPath))
+      resolvedDefaultPath = path.resolve(String(options.defaultPath));
     } catch {
-      resolvedDefaultPath = undefined
+      resolvedDefaultPath = undefined;
     }
   }
 
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: options?.title || 'Add context',
+    title: options?.title || "Add context",
     defaultPath: resolvedDefaultPath,
     properties,
-    filters: Array.isArray(options?.filters) ? options.filters : undefined
-  })
+    filters: Array.isArray(options?.filters) ? options.filters : undefined,
+  });
 
-  if (result.canceled) return []
-  return result.filePaths
-})
+  if (result.canceled) return [];
+  return result.filePaths;
+});
 
-ipcMain.handle('nexus:writeClipboard', (_event, text) => {
-  clipboard.writeText(String(text || ''))
-  return true
-})
+ipcMain.handle("nexus:writeClipboard", (_event, text) => {
+  clipboard.writeText(String(text || ""));
+  return true;
+});
 
-ipcMain.handle('nexus:saveImageFromUrl', (_event, url) => saveImageFromUrl(String(url || '')))
+ipcMain.handle("nexus:saveImageFromUrl", (_event, url) =>
+  saveImageFromUrl(String(url || "")),
+);
 
-ipcMain.handle('nexus:saveImageBuffer', async (_event, payload) => {
-  const data = payload?.data
-  if (!data) throw new Error('saveImageBuffer: missing data')
+ipcMain.handle("nexus:saveImageBuffer", async (_event, payload) => {
+  const data = payload?.data;
+  if (!data) throw new Error("saveImageBuffer: missing data");
 
-  const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
-  return writeComposerImage(buffer, payload?.ext || '.png')
-})
+  const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  return writeComposerImage(buffer, payload?.ext || ".png");
+});
 
-ipcMain.handle('nexus:saveClipboardImage', async () => {
-  const image = clipboard.readImage()
+ipcMain.handle("nexus:saveClipboardImage", async () => {
+  const image = clipboard.readImage();
   if (!image || image.isEmpty()) {
-    return ''
+    return "";
   }
 
-  return writeComposerImage(image.toPNG(), '.png')
-})
+  return writeComposerImage(image.toPNG(), ".png");
+});
 
-ipcMain.handle('nexus:normalizePreviewTarget', (_event, target, baseDir) =>
-  normalizePreviewTarget(String(target || ''), baseDir ? String(baseDir) : '')
-)
+ipcMain.handle("nexus:normalizePreviewTarget", (_event, target, baseDir) =>
+  normalizePreviewTarget(String(target || ""), baseDir ? String(baseDir) : ""),
+);
 
-ipcMain.handle('nexus:watchPreviewFile', (_event, url) => watchPreviewFile(String(url || '')))
+ipcMain.handle("nexus:watchPreviewFile", (_event, url) =>
+  watchPreviewFile(String(url || "")),
+);
 
-ipcMain.handle('nexus:stopPreviewFileWatch', (_event, id) => stopPreviewFileWatch(String(id || '')))
+ipcMain.handle("nexus:stopPreviewFileWatch", (_event, id) =>
+  stopPreviewFileWatch(String(id || "")),
+);
 
-ipcMain.on('nexus:titlebar-theme', (_event, payload) => {
-  if (!payload || !isHexColor(payload.background) || !isHexColor(payload.foreground)) {
-    return
+ipcMain.on("nexus:titlebar-theme", (_event, payload) => {
+  if (
+    !payload ||
+    !isHexColor(payload.background) ||
+    !isHexColor(payload.foreground)
+  ) {
+    return;
   }
 
   rendererTitleBarTheme = {
     background: payload.background,
-    foreground: payload.foreground
-  }
-  mainWindow?.setTitleBarOverlay?.(getTitleBarOverlayOptions())
-})
+    foreground: payload.foreground,
+  };
+  mainWindow?.setTitleBarOverlay?.(getTitleBarOverlayOptions());
+});
 
-ipcMain.handle('nexus:openExternal', (_event, url) => {
+ipcMain.handle("nexus:openExternal", (_event, url) => {
   if (!openExternalUrl(url)) {
-    throw new Error('Invalid external URL')
+    throw new Error("Invalid external URL");
   }
-})
+});
 
 // User-configurable default project directory. The renderer reads this on
 // settings mount and seeds the value into the picker; writing back persists
 // it via writeDefaultProjectDir so resolveHermesCwd picks it up on the next
 // session spawn (no app restart needed).
-ipcMain.handle('nexus:setting:defaultProjectDir:get', async () => ({
+ipcMain.handle("nexus:setting:defaultProjectDir:get", async () => ({
   dir: readDefaultProjectDir(),
-  defaultLabel: path.join(app.getPath('home'), 'hermes-projects')
-}))
+  defaultLabel: path.join(app.getPath("home"), "nexus-projects"),
+}));
 
-ipcMain.handle('nexus:setting:defaultProjectDir:set', async (_event, dir) => {
-  const next = typeof dir === 'string' && dir.trim() ? dir.trim() : null
+ipcMain.handle("nexus:setting:defaultProjectDir:set", async (_event, dir) => {
+  const next = typeof dir === "string" && dir.trim() ? dir.trim() : null;
 
   if (next) {
     try {
-      fs.mkdirSync(next, { recursive: true })
+      fs.mkdirSync(next, { recursive: true });
     } catch (error) {
-      throw new Error(`Could not create directory: ${error.message}`)
+      throw new Error(`Could not create directory: ${error.message}`);
     }
   }
 
-  writeDefaultProjectDir(next)
+  writeDefaultProjectDir(next);
 
-  return { dir: next }
-})
+  return { dir: next };
+});
 
-ipcMain.handle('nexus:setting:defaultProjectDir:pick', async () => {
+ipcMain.handle("nexus:setting:defaultProjectDir:pick", async () => {
   const result = await dialog.showOpenDialog({
-    title: 'Choose default project directory',
-    properties: ['openDirectory', 'createDirectory'],
-    defaultPath: readDefaultProjectDir() || app.getPath('home')
-  })
+    title: "Choose default project directory",
+    properties: ["openDirectory", "createDirectory"],
+    defaultPath: readDefaultProjectDir() || app.getPath("home"),
+  });
 
   if (result.canceled || result.filePaths.length === 0) {
-    return { canceled: true, dir: null }
+    return { canceled: true, dir: null };
   }
 
-  return { canceled: false, dir: result.filePaths[0] }
-})
+  return { canceled: false, dir: result.filePaths[0] };
+});
 
-ipcMain.handle('nexus:fetchLinkTitle', (_event, url) => fetchLinkTitle(url))
+ipcMain.handle("nexus:fetchLinkTitle", (_event, url) => fetchLinkTitle(url));
 
-ipcMain.handle('nexus:logs:reveal', async () => {
+ipcMain.handle("nexus:logs:reveal", async () => {
   try {
-    await fs.promises.mkdir(path.dirname(DESKTOP_LOG_PATH), { recursive: true })
+    await fs.promises.mkdir(path.dirname(DESKTOP_LOG_PATH), {
+      recursive: true,
+    });
     if (!fileExists(DESKTOP_LOG_PATH)) {
-      await fs.promises.appendFile(DESKTOP_LOG_PATH, '')
+      await fs.promises.appendFile(DESKTOP_LOG_PATH, "");
     }
-    shell.showItemInFolder(DESKTOP_LOG_PATH)
-    return { ok: true, path: DESKTOP_LOG_PATH }
+    shell.showItemInFolder(DESKTOP_LOG_PATH);
+    return { ok: true, path: DESKTOP_LOG_PATH };
   } catch (error) {
-    return { ok: false, path: DESKTOP_LOG_PATH, error: error.message }
+    return { ok: false, path: DESKTOP_LOG_PATH, error: error.message };
   }
-})
+});
 
-ipcMain.handle('nexus:logs:recent', async () => ({ path: DESKTOP_LOG_PATH, lines: hermesLog.slice(-200) }))
+ipcMain.handle("nexus:logs:recent", async () => ({
+  path: DESKTOP_LOG_PATH,
+  lines: hermesLog.slice(-200),
+}));
 
 // Always-hidden noise (covers non-git projects too — gitignore would catch
 // these anyway when present, but we want the same hygiene without one).
 const FS_READDIR_HIDDEN = new Set([
-  '.git',
-  '.hg',
-  '.svn',
-  '.cache',
-  '.next',
-  '.turbo',
-  '.venv',
-  '__pycache__',
-  'build',
-  'dist',
-  'node_modules',
-  'target',
-  'venv'
-])
+  ".git",
+  ".hg",
+  ".svn",
+  ".cache",
+  ".next",
+  ".turbo",
+  ".venv",
+  "__pycache__",
+  "build",
+  "dist",
+  "node_modules",
+  "target",
+  "venv",
+]);
 
 function findGitRoot(start) {
-  let dir = start
+  let dir = start;
 
   for (let i = 0; i < 50; i += 1) {
     try {
-      if (fs.existsSync(path.join(dir, '.git'))) {
-        return dir
+      if (fs.existsSync(path.join(dir, ".git"))) {
+        return dir;
       }
     } catch {
-      return null
+      return null;
     }
 
-    const parent = path.dirname(dir)
+    const parent = path.dirname(dir);
 
     if (parent === dir) {
-      return null
+      return null;
     }
 
-    dir = parent
+    dir = parent;
   }
 
-  return null
+  return null;
 }
 
 function terminalShellCommand() {
   if (IS_WINDOWS) {
-    return { args: [], command: process.env.COMSPEC || 'cmd.exe' }
+    return { args: [], command: process.env.COMSPEC || "cmd.exe" };
   }
 
-  const configuredShell = process.env.SHELL || ''
+  const configuredShell = process.env.SHELL || "";
   const shellPath =
-    (path.isAbsolute(configuredShell) && fs.existsSync(configuredShell) && configuredShell) ||
-    ['/bin/zsh', '/bin/bash', '/bin/sh'].find(candidate => fs.existsSync(candidate)) ||
-    '/bin/sh'
-  const shellName = path.basename(shellPath)
-  const interactiveArgs = shellName.includes('zsh') || shellName.includes('bash') ? ['-il'] : ['-i']
+    (path.isAbsolute(configuredShell) &&
+      fs.existsSync(configuredShell) &&
+      configuredShell) ||
+    ["/bin/zsh", "/bin/bash", "/bin/sh"].find((candidate) =>
+      fs.existsSync(candidate),
+    ) ||
+    "/bin/sh";
+  const shellName = path.basename(shellPath);
+  const interactiveArgs =
+    shellName.includes("zsh") || shellName.includes("bash") ? ["-il"] : ["-i"];
 
-  return { args: interactiveArgs, command: shellPath, name: shellName }
+  return { args: interactiveArgs, command: shellPath, name: shellName };
 }
 
 function safeTerminalCwd(cwd) {
-  const candidate = path.resolve(String(cwd || app.getPath('home')))
+  const candidate = path.resolve(String(cwd || app.getPath("home")));
 
   try {
-    const stat = fs.statSync(candidate)
+    const stat = fs.statSync(candidate);
 
-    return stat.isDirectory() ? candidate : path.dirname(candidate)
+    return stat.isDirectory() ? candidate : path.dirname(candidate);
   } catch {
-    return app.getPath('home')
+    return app.getPath("home");
   }
 }
 
 function terminalShellEnv() {
-  const env = { ...process.env }
+  const env = { ...process.env };
 
   // Electron is commonly launched through `npm run dev`; do not leak npm's
   // managed prefix into a user's interactive shell (nvm/proto warn loudly).
   for (const key of Object.keys(env)) {
-    if (key === 'npm_config_prefix' || key.startsWith('npm_config_') || key.startsWith('npm_package_')) {
-      delete env[key]
+    if (
+      key === "npm_config_prefix" ||
+      key.startsWith("npm_config_") ||
+      key.startsWith("npm_package_")
+    ) {
+      delete env[key];
     }
   }
 
@@ -5219,173 +6091,200 @@ function terminalShellEnv() {
   // from a non-tty agent shell (Cursor's runner sets NO_COLOR/FORCE_COLOR=0
   // /TERM=dumb; some terminals set COLORFGBG which would flip Hermes' TUI into
   // light-mode). Our PTY is a real xterm-compat terminal — force truecolor.
-  delete env.NO_COLOR
-  delete env.FORCE_COLOR
-  delete env.COLORFGBG
+  delete env.NO_COLOR;
+  delete env.FORCE_COLOR;
+  delete env.COLORFGBG;
 
-  env.COLORTERM = 'truecolor'
-  env.LC_CTYPE = env.LC_CTYPE || 'UTF-8'
-  env.TERM = 'xterm-256color'
-  env.TERM_PROGRAM = 'Hermes'
-  env.TERM_PROGRAM_VERSION = app.getVersion()
+  env.COLORTERM = "truecolor";
+  env.LC_CTYPE = env.LC_CTYPE || "UTF-8";
+  env.TERM = "xterm-256color";
+  env.TERM_PROGRAM = "Hermes";
+  env.TERM_PROGRAM_VERSION = app.getVersion();
 
-  return env
+  return env;
 }
 
 function terminalChannel(id, suffix) {
-  return `hermes:terminal:${id}:${suffix}`
+  return `hermes:terminal:${id}:${suffix}`;
 }
 
 function disposeTerminalSession(id) {
-  const sessionInfo = terminalSessions.get(id)
+  const sessionInfo = terminalSessions.get(id);
 
   if (!sessionInfo) {
-    return false
+    return false;
   }
 
-  terminalSessions.delete(id)
+  terminalSessions.delete(id);
 
   try {
-    sessionInfo.pty.kill()
+    sessionInfo.pty.kill();
   } catch {
     // Process may already be gone.
   }
 
-  return true
+  return true;
 }
 
-ipcMain.handle('nexus:fs:readDir', async (_event, dirPath) => {
-  const resolved = path.resolve(String(dirPath || ''))
+ipcMain.handle("nexus:fs:readDir", async (_event, dirPath) => {
+  const resolved = path.resolve(String(dirPath || ""));
 
   if (!resolved) {
-    return { entries: [], error: 'invalid-path' }
+    return { entries: [], error: "invalid-path" };
   }
 
   try {
-    const dirents = await fs.promises.readdir(resolved, { withFileTypes: true })
+    const dirents = await fs.promises.readdir(resolved, {
+      withFileTypes: true,
+    });
 
     const entries = dirents
-      .filter(d => {
+      .filter((d) => {
         if (FS_READDIR_HIDDEN.has(d.name)) {
-          return false
+          return false;
         }
 
-        return true
+        return true;
       })
-      .map(d => ({ name: d.name, path: path.join(resolved, d.name), isDirectory: d.isDirectory() }))
-      .sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.name.localeCompare(b.name))
+      .map((d) => ({
+        name: d.name,
+        path: path.join(resolved, d.name),
+        isDirectory: d.isDirectory(),
+      }))
+      .sort(
+        (a, b) =>
+          Number(b.isDirectory) - Number(a.isDirectory) ||
+          a.name.localeCompare(b.name),
+      );
 
-    return { entries }
+    return { entries };
   } catch (error) {
-    return { entries: [], error: error?.code || 'read-error' }
+    return { entries: [], error: error?.code || "read-error" };
   }
-})
+});
 
-ipcMain.handle('nexus:fs:gitRoot', async (_event, startPath) => {
-  const input = String(startPath || '')
-  const resolved = input.startsWith('file:') ? fileURLToPath(input) : path.resolve(input)
+ipcMain.handle("nexus:fs:gitRoot", async (_event, startPath) => {
+  const input = String(startPath || "");
+  const resolved = input.startsWith("file:")
+    ? fileURLToPath(input)
+    : path.resolve(input);
 
   try {
-    const stat = await fs.promises.stat(resolved)
-    const start = stat.isDirectory() ? resolved : path.dirname(resolved)
+    const stat = await fs.promises.stat(resolved);
+    const start = stat.isDirectory() ? resolved : path.dirname(resolved);
 
-    return findGitRoot(start)
+    return findGitRoot(start);
   } catch {
-    return findGitRoot(resolved)
+    return findGitRoot(resolved);
   }
-})
+});
 
-ipcMain.handle('nexus:terminal:start', async (event, payload = {}) => {
+ipcMain.handle("nexus:terminal:start", async (event, payload = {}) => {
   if (!nodePty) {
-    throw new Error('PTY support is unavailable. Reinstall desktop dependencies and restart Hermes.')
+    throw new Error(
+      "PTY support is unavailable. Reinstall desktop dependencies and restart Hermes.",
+    );
   }
 
-  const id = crypto.randomUUID()
-  const { args, command, name } = terminalShellCommand()
-  const cwd = safeTerminalCwd(payload?.cwd)
-  const cols = Math.max(2, Number.parseInt(String(payload?.cols || 80), 10) || 80)
-  const rows = Math.max(2, Number.parseInt(String(payload?.rows || 24), 10) || 24)
+  const id = crypto.randomUUID();
+  const { args, command, name } = terminalShellCommand();
+  const cwd = safeTerminalCwd(payload?.cwd);
+  const cols = Math.max(
+    2,
+    Number.parseInt(String(payload?.cols || 80), 10) || 80,
+  );
+  const rows = Math.max(
+    2,
+    Number.parseInt(String(payload?.rows || 24), 10) || 24,
+  );
   const ptyProcess = nodePty.spawn(command, args, {
     cols,
     cwd,
     env: terminalShellEnv(),
-    name: 'xterm-256color',
-    rows
-  })
+    name: "xterm-256color",
+    rows,
+  });
 
-  terminalSessions.set(id, { pty: ptyProcess, webContentsId: event.sender.id })
+  terminalSessions.set(id, { pty: ptyProcess, webContentsId: event.sender.id });
 
   const send = (suffix, payload) => {
     if (event.sender.isDestroyed()) {
-      return
+      return;
     }
 
-    event.sender.send(terminalChannel(id, suffix), payload)
-  }
+    event.sender.send(terminalChannel(id, suffix), payload);
+  };
 
-  ptyProcess.onData(data => send('data', data))
+  ptyProcess.onData((data) => send("data", data));
   ptyProcess.onExit(({ exitCode, signal }) => {
-    terminalSessions.delete(id)
-    send('exit', { code: exitCode, signal: signal || null })
-  })
-  event.sender.once('destroyed', () => disposeTerminalSession(id))
+    terminalSessions.delete(id);
+    send("exit", { code: exitCode, signal: signal || null });
+  });
+  event.sender.once("destroyed", () => disposeTerminalSession(id));
 
-  return { cwd, id, shell: name }
-})
+  return { cwd, id, shell: name };
+});
 
-ipcMain.handle('nexus:terminal:write', (_event, id, data) => {
-  const sessionInfo = terminalSessions.get(String(id || ''))
-
-  if (!sessionInfo) {
-    return false
-  }
-
-  sessionInfo.pty.write(String(data || ''))
-
-  return true
-})
-
-ipcMain.handle('nexus:terminal:resize', (_event, id, size = {}) => {
-  const sessionInfo = terminalSessions.get(String(id || ''))
+ipcMain.handle("nexus:terminal:write", (_event, id, data) => {
+  const sessionInfo = terminalSessions.get(String(id || ""));
 
   if (!sessionInfo) {
-    return false
+    return false;
   }
 
-  const cols = Math.max(2, Number.parseInt(String(size?.cols || 80), 10) || 80)
-  const rows = Math.max(2, Number.parseInt(String(size?.rows || 24), 10) || 24)
+  sessionInfo.pty.write(String(data || ""));
 
-  sessionInfo.pty.resize(cols, rows)
+  return true;
+});
 
-  return true
-})
-ipcMain.handle('nexus:terminal:dispose', (_event, id) => disposeTerminalSession(String(id || '')))
+ipcMain.handle("nexus:terminal:resize", (_event, id, size = {}) => {
+  const sessionInfo = terminalSessions.get(String(id || ""));
 
-ipcMain.handle('nexus:updates:check', async () =>
-  checkUpdates().catch(error => ({
+  if (!sessionInfo) {
+    return false;
+  }
+
+  const cols = Math.max(2, Number.parseInt(String(size?.cols || 80), 10) || 80);
+  const rows = Math.max(2, Number.parseInt(String(size?.rows || 24), 10) || 24);
+
+  sessionInfo.pty.resize(cols, rows);
+
+  return true;
+});
+ipcMain.handle("nexus:terminal:dispose", (_event, id) =>
+  disposeTerminalSession(String(id || "")),
+);
+
+ipcMain.handle("nexus:updates:check", async () =>
+  checkUpdates().catch((error) => ({
     supported: true,
     branch: readDesktopUpdateConfig().branch,
-    error: 'check-failed',
+    error: "check-failed",
     message: error?.message || String(error),
-    fetchedAt: Date.now()
-  }))
-)
+    fetchedAt: Date.now(),
+  })),
+);
 
-ipcMain.handle('nexus:updates:apply', async (_event, payload) =>
-  applyUpdates(payload || {}).catch(error => ({
+ipcMain.handle("nexus:updates:apply", async (_event, payload) =>
+  applyUpdates(payload || {}).catch((error) => ({
     ok: false,
-    error: 'apply-failed',
-    message: error?.message || String(error)
-  }))
-)
+    error: "apply-failed",
+    message: error?.message || String(error),
+  })),
+);
 
-ipcMain.handle('nexus:updates:branch:get', async () => readDesktopUpdateConfig())
+ipcMain.handle("nexus:updates:branch:get", async () =>
+  readDesktopUpdateConfig(),
+);
 
-ipcMain.handle('nexus:updates:branch:set', async (_event, name) => {
-  const branch = typeof name === 'string' && name.trim() ? name.trim() : DEFAULT_UPDATE_BRANCH
-  writeDesktopUpdateConfig({ branch })
-  return { branch }
-})
+ipcMain.handle("nexus:updates:branch:set", async (_event, name) => {
+  const branch =
+    typeof name === "string" && name.trim()
+      ? name.trim()
+      : DEFAULT_UPDATE_BRANCH;
+  writeDesktopUpdateConfig({ branch });
+  return { branch };
+});
 
 // Resolve the canonical Hermes version (the one `release.py` bumps in
 // hermes_cli/__init__.py + pyproject.toml) so the desktop About panel shows the
@@ -5394,46 +6293,55 @@ ipcMain.handle('nexus:updates:branch:set', async (_event, name) => {
 // when the source tree can't be read (e.g. a packaged build without the repo).
 function resolveHermesVersion() {
   try {
-    const root = resolveUpdateRoot()
-    const initPath = path.join(root, 'hermes_cli', '__init__.py')
+    const root = resolveUpdateRoot();
+    const initPath = path.join(root, "hermes_cli", "__init__.py");
     if (fileExists(initPath)) {
-      const raw = fs.readFileSync(initPath, 'utf8')
-      const match = raw.match(/__version__\s*=\s*["']([^"']+)["']/)
+      const raw = fs.readFileSync(initPath, "utf8");
+      const match = raw.match(/__version__\s*=\s*["']([^"']+)["']/);
       if (match) {
-        return match[1]
+        return match[1];
       }
     }
   } catch {
     // Fall through to the Electron app version below.
   }
-  return app.getVersion()
+  return app.getVersion();
 }
 
-ipcMain.handle('nexus:version', async () => ({
+ipcMain.handle("nexus:version", async () => ({
   appVersion: resolveHermesVersion(),
   electronVersion: process.versions.electron,
   nodeVersion: process.versions.node,
   platform: process.platform,
-  hermesRoot: resolveUpdateRoot()
-}))
+  hermesRoot: resolveUpdateRoot(),
+}));
 
 app.whenReady().then(() => {
   if (IS_MAC) {
-    Menu.setApplicationMenu(buildApplicationMenu())
+    Menu.setApplicationMenu(buildApplicationMenu());
   } else {
-    Menu.setApplicationMenu(null)
+    Menu.setApplicationMenu(null);
   }
-  installMediaPermissions()
-  registerMediaProtocol()
-  ensureWslWindowsFonts()
-  configureSpellChecker()
-  registerPowerResumeListeners()
-  createWindow()
+  installMediaPermissions();
+  registerMediaProtocol();
+  ensureWslWindowsFonts();
+  configureSpellChecker();
+  registerPowerResumeListeners();
+  createWindow();
+  createTray();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
-})
+  app.on("activate", () => {
+    // macOS dock click: restore the window if it was destroyed for lightweight
+    // mode, or create a fresh one if no window exists.
+    if (lightweightMode) {
+      lightweightMode = false;
+      rebuildTrayMenu();
+      restoreWindowFromLightweight();
+    } else if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
 
 // Seed Chromium's spellchecker with the system locale (falling back to en-US).
 // On macOS Electron uses the native spellchecker which ignores this list, but
@@ -5441,46 +6349,58 @@ app.whenReady().then(() => {
 // won't enable any without an explicit language.
 function configureSpellChecker() {
   try {
-    const defaultSession = session.defaultSession
+    const defaultSession = session.defaultSession;
 
-    if (!defaultSession || typeof defaultSession.setSpellCheckerLanguages !== 'function') {
-      return
+    if (
+      !defaultSession ||
+      typeof defaultSession.setSpellCheckerLanguages !== "function"
+    ) {
+      return;
     }
 
-    const available = defaultSession.availableSpellCheckerLanguages || []
-    const locale = (app.getLocale && app.getLocale()) || 'en-US'
-    const candidates = [locale, locale.split('-')[0], 'en-US', 'en']
-    const chosen = candidates.find(lang => available.includes(lang)) || 'en-US'
+    const available = defaultSession.availableSpellCheckerLanguages || [];
+    const locale = (app.getLocale && app.getLocale()) || "en-US";
+    const candidates = [locale, locale.split("-")[0], "en-US", "en"];
+    const chosen =
+      candidates.find((lang) => available.includes(lang)) || "en-US";
 
-    defaultSession.setSpellCheckerLanguages([chosen])
+    defaultSession.setSpellCheckerLanguages([chosen]);
   } catch (error) {
-    rememberLog(`Spellchecker setup failed: ${error.message}`)
+    rememberLog(`Spellchecker setup failed: ${error.message}`);
   }
 }
 
-app.on('before-quit', () => {
+app.on("before-quit", () => {
+  quitting = true;
   // Quitting mid-install should stop the installer, not orphan it.
   if (bootstrapAbortController) {
     try {
-      bootstrapAbortController.abort()
+      bootstrapAbortController.abort();
     } catch {
-      void 0
+      void 0;
     }
   }
 
   if (desktopLogFlushTimer) {
-    clearTimeout(desktopLogFlushTimer)
-    desktopLogFlushTimer = null
+    clearTimeout(desktopLogFlushTimer);
+    desktopLogFlushTimer = null;
   }
-  flushDesktopLogBufferSync()
-  closePreviewWatchers()
+  flushDesktopLogBufferSync();
+  closePreviewWatchers();
 
   if (hermesProcess && !hermesProcess.killed) {
-    hermesProcess.kill('SIGTERM')
+    hermesProcess.kill("SIGTERM");
   }
-  stopAllPoolBackends()
-})
+  stopAllPoolBackends();
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+});
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})
+app.on("window-all-closed", () => {
+  // Keep the app alive in lightweight mode (tray icon stays, backend keeps
+  // running for external messaging platforms). On macOS the app always stays
+  // alive until Cmd+Q regardless.
+  if (process.platform !== "darwin" && !lightweightMode) app.quit();
+});

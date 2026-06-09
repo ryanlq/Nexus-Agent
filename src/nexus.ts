@@ -265,17 +265,19 @@ export function getLogs(params: {
   })
 }
 
-export function getHermesConfig(): Promise<HermesConfig> {
-  return window.nexusAgent.api<HermesConfig>({
+export async function getHermesConfig(): Promise<HermesConfig> {
+  // GET /api/config returns { config: {...}, agents: [...] }.
+  // Extract just the config dict so callers see { display: {...}, terminal: {...} }
+  // instead of the wrapping response envelope.
+  const result = await window.nexusAgent.api<{ config: HermesConfig; agents: unknown[] }>({
     ...profileScoped(),
     path: '/api/config'
   })
+  return result.config ?? {}
 }
 
 export async function getHermesConfigRecord(): Promise<HermesConfigRecord> {
-  // GET /api/config returns { config: {...}, agents: [...] }.
-  // We extract just the config dict so that callers (e.g. i18n) see
-  // { display: { language: "zh" } } instead of the wrapping response.
+  // Same as getHermesConfig but returns the more permissive Record type.
   const result = await window.nexusAgent.api<{ config: HermesConfigRecord; agents: unknown[] }>({
     ...profileScoped(),
     path: '/api/config'

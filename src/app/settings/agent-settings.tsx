@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useStore } from '@nanostores/react'
 
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
@@ -14,9 +15,11 @@ import { ListRow, LoadingState } from './primitives'
 interface AgentParamDef {
   key: string
   label: string
-  type: 'select' | 'text' | 'toggle'
+  type: 'select' | 'text' | 'toggle' | 'number'
   options?: string[]
   default?: string
+  min?: number
+  max?: number
   description?: string
 }
 
@@ -288,6 +291,18 @@ function AgentRow({
                   <Switch
                     checked={paramValues[param.key] === 'true'}
                     onCheckedChange={checked => onParamChange(param.key, checked ? 'true' : 'false')}
+                  />
+                ) : param.type === 'number' ? (
+                  <Input
+                    type="number"
+                    min={param.min}
+                    max={param.max}
+                    value={paramValues[param.key] || param.default || ''}
+                    onChange={e => {
+                      const v = e.target.value
+                      if (v === '' || /^\d+$/.test(v)) onParamChange(param.key, v)
+                    }}
+                    className={cn(CONTROL_TEXT, 'h-7 w-36')}
                   />
                 ) : (
                   <Select

@@ -476,10 +476,11 @@ function PlatformDetail({
   const m = t.messaging
   const [showAdvanced, setShowAdvanced] = useState(false)
 
+  const envVars = platform.env_vars ?? []
   const hasEdits = Object.keys(trimEdits(edits)).length > 0
-  const requiredFields = platform.env_vars.filter(field => field.required)
-  const optionalFields = platform.env_vars.filter(field => !field.required && !fieldCopy(field, m).advanced)
-  const advancedFields = platform.env_vars.filter(field => !field.required && fieldCopy(field, m).advanced)
+  const requiredFields = envVars.filter(field => field.required)
+  const optionalFields = envVars.filter(field => !field.required && !fieldCopy(field, m).advanced)
+  const advancedFields = envVars.filter(field => !field.required && fieldCopy(field, m).advanced)
   const hiddenCount = advancedFields.length
   const isSavingEnv = saving === `env:${platform.id}`
 
@@ -518,12 +519,14 @@ function PlatformDetail({
               {introCopy(platform, m)}
             </p>
             <div className="mt-3">
-              <Button asChild size="sm" variant="textStrong">
-                <a href={platform.docs_url} rel="noreferrer" target="_blank">
-                  {m.openSetupGuide}
-                  <ExternalLink className="size-3.5" />
-                </a>
-              </Button>
+              {platform.docs_url ? (
+                <Button asChild size="sm" variant="textStrong">
+                  <a href={platform.docs_url} rel="noreferrer" target="_blank">
+                    {m.openSetupGuide}
+                    <ExternalLink className="size-3.5" />
+                  </a>
+                </Button>
+              ) : null}
             </div>
           </section>
 

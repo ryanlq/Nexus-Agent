@@ -272,11 +272,15 @@ export function getHermesConfig(): Promise<HermesConfig> {
   })
 }
 
-export function getHermesConfigRecord(): Promise<HermesConfigRecord> {
-  return window.nexusAgent.api<HermesConfigRecord>({
+export async function getHermesConfigRecord(): Promise<HermesConfigRecord> {
+  // GET /api/config returns { config: {...}, agents: [...] }.
+  // We extract just the config dict so that callers (e.g. i18n) see
+  // { display: { language: "zh" } } instead of the wrapping response.
+  const result = await window.nexusAgent.api<{ config: HermesConfigRecord; agents: unknown[] }>({
     ...profileScoped(),
     path: '/api/config'
   })
+  return result.config ?? {}
 }
 
 export function getHermesConfigDefaults(): Promise<HermesConfigRecord> {

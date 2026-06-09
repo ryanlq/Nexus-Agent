@@ -137,44 +137,9 @@ export function ModelEditSubmenu({
     }
   }
 
-  const toggleFast = (enabled: boolean) => {
-    if (fastControl.kind === 'variant') {
-      // Fast is a separate model id — swap to it (or back to the base).
-      void onSelectModel(enabled ? fastControl.fastId : fastControl.baseId)
-
-      return
-    }
-
-    if (fastControl.kind === 'param') {
-      setCurrentFastMode(enabled)
-
-      void (async () => {
-        try {
-          if (!(await ensureActive())) {
-            setCurrentFastMode(!enabled)
-
-            return
-          }
-
-          await requestGateway('config.set', {
-            key: 'fast',
-            session_id: activeSessionId ?? '',
-            value: enabled ? 'fast' : 'normal'
-          })
-        } catch (err) {
-          setCurrentFastMode(!enabled)
-          notifyError(err, 'Fast mode update failed')
-        }
-      })()
-    }
-  }
-
-  const hasFast = fastControl.kind !== 'none'
-  const fastOn = fastControl.kind === 'none' ? false : fastControl.on
-
   return (
     <DropdownMenuSubContent className="w-52 p-0" sideOffset={4}>
-      {!hasFast && !reasoning ? (
+      {!reasoning ? (
         <div className="px-2.5 py-3 text-xs text-(--ui-text-tertiary)">No options for this model</div>
       ) : (
         <>
@@ -192,12 +157,7 @@ export function ModelEditSubmenu({
               />
             </DropdownMenuItem>
           ) : null}
-          {hasFast ? (
-            <DropdownMenuItem className={dropdownMenuRow} onSelect={event => event.preventDefault()}>
-              Fast
-              <Switch checked={fastOn} className="ml-auto" onCheckedChange={toggleFast} size="xs" />
-            </DropdownMenuItem>
-          ) : null}
+          {/* Fast toggle hidden — no CLI agent supports a --fast flag yet */}
           {reasoning ? (
             <>
               <DropdownMenuSeparator className="mx-0" />

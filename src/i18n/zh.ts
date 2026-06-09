@@ -780,6 +780,8 @@ export const zh: Translations = {
     startVoice: '开始语音对话',
     queueMessage: '排队消息',
     steer: '引导当前运行 (⌘⏎)',
+    bareModeOn: '启用极简模式（无工具、无上下文）',
+    bareModeOff: '关闭极简模式',
     stop: '停止',
     send: '发送',
     speaking: '讲话中',

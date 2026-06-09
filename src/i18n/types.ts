@@ -549,6 +549,8 @@ export interface Translations {
     startVoice: string
     queueMessage: string
     steer: string
+    bareModeOn: string
+    bareModeOff: string
     stop: string
     send: string
     speaking: string

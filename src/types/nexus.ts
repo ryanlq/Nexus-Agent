@@ -129,10 +129,10 @@ export interface MessagingHomeChannel {
 
 export interface MessagingPlatformInfo {
   configured: boolean
-  description: string
-  docs_url: string
+  description?: string
+  docs_url?: string
   enabled: boolean
-  env_vars: MessagingEnvVarInfo[]
+  env_vars?: MessagingEnvVarInfo[]
   error_code?: null | string
   error_message?: null | string
   gateway_running: boolean

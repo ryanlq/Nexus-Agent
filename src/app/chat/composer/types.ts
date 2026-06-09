@@ -25,6 +25,7 @@ export interface ChatBarState {
   }
   tools: { enabled: boolean; label: string; suggestions?: ContextSuggestion[] }
   voice: { enabled: boolean; active: boolean }
+  bare: { enabled: boolean; active: boolean }
 }
 
 export interface ChatBarProps {
@@ -48,6 +49,7 @@ export interface ChatBarProps {
   onPickImages?: () => void
   onRemoveAttachment?: (id: string) => void
   onSteer?: (text: string) => Promise<boolean> | boolean
+  onToggleBare?: () => void
   onSubmit: (
     value: string,
     options?: { attachments?: ComposerAttachment[]; fromQueue?: boolean }

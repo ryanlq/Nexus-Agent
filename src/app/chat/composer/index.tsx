@@ -124,6 +124,7 @@ export function ChatBar({
   onPickImages,
   onRemoveAttachment,
   onSteer,
+  onToggleBare,
   onSubmit,
   onTranscribeAudio
 }: ChatBarProps) {
@@ -1371,6 +1372,7 @@ export function ChatBar({
       hasComposerPayload={hasComposerPayload}
       onDictate={dictate}
       onSteer={steerDraft}
+      onToggleBare={onToggleBare}
       state={state}
       voiceStatus={voiceStatus}
     />

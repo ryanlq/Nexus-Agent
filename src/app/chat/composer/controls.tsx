@@ -3,7 +3,7 @@ import { Codicon } from '@/components/ui/codicon'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
-import { AudioLines, Layers3, Loader2, Square, SteeringWheel } from '@/lib/icons'
+import { AudioLines, Layers3, Loader2, Square, SteeringWheel, Zap } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 import type { ConversationStatus } from './hooks/use-voice-conversation'
@@ -46,7 +46,8 @@ export function ComposerControls({
   state,
   voiceStatus,
   onDictate,
-  onSteer
+  onSteer,
+  onToggleBare
 }: {
   busy: boolean
   busyAction: 'queue' | 'stop'
@@ -59,6 +60,7 @@ export function ComposerControls({
   voiceStatus: VoiceStatus
   onDictate: () => void
   onSteer: () => void
+  onToggleBare?: () => void
 }) {
   const { t } = useI18n()
   const c = t.composer
@@ -71,6 +73,29 @@ export function ComposerControls({
 
   return (
     <div className="ml-auto flex shrink-0 items-center gap-(--composer-control-gap)">
+      {state.bare.enabled && onToggleBare && (
+        <Tip label={state.bare.active ? c.bareModeOff : c.bareModeOn}>
+          <Button
+            aria-label={state.bare.active ? c.bareModeOff : c.bareModeOn}
+            aria-pressed={state.bare.active}
+            className={cn(
+              GHOST_ICON_BTN,
+              'p-0',
+              state.bare.active && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary'
+            )}
+            disabled={disabled}
+            onClick={() => {
+              triggerHaptic('selection')
+              onToggleBare()
+            }}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <Zap size={15} />
+          </Button>
+        </Tip>
+      )}
       <DictationButton disabled={disabled} onToggle={onDictate} state={state.voice} status={voiceStatus} />
       {canSteer && (
         <Tip label={c.steer}>

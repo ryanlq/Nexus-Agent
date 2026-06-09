@@ -651,6 +651,8 @@ export const en: Translations = {
     startVoice: 'Start voice conversation',
     queueMessage: 'Queue message',
     steer: 'Steer the current run (⌘⏎)',
+    bareModeOn: 'Enable bare mode (no tools, no context)',
+    bareModeOff: 'Disable bare mode',
     stop: 'Stop',
     send: 'Send',
     speaking: 'Speaking',

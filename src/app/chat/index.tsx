@@ -7,7 +7,7 @@ import {
 import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
 import type * as React from 'react'
-import { Suspense, useCallback, useMemo, useRef } from 'react'
+import { Suspense, useCallback, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 
 import { Thread } from '@/components/assistant-ui/thread'
@@ -226,6 +226,30 @@ export function ChatView({
     [currentModel, currentProvider, modelOptionsQuery.data]
   )
 
+  // Per-session bare mode state — toggled via the ⚡ button in composer toolbar
+  const [bareActive, setBareActive] = useState(false)
+
+  const toggleBare = useCallback(async () => {
+    if (!activeSessionId || !gatewayOpen) return
+    const next = !bareActive
+    setBareActive(next)
+    try {
+      await window.nexusAgent.api<{ ok: boolean }>({
+        path: '/api/agents/switch',
+        method: 'POST',
+        body: {
+          agent: currentProvider,
+          session_id: activeSessionId,
+          agent_params: { bare: next ? 'true' : 'false' },
+        },
+        timeoutMs: 5000,
+      })
+    } catch {
+      // Revert on failure
+      setBareActive(!next)
+    }
+  }, [activeSessionId, currentProvider, gatewayOpen, bareActive])
+
   const chatBarState = useMemo<ChatBarState>(
     () => ({
       model: {
@@ -243,9 +267,13 @@ export function ChatView({
       voice: {
         enabled: true,
         active: false
+      },
+      bare: {
+        enabled: gatewayOpen && !!activeSessionId,
+        active: bareActive
       }
     }),
-    [contextSuggestions, currentModel, currentProvider, gatewayOpen, quickModels]
+    [contextSuggestions, currentModel, currentProvider, gatewayOpen, quickModels, activeSessionId, bareActive]
   )
 
   const runtimeMessageRepository = useMemo(() => {
@@ -375,6 +403,7 @@ export function ChatView({
                 onPickImages={onPickImages}
                 onRemoveAttachment={onRemoveAttachment}
                 onSteer={onSteer}
+                onToggleBare={toggleBare}
                 onSubmit={onSubmit}
                 onTranscribeAudio={onTranscribeAudio}
                 queueSessionKey={selectedSessionId || activeSessionId}

@@ -3,6 +3,7 @@ import { useStore } from '@nanostores/react'
 
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { notifyError } from '@/store/notifications'
 import { $agentAvailable, $currentProvider, setCurrentProvider } from '@/store/session'
@@ -13,7 +14,7 @@ import { ListRow, LoadingState } from './primitives'
 interface AgentParamDef {
   key: string
   label: string
-  type: 'select' | 'text'
+  type: 'select' | 'text' | 'toggle'
   options?: string[]
   default?: string
   description?: string
@@ -33,17 +34,26 @@ const DEFAULT_AGENTS: AgentInfo[] = [
   {
     slug: 'claude-code', name: 'Claude Code', description: "Anthropic's coding agent. Uses Claude Sonnet / Opus.", installed: false,
     install_hint: 'npm install -g @anthropic-ai/claude-code', docs_url: 'https://docs.anthropic.com/en/docs/claude-code',
-    params: [{ key: 'model', label: 'Model', type: 'select', options: ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'], default: 'claude-sonnet-4-6', description: 'Claude model to use.' }],
+    params: [
+      { key: 'model', label: 'Model', type: 'select', options: ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'], default: 'claude-sonnet-4-6', description: 'Claude model to use.' },
+      { key: 'bare', label: 'Bare Mode', type: 'toggle', default: 'false', description: '极简模式：跳过工具、技能、上下文加载，节省 token。适合简单问答。' },
+    ],
   },
   {
     slug: 'pi', name: 'Pi Agent', description: "Nous Research's Pi agent. Supports print, json, and rpc modes.", installed: false,
     install_hint: 'pip install pi-agent',
-    params: [{ key: 'mode', label: 'Mode', type: 'select', options: ['print', 'json', 'rpc'], default: 'json', description: 'Pi agent communication mode.' }],
+    params: [
+      { key: 'mode', label: 'Mode', type: 'select', options: ['print', 'json', 'rpc'], default: 'json', description: 'Pi agent communication mode.' },
+      { key: 'bare', label: 'Bare Mode', type: 'toggle', default: 'false', description: '极简模式：跳过工具、技能、上下文加载，节省 token。适合简单问答。' },
+    ],
   },
   {
     slug: 'codex', name: 'OpenAI Codex', description: "OpenAI's Codex CLI coding agent.", installed: false,
     install_hint: 'npm install -g @openai/codex', docs_url: 'https://github.com/openai/codex',
-    params: [{ key: 'approval_mode', label: 'Approval Mode', type: 'select', options: ['suggest', 'auto-edit', 'full-auto'], default: 'suggest', description: 'Codex approval mode for tool calls.' }],
+    params: [
+      { key: 'approval_mode', label: 'Approval Mode', type: 'select', options: ['suggest', 'auto-edit', 'full-auto'], default: 'suggest', description: 'Codex approval mode for tool calls.' },
+      { key: 'bare', label: 'Bare Mode', type: 'toggle', default: 'false', description: '极简模式：跳过工具、技能、上下文加载，节省 token。适合简单问答。' },
+    ],
   },
 ]
 
@@ -68,11 +78,23 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
       const result = await window.nexusAgent.api<{
         agents: AgentInfo[]
         current: string
+        current_params?: Record<string, string>
+        all_params?: Record<string, Record<string, string>>
       }>({ path: '/api/agents/status', timeoutMs: 5000 })
       setAgents(result.agents || DEFAULT_AGENTS)
       // Sync shared atom with server truth
       if (result.current) {
         setCurrentProvider(result.current)
+      }
+      // Restore persisted params for ALL agents (not just current)
+      if (result.all_params && Object.keys(result.all_params).length > 0) {
+        setParamValues(prev => {
+          const next = { ...prev }
+          for (const [slug, params] of Object.entries(result.all_params!)) {
+            next[slug] = { ...(prev[slug] || {}), ...params }
+          }
+          return next
+        })
       }
     } catch {
       // Fallback: get current agent from /api/model/info and use defaults
@@ -130,11 +152,24 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
     }
   }
 
-  const setParamValue = (agentSlug: string, key: string, value: string) => {
+  const setParamValue = async (agentSlug: string, key: string, value: string) => {
+    const prevParams = paramValues[agentSlug] || {}
+    const nextParams = { ...prevParams, [key]: value }
     setParamValues(prev => ({
       ...prev,
-      [agentSlug]: { ...(prev[agentSlug] || {}), [key]: value },
+      [agentSlug]: nextParams,
     }))
+    // Persist the param change to the backend immediately
+    try {
+      await window.nexusAgent.api<{ ok: boolean }>({
+        path: '/api/agents/switch',
+        method: 'POST',
+        body: { agent: agentSlug, agent_params: nextParams },
+        timeoutMs: 5000,
+      })
+    } catch (err) {
+      notifyError(err, 'Failed to save agent parameter')
+    }
   }
 
   if (loading) {
@@ -249,21 +284,28 @@ function AgentRow({
           {agent.params!.map(param => (
             <ListRow
               action={
-                <Select
-                  onValueChange={val => onParamChange(param.key, val === EMPTY_SELECT_VALUE ? '' : val)}
-                  value={paramValues[param.key] || param.default || EMPTY_SELECT_VALUE}
-                >
-                  <SelectTrigger className={cn(CONTROL_TEXT, 'h-7 w-36')}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {param.options!.map(opt => (
-                      <SelectItem key={opt || EMPTY_SELECT_VALUE} value={opt || EMPTY_SELECT_VALUE}>
-                        {opt}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                param.type === 'toggle' ? (
+                  <Switch
+                    checked={paramValues[param.key] === 'true'}
+                    onCheckedChange={checked => onParamChange(param.key, checked ? 'true' : 'false')}
+                  />
+                ) : (
+                  <Select
+                    onValueChange={val => onParamChange(param.key, val === EMPTY_SELECT_VALUE ? '' : val)}
+                    value={paramValues[param.key] || param.default || EMPTY_SELECT_VALUE}
+                  >
+                    <SelectTrigger className={cn(CONTROL_TEXT, 'h-7 w-36')}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {param.options!.map(opt => (
+                        <SelectItem key={opt || EMPTY_SELECT_VALUE} value={opt || EMPTY_SELECT_VALUE}>
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )
               }
               description={param.description}
               key={param.key}

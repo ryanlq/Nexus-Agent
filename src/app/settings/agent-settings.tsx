@@ -220,7 +220,7 @@ function AgentRow({
   paramValues: Record<string, string>
   onParamChange: (key: string, value: string) => void
 }) {
-  const hasParams = agent.params && agent.params.length > 0 && agent.installed
+  const hasParams = agent.params && agent.params.length > 0
 
   return (
     <div className="space-y-0">
@@ -292,6 +292,7 @@ function AgentRow({
                   <Switch
                     checked={paramValues[param.key] === 'true'}
                     onCheckedChange={checked => onParamChange(param.key, checked ? 'true' : 'false')}
+                    disabled={!agent.installed}
                   />
                 ) : param.type === 'number' ? (
                   <Input
@@ -304,11 +305,13 @@ function AgentRow({
                       if (v === '' || /^\d+$/.test(v)) onParamChange(param.key, v)
                     }}
                     className={cn(CONTROL_TEXT, 'h-7 w-36')}
+                    disabled={!agent.installed}
                   />
                 ) : (
                   <Select
                     onValueChange={val => onParamChange(param.key, val === EMPTY_SELECT_VALUE ? '' : val)}
                     value={paramValues[param.key] || param.default || EMPTY_SELECT_VALUE}
+                    disabled={!agent.installed}
                   >
                     <SelectTrigger className={cn(CONTROL_TEXT, 'h-7 w-36')}>
                       <SelectValue />

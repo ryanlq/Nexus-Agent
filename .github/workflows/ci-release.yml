@@ -28,13 +28,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos
-            runner: macos-latest
-            build-cmd: npm run dist:mac
-            artifact-name: nexus-agent-macos
-            artifact-path: |
-              release/*.dmg
-              release/*.zip
+          # macOS temporarily disabled — extraResources path issue on CI
+          # - platform: macos
+          #   runner: macos-latest
+          #   build-cmd: npm run dist:mac
+          #   artifact-name: nexus-agent-macos
+          #   artifact-path: |
+          #     release/*.dmg
+          #     release/*.zip
           - platform: windows
             runner: windows-latest
             build-cmd: npm run dist:win

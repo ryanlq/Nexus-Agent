@@ -108,7 +108,7 @@ function ClarifyToolPending({ args }: ToolCallMessagePartProps) {
       }
 
       if (!gateway) {
-        notifyError(new Error('Hermes gateway is not connected'), 'Could not send clarify response')
+        notifyError(new Error('Nexus Agent gateway is not connected'), 'Could not send clarify response')
 
         return
       }

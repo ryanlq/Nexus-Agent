@@ -280,13 +280,13 @@ export function useGatewayBoot({
 
     const offExit = desktop.onBackendExit(() => {
       if ($desktopBoot.get().running || $desktopBoot.get().visible) {
-        failDesktopBoot('Hermes background process exited during startup.')
+        failDesktopBoot('Nexus Agent background process exited during startup.')
       }
 
       notify({
         kind: 'error',
         title: 'Backend stopped',
-        message: 'Hermes background process exited.',
+        message: 'Nexus Agent background process exited.',
         durationMs: 0
       })
     })
@@ -332,7 +332,7 @@ export function useGatewayBoot({
 
         setDesktopBootStep({
           phase: 'renderer.config',
-          message: 'Loading Hermes settings',
+          message: 'Loading Nexus Agent settings',
           progress: 97
         })
         await callbacksRef.current.refreshHermesConfig()

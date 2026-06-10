@@ -117,7 +117,7 @@ function OAuthPicker({ onWantApiKey, providers }: { onWantApiKey: () => void; pr
         </Button>
       </div>
       <p className="-mt-2 mb-1 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-        Sign in with a subscription — no API key to copy. Hermes runs the browser sign-in for you, right here in the
+        Sign in with a subscription — no API key to copy. Nexus Agent runs the browser sign-in for you, right here in the
         app.
       </p>
       {featured && <FeaturedProviderRow onSelect={select} provider={featured} />}

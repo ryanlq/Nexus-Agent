@@ -493,9 +493,9 @@ export const zh: Translations = {
       feishu: '创建飞书 / Lark 应用,配置机器人能力,复制 App ID、App secret 和事件加密密钥。',
       wecom: '在企业微信中添加群机器人,复制其 webhook key 作为 WECOM_BOT_ID。仅可发送——双向请用企业微信(应用)选项。',
       wecom_callback: '设置一个企业微信自建应用,暴露其回调 URL,并提供 corp ID、secret、agent ID 和 AES key。',
-      weixin: '登录微信公众平台,复制 AppID 和 Token,并把消息回调 URL 指向 Hermes。',
+      weixin: '登录微信公众平台,复制 AppID 和 Token,并把消息回调 URL 指向 Nexus Agent。',
       qqbot: '在 QQ 开放平台(q.qq.com)注册一个应用,复制 App ID 和 Client Secret。',
-      api_server: '把 Hermes 暴露为兼容 OpenAI 的 API。设置一个鉴权密钥,然后把 Open WebUI / LobeChat 等指向 host:port。',
+      api_server: '把 Nexus Agent 暴露为兼容 OpenAI 的 API。设置一个鉴权密钥,然后把 Open WebUI / LobeChat 等指向 host:port。',
       webhook: '运行一个 HTTP 服务器,供其他工具(GitHub、GitLab、自定义应用)POST。用 secret 验证签名。'
     }
   },
@@ -532,7 +532,7 @@ export const zh: Translations = {
     deleteDescMid: ' 并移除其 ',
     deleteDescSuffix: ' 目录。此操作无法撤销。',
     deleting: '删除中…',
-    createDesc: '配置档案是相互独立的 Hermes 环境:各自拥有独立的配置、技能和 SOUL.md。',
+    createDesc: '配置档案是相互独立的 Nexus Agent 环境:各自拥有独立的配置、技能和 SOUL.md。',
     nameLabel: '名称',
     cloneFromDefault: '从默认档案克隆',
     cloneFromDefaultDesc: '从你的默认配置档案复制配置、技能和 SOUL.md。',
@@ -619,7 +619,7 @@ export const zh: Translations = {
     active: (enabled, total) => `${enabled}/${total} 个启用`,
     newCron: '新建定时任务',
     createFirst: '创建第一个定时任务',
-    emptyDescNew: '按 cron 表达式排程一个提示词。Hermes 会运行它,并把结果发送到你选择的目的地。',
+    emptyDescNew: '按 cron 表达式排程一个提示词。Nexus Agent 会运行它,并把结果发送到你选择的目的地。',
     emptyDescSearch: '尝试更宽泛的搜索词。',
     emptyTitleNew: '暂无排程任务',
     emptyTitleSearch: '无匹配项',
@@ -756,12 +756,12 @@ export const zh: Translations = {
 
   composer: {
     message: '消息',
-    placeholderStarting: '正在启动 Hermes…',
-    placeholderReconnecting: '正在重新连接 Hermes…',
+    placeholderStarting: '正在启动 Nexus Agent…',
+    placeholderReconnecting: '正在重新连接 Nexus Agent…',
     placeholderFollowUp: '发送后续消息',
     newSessionPlaceholders: [
       '我们要构建什么？',
-      '给 Hermes 一个任务',
+      '给 Nexus Agent 一个任务',
       '你在想什么？',
       '描述你需要什么',
       '我们该处理什么？',
@@ -807,7 +807,7 @@ export const zh: Translations = {
       '/resume': '恢复之前的会话',
       '/details': '控制对话记录的详细程度',
       '/copy': '复制所选内容或最后一条助手消息',
-      '/quit': '退出 hermes'
+      '/quit': '退出 nexus agent'
     },
     hotkeyDescs: {
       '@': '引用文件、文件夹、URL、git',
@@ -820,7 +820,7 @@ export const zh: Translations = {
       '↑ / ↓': '循环弹窗 / 历史'
     },
     attachUrlTitle: '附加 URL',
-    attachUrlDesc: 'Hermes 将抓取该页面并作为本回合的上下文。',
+    attachUrlDesc: 'Nexus Agent 将抓取该页面并作为本回合的上下文。',
     urlPlaceholder: 'https://example.com/post',
     urlHintPre: '请包含完整 URL,例如 ',
     attach: '附加',

@@ -307,7 +307,7 @@ export function ToolsetConfigPanel({ toolset, onConfiguredChange }: ToolsetConfi
                 {provider.post_setup && (
                   <p className="text-[0.72rem] text-muted-foreground">
                     This provider needs an extra setup step ({provider.post_setup}). Run it from the CLI with{' '}
-                    <code className="font-mono">hermes tools</code> for now.
+                    <code className="font-mono">nexus tools</code> for now.
                   </p>
                 )}
               </div>

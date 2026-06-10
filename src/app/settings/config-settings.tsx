@@ -340,7 +340,7 @@ export function ConfigSettings({
   }
 
   if (!config || !schema) {
-    return <LoadingState label="Loading Hermes configuration..." />
+    return <LoadingState label="Loading Nexus Agent configuration..." />
   }
 
   return (

@@ -68,7 +68,7 @@ const ApprovalBar: FC<{ request: ApprovalRequest }> = ({ request }) => {
       }
 
       if (!gateway) {
-        notifyError(new Error('Hermes gateway is not connected'), 'Could not send approval response')
+        notifyError(new Error('Nexus Agent gateway is not connected'), 'Could not send approval response')
 
         return
       }
@@ -175,7 +175,7 @@ const ApprovalBar: FC<{ request: ApprovalRequest }> = ({ request }) => {
             <DialogTitle>Always allow this command?</DialogTitle>
             <DialogDescription>
               This adds the “{request.description}” pattern to your permanent allowlist (
-              <code className="font-mono text-xs">~/.hermes/config.yaml</code>). Hermes won’t ask again for commands
+              <code className="font-mono text-xs">~/.nexus-agent/config.yaml</code>). Nexus Agent won’t ask again for commands
               like this — in this session or any future one.
             </DialogDescription>
           </DialogHeader>

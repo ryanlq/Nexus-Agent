@@ -2676,7 +2676,7 @@ async function ensureRuntime(backend) {
     bootstrapAbortController = null;
 
     if (bootstrapResult.cancelled) {
-      const cancelledError = new Error("Hermes install was cancelled.");
+      const cancelledError = new Error("Nexus Agent install was cancelled.");
       cancelledError.isBootstrapFailure = true;
       cancelledError.bootstrapCancelled = true;
       bootstrapFailure = cancelledError;
@@ -2685,7 +2685,7 @@ async function ensureRuntime(backend) {
 
     if (!bootstrapResult.ok) {
       const bootstrapError = new Error(
-        `Hermes bootstrap failed${bootstrapResult.failedStage ? ` at stage '${bootstrapResult.failedStage}'` : ""}: ` +
+        `Nexus Agent bootstrap failed${bootstrapResult.failedStage ? ` at stage '${bootstrapResult.failedStage}'` : ""}: ` +
           `${bootstrapResult.error || "unknown error"}. ` +
           `Check ${path.join(NEXUS_AGENT_HOME, "logs", "desktop.log")} for the full transcript.`,
       );
@@ -2727,10 +2727,10 @@ async function ensureRuntime(backend) {
   // here via an external `hermes` on PATH, this check still helps.
   if (IS_WINDOWS && !findGitBash()) {
     throw new Error(
-      "Git for Windows is required for Hermes on Windows (provides Git Bash, " +
+      "Git for Windows is required for Nexus Agent on Windows (provides Git Bash, " +
         "which the agent's terminal tool uses). Install it from " +
         "https://git-scm.com/download/win or run `winget install -e --id Git.Git`, " +
-        "then relaunch Hermes.",
+        "then relaunch Nexus Agent.",
     );
   }
 
@@ -2744,7 +2744,7 @@ async function ensureRuntime(backend) {
     // install.ps1 succeeds. If we hit this, the user (or a deleted venv)
     // broke the invariant; tell them to re-run the install.
     throw new Error(
-      `Hermes venv missing at ${NEXUS_VENV_ROOT}. Re-run the desktop installer or ` +
+      `Nexus Agent venv missing at ${NEXUS_VENV_ROOT}. Re-run the desktop installer or ` +
         "`scripts/install.ps1` to rebuild it.",
     );
   }
@@ -2753,7 +2753,7 @@ async function ensureRuntime(backend) {
   backend.label = `Hermes at ${ACTIVE_NEXUS_ROOT} (venv: ${NEXUS_VENV_ROOT})`;
   updateBootProgress({
     phase: "runtime.ready",
-    message: "Hermes runtime is ready",
+    message: "Nexus Agent runtime is ready",
     progress: 82,
     running: true,
     error: null,
@@ -4210,7 +4210,7 @@ function openOauthLoginWindow(baseUrl) {
       win = new BrowserWindow({
         width: 520,
         height: 720,
-        title: "Sign in to Hermes gateway",
+        title: "Sign in to Nexus Agent gateway",
         autoHideMenuBar: true,
         webPreferences: {
           contextIsolation: true,
@@ -5479,7 +5479,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 620,
-    title: "Hermes",
+    title: "Nexus Agent",
     // Frameless title bar on every platform so the renderer can paint the
     // "hide sidebar" button (and other left-side titlebar tools) flush with
     // the top edge — matching the macOS layout where the traffic lights sit
@@ -6002,7 +6002,7 @@ ipcMain.handle("nexus:api", async (_event, request) => {
 ipcMain.handle("nexus:notify", (_event, payload) => {
   if (!Notification.isSupported()) return false;
   new Notification({
-    title: payload?.title || "Hermes",
+    title: payload?.title || "Nexus Agent",
     body: payload?.body || "",
     silent: Boolean(payload?.silent),
   }).show();
@@ -6375,7 +6375,7 @@ ipcMain.handle("nexus:fs:gitRoot", async (_event, startPath) => {
 ipcMain.handle("nexus:terminal:start", async (event, payload = {}) => {
   if (!nodePty) {
     throw new Error(
-      "PTY support is unavailable. Reinstall desktop dependencies and restart Hermes.",
+      "PTY support is unavailable. Reinstall desktop dependencies and restart Nexus Agent.",
     );
   }
 

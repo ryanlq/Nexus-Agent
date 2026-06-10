@@ -24,7 +24,7 @@ const https = require("node:https");
 const net = require("node:net");
 const path = require("node:path");
 const { fileURLToPath, pathToFileURL } = require("node:url");
-const { execFileSync, spawn } = require("node:child_process");
+const { execFileSync, execSync, spawn } = require("node:child_process");
 const {
   detectRemoteDisplay,
   isWindowsBinaryPathInWsl,
@@ -990,6 +990,96 @@ function findOnPath(command) {
   }
 
   return null;
+}
+
+// Cached result of the login-shell PATH probe. Populated on first call to
+// getLoginShellPath(); subsequent calls return the same value synchronously.
+// Null sentinel means "we tried and failed" — don't retry every call.
+let _loginShellPathCache = undefined;
+
+// Resolve the user's login-shell PATH. Desktop-launched Electron (Dock,
+// Start menu, .desktop shortcut) inherits the desktop session's minimal
+// PATH (/usr/local/bin:/usr/bin:/bin + Windows System32), not the PATH
+// produced by ~/.zshrc / ~/.bashrc / ~/.zprofile / user env vars. That gap
+// hides CLI agents (claude, pi, codex) and language runtimes (nvm, pyenv,
+// asdf) installed under ~/.local, ~/.cargo, scoop, npm-global, etc.
+//
+// Strategy per platform:
+//   - POSIX: run `zsh -ilc 'printf %s $PATH'` (fall back to bash). `-il`
+//     makes zsh/bash source the login + interactive profile chain, which
+//     is what the user's terminal sees.
+//   - Windows: read [Environment]::GetEnvironmentVariable('PATH','User')
+//     and 'Machine' via PowerShell — this is the canonical user+machine
+//     PATH the Start menu honors, no shell invocation needed.
+//
+// Returns null on any failure; callers treat that as "use process.env.PATH".
+function getLoginShellPath() {
+  if (_loginShellPathCache !== undefined) return _loginShellPathCache;
+
+  let result = null;
+
+  try {
+    if (IS_WINDOWS) {
+      try {
+        const script =
+          "Write-Host (([Environment]::GetEnvironmentVariable('PATH','User') " +
+          "+ ';' + [Environment]::GetEnvironmentVariable('PATH','Machine')).Trim(';'))";
+        const out = execSync(
+          `powershell.exe -NoProfile -NonInteractive -Command "${script}"`,
+          { encoding: "utf8", timeout: 3000, stdio: ["ignore", "pipe", "ignore"] },
+        ).trim();
+        if (out) result = out;
+      } catch (err) {
+        rememberLog(`[path-expand] Windows PATH probe failed: ${err.message}`);
+      }
+    } else {
+      // Try zsh first (default on macOS, common on Linux), fall back to bash.
+      const shell = findOnPath("zsh") || findOnPath("bash");
+      if (shell) {
+        try {
+          const out = execSync(`${shell} -ilc 'printf %s "$PATH"'`, {
+            encoding: "utf8",
+            timeout: 3000,
+            stdio: ["ignore", "pipe", "ignore"],
+          }).trim();
+          if (out) result = out;
+        } catch (err) {
+          rememberLog(`[path-expand] ${shell} PATH probe failed: ${err.message}`);
+        }
+      }
+    }
+  } catch (err) {
+    rememberLog(`[path-expand] login-shell PATH probe threw: ${err.message}`);
+  }
+
+  _loginShellPathCache = result;
+  return result;
+}
+
+// Merge the login-shell PATH into process.env.PATH (append-only, deduped).
+// Idempotent — safe to call multiple times. Side-effecting by design: once
+// patched, findOnPath() (used for python/hermes/cli lookups) and every
+// spawn that inherits env: {...process.env, ...} automatically see the
+// added directories. This is how the sidecar finds `claude`, `pi`, `codex`
+// when the desktop was launched from a shortcut.
+async function expandProcessPath() {
+  const shellPath = getLoginShellPath();
+  if (!shellPath) return;
+
+  const current = String(process.env.PATH || "");
+  const currentSet = new Set(current.split(path.delimiter).filter(Boolean));
+  const extras = shellPath
+    .split(path.delimiter)
+    .filter(Boolean)
+    .filter((entry) => !currentSet.has(entry));
+
+  if (extras.length === 0) return;
+
+  process.env.PATH = [current, ...extras].filter(Boolean).join(path.delimiter);
+  rememberLog(
+    `[path-expand] appended ${extras.length} login-shell PATH entries ` +
+      `(total ${process.env.PATH.split(path.delimiter).length})`,
+  );
 }
 
 function isCommandScript(command) {
@@ -5019,6 +5109,12 @@ function startPoolIdleReaper() {
 // local-spawn portion of startHermes() but without the boot-progress UI,
 // bootstrap, or remote handling (those belong to the primary backend only).
 async function spawnPoolBackend(profile, entry) {
+  // Ensure PATH is enriched before we resolve a remote probe or spawn a
+  // local pool backend. Cached + idempotent — the primary backend's
+  // startHermes() already did the first shell probe, so this call is
+  // effectively free for any subsequent profile.
+  await expandProcessPath();
+
   // A profile may point at its OWN remote backend (connection.json
   // `profiles[name]`), or inherit the app-wide remote (env / global settings).
   // In either case there is no local child to spawn — we just verify the
@@ -5166,6 +5262,15 @@ async function startHermes() {
   if (connectionPromise) return connectionPromise;
 
   connectionPromise = (async () => {
+    // Ensure the login-shell PATH is merged into process.env.PATH before
+    // we resolve the backend or spawn any child. On the first startHermes()
+    // this may wait ~200ms for the shell probe; on subsequent calls the
+    // cached result is returned synchronously. Without this, a desktop-
+    // launched Electron wouldn't see CLI agents installed under user dirs
+    // (nvm, pyenv, pipx, scoop, cargo) because findOnPath() and the
+    // sidecar child would only see the desktop session's minimal PATH.
+    await expandProcessPath();
+
     await advanceBootProgress(
       "backend.resolve",
       "Resolving Nexus Agent backend",
@@ -6411,6 +6516,12 @@ app.whenReady().then(() => {
   ensureWslWindowsFonts();
   configureSpellChecker();
   registerPowerResumeListeners();
+  // Enrich process.env.PATH with the user's login-shell PATH so a
+  // desktop-launched Electron can find CLI agents and language runtimes
+  // installed under user dirs. Idempotent + cached; ~200ms first call.
+  expandProcessPath().catch((err) =>
+    rememberLog(`[path-expand] eager expansion failed: ${err.message}`),
+  );
   createWindow();
   createTray();
 

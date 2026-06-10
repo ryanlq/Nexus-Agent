@@ -4,6 +4,7 @@
   "version": "0.15.1",
   "description": "Native desktop shell for Nexus Agent.",
   "author": "Nous Research",
+  "homepage": "https://github.com/ryanlq/agent-gateway",
   "type": "module",
   "main": "electron/main.cjs",
   "engines": {

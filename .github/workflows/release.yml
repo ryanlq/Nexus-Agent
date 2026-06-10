@@ -37,6 +37,8 @@ on:
     tags:
       - 'v*'
       - 'release-*'
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       tag:

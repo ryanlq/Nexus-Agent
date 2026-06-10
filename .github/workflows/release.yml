@@ -73,17 +73,25 @@ jobs:
             runner: macos-latest
             build-cmd: npm run dist:mac
             artifact-name: nexus-agent-macos
-            artifact-path: release/*.{dmg,zip}
+            artifact-path: |
+              release/*.dmg
+              release/*.zip
           - platform: windows
             runner: windows-latest
             build-cmd: npm run dist:win
             artifact-name: nexus-agent-windows
-            artifact-path: release/*.{exe,msi,blockmap}
+            artifact-path: |
+              release/*.exe
+              release/*.msi
+              release/*.blockmap
           - platform: linux
             runner: ubuntu-latest
             build-cmd: npm run dist:linux
             artifact-name: nexus-agent-linux
-            artifact-path: release/*.{AppImage,deb,rpm}
+            artifact-path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
 
     steps:
       - name: Checkout

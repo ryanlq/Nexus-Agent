@@ -165,8 +165,22 @@ exports.default = async function beforePack(context) {
       console.log(`[before-pack] staged sidecar ${path.basename(result.target)} from ${result.source}`)
     } else {
       console.warn(`[before-pack] sidecar not staged (${result.reason}); build will fall back to venv backend`)
+      // Ensure the directory exists (even if empty) so that extraResources
+      // in package.json ("from": "build/sidecar") never fails with "not a file"
+      // on CI where the prebuilt sidecar binary is absent.
+      const targetDir = path.resolve(process.cwd(), 'build', 'sidecar')
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true })
+      }
     }
   } catch (err) {
     console.warn(`[before-pack] sidecar staging failed (${err.message}); continuing with fallback backend`)
+    // Belt-and-braces: ensure dir exists even on unexpected errors.
+    try {
+      const targetDir = path.resolve(process.cwd(), 'build', 'sidecar')
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true })
+      }
+    } catch { /* non-fatal */ }
   }
 }

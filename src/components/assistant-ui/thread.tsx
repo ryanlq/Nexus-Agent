@@ -1249,7 +1249,7 @@ const UserEditComposer: FC<UserEditComposerProps> = ({ cwd, gateway, sessionId }
         }
 
         closeTrigger()
-        aui.composer().cancel()
+        try { aui.composer().cancel() } catch {} // guard: composer may not be mounted yet
       }, 80)
     },
     [aui, closeTrigger, submitting]

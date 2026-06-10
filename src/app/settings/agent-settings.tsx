@@ -40,6 +40,7 @@ const DEFAULT_AGENTS: AgentInfo[] = [
     params: [
       { key: 'model', label: 'Model', type: 'select', options: ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'], default: 'claude-sonnet-4-6', description: 'Claude model to use.' },
       { key: 'bare', label: 'Bare Mode', type: 'toggle', default: 'false', description: '极简模式：跳过工具、技能、上下文加载，节省 token。适合简单问答。' },
+      { key: 'max_turns', label: 'Max Turns', type: 'number', default: '10', min: 1, max: 50, description: '最大 agentic 轮数。1=纯对话无工具，5-10=允许读文件/搜索等，50=复杂任务。' },
     ],
   },
   {

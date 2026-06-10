@@ -3,7 +3,7 @@
 > Native desktop shell for **Nexus Agent**, built on Electron + Vite + React.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
-![Node](https://img.shields.io/badge/node-%5E20.19.0%20%7C%7C%20%3E%3D22.12.0-339933?logo=nodedotjs)
+![Node](https://img.shields.io/badge/node-%3E%3D24-339933?logo=nodedotjs)
 ![License](https://img.shields.io/badge/license-See%20upstream-blue)
 
 ## About
@@ -66,7 +66,7 @@ hermes-desktop/         # this repo (working directory)
 
 ## Requirements
 
-- **Node.js** `^20.19.0` or `>=22.12.0`
+- **Node.js** `>= 24` (required by `@icons-pack/react-simple-icons@13.x`)
 - A working Nexus Agent backend installation (resolved via `NEXUS_AGENT_HOME`, default `~/.nexus-agent`; the legacy `HERMES_HOME` / `~/.hermes` path is still detected for migration)
 - On Windows: **Git for Windows** (provides Git Bash, required by the terminal tool)
 

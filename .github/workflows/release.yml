@@ -54,7 +54,7 @@ permissions:
   attestations: read
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '24'
   PYTHON_VERSION: '3.11'
   # Electron + Chromium download mirror (opt-in, speeds up the first build in
   # some regions). Remove if the default CDN works for your runners.

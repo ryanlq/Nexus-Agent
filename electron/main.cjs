@@ -2351,27 +2351,31 @@ function createPythonBackend(root, label, dashboardArgs, options = {}) {
 // shipped with this build (dev runs, or a package built without the gateway
 // checkout available). The spawn site re-chmods POSIX binaries on launch
 // because some installers / archive extractors strip the executable bit.
+function _sidecarFilename() {
+  const arch = process.arch === "arm64" ? "arm64" : "amd64";
+  if (process.platform === "win32") return `agent-gateway-windows-${arch}.exe`;
+  if (process.platform === "darwin") return `agent-gateway-macos-${arch}`;
+  return `agent-gateway-linux-${arch}`;
+}
+
 function resolveSidecarBinary() {
+  const filename = _sidecarFilename();
+
+  // 1. Packaged app: resources/gateway/<binary>
   const resourcesRoot =
     (process.resourcesPath && path.resolve(process.resourcesPath)) ||
     path.join(__dirname, "..");
-  const gatewayDir = path.join(resourcesRoot, "gateway");
+  const packaged = path.join(resourcesRoot, "gateway", filename);
+  if (fileExists(packaged)) return packaged;
 
-  if (!directoryExists(gatewayDir)) return null;
+  // 2. Dev mode: build/sidecar/<binary> (staged by scripts/before-pack.cjs
+  //    or manually placed). This lets developers run against the exact same
+  //    prebuilt binary that ships in the packaged app, catching issues like
+  //    stale builds before they reach CI.
+  const devSidecar = path.join(__dirname, "..", "build", "sidecar", filename);
+  if (fileExists(devSidecar)) return devSidecar;
 
-  const arch = process.arch === "arm64" ? "arm64" : "amd64";
-  let filename;
-
-  if (process.platform === "win32") {
-    filename = `agent-gateway-windows-${arch}.exe`;
-  } else if (process.platform === "darwin") {
-    filename = `agent-gateway-macos-${arch}`;
-  } else {
-    filename = `agent-gateway-linux-${arch}`;
-  }
-
-  const candidate = path.join(gatewayDir, filename);
-  return fileExists(candidate) ? candidate : null;
+  return null;
 }
 
 // createActiveBackend — build a backend pointing at ACTIVE_NEXUS_ROOT, the

@@ -1,141 +1,121 @@
-# Hermes Desktop ☤
+# Nexus Agent Desktop
 
-<p align="center">
-  <a href="https://github.com/NousResearch/hermes-agent/releases"><img src="https://img.shields.io/badge/Download-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-FFD700?style=for-the-badge" alt="Download"></a>
-  <a href="https://hermes-agent.nousresearch.com/docs/"><img src="https://img.shields.io/badge/Docs-hermes--agent.nousresearch.com-FFD700?style=for-the-badge" alt="Documentation"></a>
-  <a href="https://discord.gg/NousResearch"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://github.com/NousResearch/hermes-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
-</p>
+> Native desktop shell for **Nexus Agent**, built on Electron + Vite + React.
 
-**The native desktop app for [Hermes Agent](../../README.md) — the self-improving AI agent from [Nous Research](https://nousresearch.com).** Same agent, same skills, same memory as the CLI and gateway, in a polished native window — chat with streaming tool output, side-by-side previews, a file browser, voice, and settings, no terminal required. Available for **macOS, Windows, and Linux**.
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
+![Node](https://img.shields.io/badge/node-%5E20.19.0%20%7C%7C%20%3E%3D22.12.0-339933?logo=nodedotjs)
+![License](https://img.shields.io/badge/license-See%20upstream-blue)
 
-<table>
-<tr><td><b>Chat with the full agent</b></td><td>Streaming responses, live tool activity, structured tool summaries, and the same conversation history as every other Hermes surface.</td></tr>
-<tr><td><b>Side-by-side previews</b></td><td>Render web pages, files, and tool outputs in a right-hand pane while you keep chatting.</td></tr>
-<tr><td><b>File browser</b></td><td>Explore and preview the working directory without leaving the app.</td></tr>
-<tr><td><b>Voice</b></td><td>Talk to Hermes and hear it back.</td></tr>
-<tr><td><b>Settings & onboarding</b></td><td>Manage providers, models, tools, and credentials from a real UI. First-run setup gets you to your first message in seconds.</td></tr>
-<tr><td><b>Stays current</b></td><td>Built-in updates pull the latest agent and rebuild the app in place.</td></tr>
-</table>
+## About
 
----
+**Nexus Agent Desktop** is the desktop client module of the [Nexus Agent / Agent Gateway](https://github.com/ryanlq/agent-gateway) project. It provides a cross-platform native window, IPC bridge, local/remote gateway bootstrap, profile management, installer, updater, and a rich chat UI on top of the Nexus Agent backend (an agent-gateway server wrapping installed CLI agents such as Claude Code, Pi, Codex, etc.).
 
-## Install
+## Lineage
 
-### Install with Hermes (recommended)
+> This project is **derived from [Hermes Agent](https://github.com/NousResearch/hermes-agent)** by [Nous Research](https://nousresearch.com).
+>
+> Nexus Agent Desktop was created by **extracting the desktop/client module from the original Hermes Agent repository**, and reworking it as a standalone project under the **Nexus Agent** brand.
+>
+> - Upstream source: [`NousResearch/hermes-agent`](https://github.com/NousResearch/hermes-agent)
+> - Upstream desktop module path (historical): `apps/desktop` inside the Hermes Agent monorepo
+> - Desktop shell author (original): Nous Research
+>
+> We gratefully acknowledge Nous Research and the Hermes Agent contributors for the original work this project is built upon. The backend CLI, Python runtime, gateway protocols, and many of the design decisions still originate from Hermes Agent.
 
-Already have the Hermes CLI? Just run:
+### What was carried over
 
-```bash
-hermes desktop
+- The Electron + Vite + React desktop shell (main process, preload, renderer)
+- Installer / bootstrap / self-update flow for the local backend
+- Local + remote gateway connection model, OAuth sign-in, session tokens
+- Chat UI components (composer, thread, preview pane, tool approval, prompt overlays)
+- Settings panels (model, gateway, MCP, toolsets, messaging, profiles, crons)
+- i18n infrastructure (English + Chinese)
+
+### What changed in the Nexus Agent fork
+
+- Package name: `hermes-desktop` → `nexus-agent`
+- Brand strings: "Hermes" / "Hermes Desktop" → "Nexus Agent"
+- Config directory: `~/.hermes` → `~/.nexus-agent`
+- App ID: `com.nousresearch.hermes` → `com.nousresearch.nexus-agent`
+- Environment variables: `HERMES_DESKTOP_*` → `NEXUS_AGENT_*`
+- Home variable: `HERMES_HOME` → `NEXUS_AGENT_HOME`
+- IPC channel prefix: `hermes:*` → `nexus:*`
+- Window API: `window.hermesDesktop` → `window.nexusAgent`
+- Custom protocol: `hermes-media` → `nexus-media`
+- Shared package: `@hermes/desktop-shared` → `@nexus-agent/desktop-shared`
+
+TypeScript internal type names (e.g. `HermesConnection`, `HermesConfig`), the `hermes_cli` Python module references, and model names such as `hermes-4` are intentionally left untouched — they either belong to the upstream Hermes Agent codebase or are functional identifiers rather than brand strings.
+
+## Project layout
+
 ```
-
-It builds and launches the GUI against your existing install — same config, keys, sessions, and skills. On first launch Hermes walks you through picking a provider and model; nothing else to configure.
-
-### Prebuilt installers
-
-Prebuilt installers are built and distributed via [the Hermes Desktop website.](https://hermes-agent.nousresearch.com/desktop).
-
----
-
-## Updating
-
-The app checks for updates in the background and offers a one-click update when one is ready. You can also update any time from the CLI:
-
-```bash
-hermes update
+hermes-desktop/         # this repo (working directory)
+├── electron/           # Electron main process, bootstrap, hardening, IPC
+├── src/                # React renderer (Vite + TypeScript)
+│   ├── app/            # feature modules (chat, settings, messaging, gateway, …)
+│   ├── components/     # shared UI components (assistant-ui, chat, overlays)
+│   ├── i18n/           # en.ts / zh.ts translation dictionaries
+│   ├── lib/            # utilities
+│   └── store/          # nanostores state (boot, onboarding, updates, …)
+├── shared/             # @nexus-agent/desktop-shared (renderer ↔ main types)
+├── scripts/            # build, install helpers, profiling, test harness
+├── assets/             # native app icons (icns / ico / png)
+├── public/             # static web assets bundled into the renderer
+└── package.json        # nexus-agent, main = electron/main.cjs
 ```
-
----
 
 ## Requirements
 
-The installer handles everything for you (Python 3.11+, a portable Git, ripgrep).
+- **Node.js** `^20.19.0` or `>=22.12.0`
+- A working Nexus Agent backend installation (resolved via `NEXUS_AGENT_HOME`, default `~/.nexus-agent`; the legacy `HERMES_HOME` / `~/.hermes` path is still detected for migration)
+- On Windows: **Git for Windows** (provides Git Bash, required by the terminal tool)
 
----
-
-## Development
-
-Want to hack on the app itself? Install workspace deps from the repo root once, then run the dev server from this directory:
+## Getting started
 
 ```bash
-npm install          # from repo root — links apps/desktop, web, apps/shared
-cd apps/desktop
-npm run dev          # Vite renderer + Electron, which boots the Python backend
+# install dependencies
+npm install
+
+# run renderer + electron in dev mode (HMR on :5174)
+npm run dev
+
+# run against the local agent-gateway checkout
+npm run dev:gateway
+
+# production build + packaged electron
+npm run build
+npm run dist           # all platforms detected by electron-builder
+npm run dist:mac       # macOS only (.app / .dmg / .zip)
+npm run dist:win       # Windows only (NSIS / MSI)
+npm run dist:linux     # Linux only (AppImage / deb / rpm)
 ```
 
-Point the app at a specific source checkout, or sandbox it away from your real config:
+### Environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXUS_AGENT_HOME` | Override the per-user install root (default: `~/.nexus-agent` or `%LOCALAPPDATA%\nexus-agent`). |
+| `NEXUS_AGENT_DEV_SERVER` | Point the packaged app at a dev renderer URL (e.g. `http://127.0.0.1:5174`). |
+| `NEXUS_AGENT_BOOT_FAKE` | Drive the boot overlay through a scripted progress sequence for UI work. |
+| `NEXUS_AGENT_BOOT_FAKE_STEP_MS` | Milliseconds per fake boot step. |
+| `NEXUS_AGENT_AGENT_GATEWAY_ROOT` | Path to a local agent-gateway checkout (used by `npm run dev:gateway`). |
+| `NEXUS_AGENT_DESKTOP_REMOTE_URL` / `NEXUS_AGENT_DESKTOP_REMOTE_TOKEN` | Force the desktop to attach to a remote gateway. |
+
+## Testing
 
 ```bash
-HERMES_DESKTOP_HERMES_ROOT=/path/to/clone npm run dev
-HERMES_HOME=/tmp/throwaway npm run dev
-npm run dev:fake-boot   # exercise the startup overlay with deterministic delays
+npm run test:desktop:platforms   # node --test over electron/*.test.cjs
+npm run test:desktop:fresh       # install sandbox + launch packaged app
+npm run test:desktop:existing    # launch packaged app against current PATH
+npm run test:desktop:all         # everything
 ```
 
-### Building installers
+## Acknowledgements
 
-```bash
-npm run dist:mac     # DMG + zip
-npm run dist:win     # NSIS + MSI
-npm run dist:linux   # AppImage + deb + rpm
-npm run pack         # unpacked app under release/ (no installer)
-```
-
-Installers are built and uploaded to GitHub Releases manually. macOS/Windows signing & notarization happen automatically when the relevant credentials are present in the environment (`CSC_LINK` / `CSC_KEY_PASSWORD` / `APPLE_*` for macOS, `WIN_CSC_*` for Windows).
-
-### How it works
-
-The packaged app ships only the Electron shell. On first launch it installs the Hermes Agent runtime into `HERMES_HOME` (`~/.hermes`, or `%LOCALAPPDATA%\hermes` on Windows) — the **same layout a CLI install uses**, so the two are interchangeable. The renderer (React, in `src/`) talks to a `hermes dashboard` backend over the standard gateway APIs and reuses the embedded TUI rather than reimplementing chat. The install, backend-resolution, and self-update logic all live in `electron/main.cjs`.
-
-### Verification
-
-Run before opening a PR (lint may surface pre-existing warnings but must exit cleanly):
-
-```bash
-npm run fix
-npm run type-check
-npm run lint
-npm run test:desktop:all
-```
-
-### Troubleshooting
-
-Boot logs land in `HERMES_HOME/logs/desktop.log` (includes backend output and recent Python tracebacks) — check it first if the app reports a boot failure.
-
-**macOS / Linux:**
-
-```bash
-# Force a clean first-launch setup
-rm "$HOME/.hermes/hermes-agent/.hermes-bootstrap-complete"
-# Rebuild a broken Python venv
-rm -rf "$HOME/.hermes/hermes-agent/venv"
-# Reset a stuck macOS microphone prompt (macOS only)
-tccutil reset Microphone com.nousresearch.hermes
-```
-
-**Windows (PowerShell):**
-
-```powershell
-# Force a clean first-launch setup
-Remove-Item "$env:LOCALAPPDATA\hermes\hermes-agent\.hermes-bootstrap-complete"
-# Rebuild a broken Python venv
-Remove-Item -Recurse -Force "$env:LOCALAPPDATA\hermes\hermes-agent\venv"
-```
-
-> The default Hermes home on Windows is `%LOCALAPPDATA%\hermes`. Set the `HERMES_HOME` env var if you've relocated it.
-
----
-
-## Community
-
-- 💬 [Discord](https://discord.gg/NousResearch)
-- 📖 [Documentation](https://hermes-agent.nousresearch.com/docs/)
-- 🐛 [Issues](https://github.com/NousResearch/hermes-agent/issues)
-
----
+- **[Nous Research](https://nousresearch.com)** — original author of Hermes Agent and its desktop shell.
+- **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** — the upstream project this fork was extracted from.
+- The open-source Electron, Vite, React, nanostores, and assistant-ui ecosystems that power the UI.
 
 ## License
 
-MIT — see [LICENSE](../../LICENSE).
-
-Built by [Nous Research](https://nousresearch.com).
+See the upstream Hermes Agent license for terms that apply to the portions derived from `NousResearch/hermes-agent`. Any additional work in this fork is licensed by its own contributors under the same terms unless otherwise noted.

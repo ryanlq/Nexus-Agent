@@ -85,7 +85,18 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
         current_params?: Record<string, string>
         all_params?: Record<string, Record<string, string>>
       }>({ path: '/api/agents/status', timeoutMs: 5000 })
-      setAgents(result.agents || DEFAULT_AGENTS)
+      // Merge: use backend params as base, but union with DEFAULT_AGENTS so
+      // params added in newer frontend code appear even when the sidecar
+      // binary is stale (e.g. max_turns missing from an older build).
+      const merged = (result.agents || []).map((apiAgent) => {
+        const localDefault = DEFAULT_AGENTS.find(d => d.slug === apiAgent.slug)
+        if (!localDefault?.params) return apiAgent
+        const apiKeys = new Set(apiAgent.params?.map(p => p.key))
+        const extraParams = localDefault.params.filter(p => !apiKeys.has(p.key))
+        if (extraParams.length === 0) return apiAgent
+        return { ...apiAgent, params: [...(apiAgent.params || []), ...extraParams] }
+      })
+      setAgents(merged.length > 0 ? merged : DEFAULT_AGENTS)
       // Sync shared atom with server truth
       if (result.current) {
         setCurrentProvider(result.current)

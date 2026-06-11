@@ -110,13 +110,13 @@ export function BootFailureOverlay() {
 
   const retry = async () => {
     setBusy('retry')
-    await window.nexusAgent?.resetBootstrap().catch(() => undefined)
+    // NOTE: resetBootstrap removed — just reload to retry backend resolution.
     window.location.reload()
   }
 
   const repair = async () => {
     setBusy('repair')
-    await window.nexusAgent?.repairBootstrap().catch(() => undefined)
+    // NOTE: repairBootstrap removed — just reload to retry backend resolution.
     window.location.reload()
   }
 

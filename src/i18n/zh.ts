@@ -72,6 +72,9 @@ export const zh: Translations = {
     updateReadyTitle: '有可用更新',
     updateReadyMessage: count => `有 ${count} 项新更改可用。`,
     seeWhatsNew: '查看更新内容',
+    gatewayUpdateTitle: '网关有可用更新',
+    gatewayUpdateMessage: (version: string) => `网关 ${version} 已发布，更新以获取最新功能和修复。`,
+    updateGateway: '更新网关',
     errors: {
       elevenLabsNeedsKey: 'ElevenLabs STT 需要 ELEVENLABS_API_KEY。',
       elevenLabsRejectedKey: 'ElevenLabs 拒绝了该 API key (401)。',
@@ -664,7 +667,21 @@ export const zh: Translations = {
     optional: '可选',
     promptScheduleRequired: '提示词和排程为必填项。',
     saveChanges: '保存更改',
-    createAction: '创建定时任务'
+    createAction: '创建定时任务',
+    jobTypeLabel: '任务类型',
+    jobTypeAgent: 'Agent 任务',
+    jobTypeScript: '仅脚本',
+    scriptLabel: '脚本',
+    scriptPlaceholder: 'backup-check.sh',
+    scriptHint: '前置脚本,位于 ~/.nexus-agent/scripts/ — 输出将注入为上下文。',
+    scriptOnlyHint: '脚本位于 ~/.nexus-agent/scripts/ — 不使用 AI agent 直接运行。',
+    contextFromLabel: '注入上下文来源',
+    contextFromPlaceholder: '选择任务…',
+    contextFromHint: '所选任务的输出将在本任务运行前注入为上下文。',
+    contextFromEmpty: '没有其他任务可引用。',
+    removeContextItem: (title: string) => `移除 ${title}`,
+    scriptRequired: '仅脚本模式下脚本为必填项。',
+    scriptOrPromptRequired: '请提供提示词、脚本或两者。'
   },
 
   artifacts: {
@@ -752,6 +769,19 @@ export const zh: Translations = {
       ageHour: '时',
       ageMin: '分'
     }
+  },
+
+  gateway: {
+    version: (version: string) => `v${version}`,
+    versionUnknown: '未知',
+    noVersion: '未安装',
+    checkUpdate: '检查更新',
+    checking: '检查中…',
+    upToDate: '已是最新',
+    updateAvailable: (version: string) => `更新到 ${version}`,
+    updating: '更新中…',
+    updateDone: '已更新！重启后生效。',
+    updateFailed: '更新失败'
   },
 
   composer: {

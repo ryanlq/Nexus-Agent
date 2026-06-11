@@ -1,11 +1,21 @@
+import { useStore } from '@nanostores/react'
 import { IconLayoutDashboard } from '@tabler/icons-react'
 
 import { StatusDot, type StatusTone } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
-import { Activity, AlertCircle } from '@/lib/icons'
+import { Activity, AlertCircle, Download, Loader2 } from '@/lib/icons'
 import type { RuntimeReadinessResult } from '@/lib/runtime-readiness'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/i18n'
+import {
+  $sidecarChecking,
+  $sidecarUpdateCheck,
+  $sidecarUpdating,
+  $sidecarVersion,
+  applySidecarUpdate,
+  checkSidecarUpdate
+} from '@/store/sidecar'
 import type { StatusResponse } from '@/types/nexus'
 
 interface GatewayMenuPanelProps {
@@ -40,6 +50,12 @@ export function GatewayMenuPanel({
   onOpenSystem,
   statusSnapshot
 }: GatewayMenuPanelProps) {
+  const sidecarVersion = useStore($sidecarVersion)
+  const sidecarUpdateCheck = useStore($sidecarUpdateCheck)
+  const sidecarUpdating = useStore($sidecarUpdating)
+  const sidecarChecking = useStore($sidecarChecking)
+  const { t } = useI18n()
+
   const gatewayOpen = gatewayState === 'open'
   const gatewayConnecting = gatewayState === 'connecting'
   const inferenceReady = gatewayOpen && inferenceStatus?.ready === true
@@ -60,6 +76,30 @@ export function GatewayMenuPanel({
 
   const platforms = Object.entries(statusSnapshot?.gateway_platforms || {}).sort(([l], [r]) => l.localeCompare(r))
   const recentLogs = logLines.slice(-5)
+
+  // Sidecar version + update state
+  const versionLabel = sidecarVersion
+    ? t.gateway.version(sidecarVersion.version)
+    : t.gateway.versionUnknown
+
+  const updateAvailable = sidecarUpdateCheck?.updateAvailable === true
+  const latestVersion = sidecarUpdateCheck?.latestVersion
+
+  const handleCheckUpdate = () => void checkSidecarUpdate()
+  const handleUpdate = () => void applySidecarUpdate()
+
+  // Pick the right label for the update button
+  let updateLabel: string | null = null
+
+  if (sidecarUpdating) {
+    updateLabel = t.gateway.updating
+  } else if (sidecarChecking) {
+    updateLabel = t.gateway.checking
+  } else if (updateAvailable && latestVersion) {
+    updateLabel = t.gateway.updateAvailable(latestVersion)
+  } else if (sidecarUpdateCheck && !sidecarUpdateCheck.error && !updateAvailable) {
+    updateLabel = t.gateway.upToDate
+  }
 
   return (
     <div className="text-sm">
@@ -96,6 +136,41 @@ export function GatewayMenuPanel({
         {inferenceStatus?.reason && <div className="mt-1 line-clamp-3">{inferenceStatus.reason}</div>}
       </div>
 
+      {/* Sidecar version + update */}
+      <div className="flex items-center justify-between gap-2 border-t border-border/50 px-3 py-2 text-xs">
+        <span className="text-muted-foreground">
+          Gateway {versionLabel}
+        </span>
+        <div className="flex items-center gap-1">
+          {updateAvailable && !sidecarUpdating ? (
+            <Button
+              className="h-6 gap-1 px-2 text-xs"
+              disabled={sidecarUpdating}
+              onClick={handleUpdate}
+              size="sm"
+              variant="secondary"
+            >
+              <Download className="size-3" />
+              {updateLabel}
+            </Button>
+          ) : null}
+          <Button
+            className="h-6 gap-1 px-2 text-xs"
+            disabled={sidecarChecking || sidecarUpdating}
+            onClick={handleCheckUpdate}
+            size="sm"
+            variant="ghost"
+          >
+            {sidecarChecking || sidecarUpdating ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : updateAvailable ? null : (
+              <Download className="size-3" />
+            )}
+            {!updateAvailable && (sidecarChecking ? t.gateway.checking : t.gateway.checkUpdate)}
+          </Button>
+        </div>
+      </div>
+
       {recentLogs.length > 0 && (
         <div className="border-t border-border/50 px-3 py-2">
           <SectionLabel>Recent activity</SectionLabel>
@@ -103,7 +178,7 @@ export function GatewayMenuPanel({
             {recentLogs.map((line, index) => (
               <Tip key={`${index}:${line}`} label={line.trim()}>
                 <li className="truncate font-mono text-[0.68rem] text-muted-foreground/85">
-                  {trimLogLine(line) || '\u00A0'}
+                  {trimLogLine(line) || ' '}
                 </li>
               </Tip>
             ))}

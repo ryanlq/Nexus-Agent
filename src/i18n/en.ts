@@ -77,6 +77,9 @@ export const en: Translations = {
     updateReadyTitle: 'Update ready',
     updateReadyMessage: count => `${count} new change${count === 1 ? '' : 's'} available.`,
     seeWhatsNew: "See what's new",
+    gatewayUpdateTitle: 'Gateway update available',
+    gatewayUpdateMessage: (version: string) => `Gateway ${version} is available. Update for the latest features and fixes.`,
+    updateGateway: 'Update gateway',
     errors: {
       elevenLabsNeedsKey: 'ElevenLabs STT needs ELEVENLABS_API_KEY.',
       elevenLabsRejectedKey: 'ElevenLabs rejected the API key (401).',
@@ -535,7 +538,21 @@ export const en: Translations = {
     optional: 'Optional',
     promptScheduleRequired: 'Prompt and schedule are required.',
     saveChanges: 'Save changes',
-    createAction: 'Create cron'
+    createAction: 'Create cron',
+    jobTypeLabel: 'Job type',
+    jobTypeAgent: 'Agent task',
+    jobTypeScript: 'Script only',
+    scriptLabel: 'Script',
+    scriptPlaceholder: 'backup-check.sh',
+    scriptHint: 'Pre-run script in ~/.nexus-agent/scripts/ — output is injected as context.',
+    scriptOnlyHint: 'Script in ~/.nexus-agent/scripts/ — runs without the AI agent.',
+    contextFromLabel: 'Inject context from',
+    contextFromPlaceholder: 'Select jobs…',
+    contextFromHint: 'Output from selected jobs is injected as context before this job runs.',
+    contextFromEmpty: 'No other jobs to reference.',
+    removeContextItem: (title: string) => `Remove ${title}`,
+    scriptRequired: 'A script is required in script-only mode.',
+    scriptOrPromptRequired: 'Provide a prompt, a script, or both.'
   },
 
   artifacts: {
@@ -623,6 +640,19 @@ export const en: Translations = {
       ageHour: 'h',
       ageMin: 'm'
     }
+  },
+
+  gateway: {
+    version: (version: string) => `v${version}`,
+    versionUnknown: 'Unknown',
+    noVersion: 'Not installed',
+    checkUpdate: 'Check for updates',
+    checking: 'Checking…',
+    upToDate: 'Up to date',
+    updateAvailable: (version: string) => `Update to ${version}`,
+    updating: 'Updating…',
+    updateDone: 'Updated! Restart to apply.',
+    updateFailed: 'Update failed'
   },
 
   composer: {

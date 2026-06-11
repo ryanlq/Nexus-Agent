@@ -30,8 +30,7 @@ const {
   isWindowsBinaryPathInWsl,
   isWslEnvironment,
 } = require("./bootstrap-platform.cjs");
-const { runBootstrap } = require("./bootstrap-runner.cjs");
-const { canImportHermesCli, verifyHermesCli } = require("./backend-probes.cjs");
+// NOTE: bootstrap-runner.cjs and backend-probes.cjs removed — legacy hermes_cli paths retired.
 const { probeGatewayWebSocket } = require("./gateway-ws-probe.cjs");
 const {
   serializeJsonBody,
@@ -120,75 +119,7 @@ if (REMOTE_DISPLAY_REASON) {
 }
 const SOURCE_REPO_ROOT = path.resolve(APP_ROOT, "../..");
 
-// Build-time install stamp -- the git ref this .exe was built against.
-//
-// Written by apps/desktop/scripts/write-build-stamp.cjs during `npm run build`
-// and bundled into packaged apps via electron-builder's extraResources entry,
-// so the runtime stamp ends up at process.resourcesPath/install-stamp.json
-// after install. The bootstrap runner (Phase 1D) reads it to know which
-// commit to clone when running install.ps1 stages at first launch.
-//
-// Returns null when the file is missing (dev runs from a checkout where
-// build hasn't been invoked, or schema mismatch). Callers must handle null.
-//
-// Schema:
-//   { schemaVersion: 1, commit, branch, builtAt, dirty, source }
-const INSTALL_STAMP_SCHEMA_VERSION = 1;
-function loadInstallStamp() {
-  // Try packaged location first (resources/install-stamp.json), then the
-  // dev/local build output (apps/desktop/build/install-stamp.json) so
-  // someone running `npm run start` after a local `npm run build` also
-  // sees a stamp without needing a packaged build.
-  const candidates = [
-    process.resourcesPath
-      ? path.join(process.resourcesPath, "install-stamp.json")
-      : null,
-    path.join(APP_ROOT, "build", "install-stamp.json"),
-  ].filter(Boolean);
-  for (const p of candidates) {
-    try {
-      const raw = fs.readFileSync(p, "utf8");
-      const parsed = JSON.parse(raw);
-      if (
-        parsed &&
-        typeof parsed === "object" &&
-        typeof parsed.commit === "string" &&
-        parsed.commit.length >= 7
-      ) {
-        if (parsed.schemaVersion !== INSTALL_STAMP_SCHEMA_VERSION) {
-          console.warn(
-            `[nexus] install-stamp.json schemaVersion ${parsed.schemaVersion} != expected ${INSTALL_STAMP_SCHEMA_VERSION}; ignoring`,
-          );
-          continue;
-        }
-        return Object.freeze({
-          schemaVersion: parsed.schemaVersion,
-          commit: parsed.commit,
-          branch: parsed.branch || null,
-          builtAt: parsed.builtAt || null,
-          dirty: Boolean(parsed.dirty),
-          source: parsed.source || null,
-          path: p,
-        });
-      }
-    } catch {
-      // Either ENOENT or malformed JSON; try the next candidate
-    }
-  }
-  return null;
-}
-const INSTALL_STAMP = loadInstallStamp();
-if (INSTALL_STAMP) {
-  console.log(
-    `[nexus] install stamp: ${INSTALL_STAMP.commit.slice(0, 12)}${INSTALL_STAMP.branch ? ` (${INSTALL_STAMP.branch})` : ""}${INSTALL_STAMP.dirty ? " [DIRTY]" : ""} from ${INSTALL_STAMP.source || "unknown"}`,
-  );
-} else if (IS_PACKAGED) {
-  // Dev builds without a stamp are normal; packaged builds without one
-  // mean the bootstrap won't know what to clone. Surface clearly.
-  console.error(
-    "[nexus] WARNING: no install-stamp.json found in packaged build. First-launch bootstrap will not have a pinned ref to install.",
-  );
-}
+// NOTE: install-stamp / loadInstallStamp / INSTALL_STAMP removed — legacy bootstrap path retired.
 
 // NEXUS_AGENT_HOME — the user-facing root for everything Hermes-related. Mirrors
 // scripts/install.ps1's $HermesHome and scripts/install.sh's $NEXUS_AGENT_HOME.
@@ -223,28 +154,7 @@ function resolveNexusHome() {
 }
 
 const NEXUS_AGENT_HOME = resolveNexusHome();
-// ACTIVE_NEXUS_ROOT — the canonical mutable Hermes install. Same path
-// install.ps1 / install.sh use, so a desktop-only user and a CLI-only user end
-// up with identical layouts and can share one install.
-const ACTIVE_NEXUS_ROOT = path.join(NEXUS_AGENT_HOME, "nexus-agent");
-// NEXUS_VENV_ROOT — venv lives inside the repo, exactly like install.ps1 does it.
-const NEXUS_VENV_ROOT = path.join(ACTIVE_NEXUS_ROOT, "venv");
-// BOOTSTRAP_COMPLETE_MARKER — written by the first-launch bootstrap runner
-// (Phase 1D) after install.ps1 has completed all stages and the user has
-// finished initial configuration. Presence of this marker means the install
-// is in a known-good state and we can skip the bootstrap flow on subsequent
-// boots, going straight to `resolveHermesBackend()`. Missing or stale marker
-// means we re-run the bootstrap; install.ps1's stages are idempotent so a
-// re-run on an already-good install just discovers everything in place.
-//
-// We deliberately put the marker INSIDE ACTIVE_NEXUS_ROOT (not alongside)
-// so that deleting the checkout to start fresh also deletes the marker --
-// avoids the confusing "marker exists but checkout is gone" state.
-const BOOTSTRAP_COMPLETE_MARKER = path.join(
-  ACTIVE_NEXUS_ROOT,
-  ".nexus-bootstrap-complete",
-);
-const BOOTSTRAP_MARKER_SCHEMA_VERSION = 1;
+// NOTE: ACTIVE_NEXUS_ROOT, NEXUS_VENV_ROOT, BOOTSTRAP_COMPLETE_MARKER removed — legacy hermes_cli paths retired.
 
 const DESKTOP_CONNECTION_CONFIG_PATH = path.join(
   app.getPath("userData"),
@@ -563,15 +473,7 @@ let poolIdleReaper = null;
 const RENDERER_RELOAD_WINDOW_MS = 60_000;
 const RENDERER_RELOAD_MAX = 3;
 let rendererReloadTimes = [];
-// Latched bootstrap failure: when the first-launch install fails, we hold
-// onto the error so subsequent startHermes() calls (e.g. the renderer's
-// ensureGatewayOpen retrying after the WS won't open) return the same error
-// instead of re-running install.ps1 in a hot loop. Cleared explicitly by
-// the renderer's "Reload and retry" path or by quitting the app.
-let bootstrapFailure = null;
-// Active first-launch install, so the renderer's Cancel button (and app quit)
-// can abort the in-flight install.sh/ps1 instead of leaving it running.
-let bootstrapAbortController = null;
+// NOTE: bootstrapFailure / bootstrapAbortController removed — legacy bootstrap path retired.
 let connectionConfigCache = null;
 let connectionConfigCacheMtime = null;
 const hermesLog = [];
@@ -818,85 +720,7 @@ function broadcastBootProgress() {
 //
 // The snapshot is queryable via the hermes:bootstrap:get IPC handler so a
 // reloaded renderer (e.g. devtools reload during dev) recovers state.
-// Bootstrap log ring: bounded buffer so a long install (npm + playwright
-// downloads can emit thousands of lines) doesn't grow unbounded in memory
-// AND so the renderer's getBootstrapState() reply stays a reasonable size.
-// We keep enough to cover an entire failed stage's transcript so the
-// 'Copy output' button gives the user actually-actionable context, not
-// just the last few lines.
-const BOOTSTRAP_LOG_RING_MAX = 500;
-let bootstrapState = {
-  active: false,
-  manifest: null,
-  stages: {},
-  error: null,
-  log: [],
-  startedAt: null,
-  completedAt: null,
-  unsupportedPlatform: null,
-};
-
-function broadcastBootstrapEvent(ev) {
-  if (ev.type === "manifest") {
-    bootstrapState.manifest = ev;
-    bootstrapState.active = true;
-    bootstrapState.startedAt = bootstrapState.startedAt || Date.now();
-    bootstrapState.stages = {};
-    for (const stage of ev.stages || []) {
-      bootstrapState.stages[stage.name] = {
-        state: "pending",
-        json: null,
-        durationMs: null,
-        error: null,
-      };
-    }
-  } else if (ev.type === "stage") {
-    bootstrapState.stages[ev.name] = {
-      state: ev.state,
-      durationMs: ev.durationMs ?? null,
-      json: ev.json ?? null,
-      error: ev.error ?? null,
-    };
-  } else if (ev.type === "log") {
-    bootstrapState.log.push({
-      ts: Date.now(),
-      stage: ev.stage || null,
-      line: ev.line,
-      stream: ev.stream || "stdout",
-    });
-    if (bootstrapState.log.length > BOOTSTRAP_LOG_RING_MAX) {
-      bootstrapState.log.splice(
-        0,
-        bootstrapState.log.length - BOOTSTRAP_LOG_RING_MAX,
-      );
-    }
-  } else if (ev.type === "complete") {
-    bootstrapState.active = false;
-    bootstrapState.completedAt = Date.now();
-    bootstrapState.error = null;
-    bootstrapState.unsupportedPlatform = null;
-  } else if (ev.type === "failed") {
-    bootstrapState.active = false;
-    bootstrapState.error = ev.error || "unknown error";
-  } else if (ev.type === "unsupported-platform") {
-    bootstrapState.active = false;
-    bootstrapState.unsupportedPlatform = {
-      platform: ev.platform,
-      activeRoot: ev.activeRoot,
-      installCommand: ev.installCommand,
-      docsUrl: ev.docsUrl,
-    };
-  }
-
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  const { webContents } = mainWindow;
-  if (!webContents || webContents.isDestroyed()) return;
-  webContents.send("nexus:bootstrap:event", ev);
-}
-
-function getBootstrapState() {
-  return bootstrapState;
-}
+// NOTE: bootstrapState, broadcastBootstrapEvent, getBootstrapState removed — legacy bootstrap retired.
 
 function updateBootProgress(update, options = {}) {
   const nextProgressRaw =
@@ -1082,62 +906,8 @@ async function expandProcessPath() {
   );
 }
 
-function isCommandScript(command) {
-  return IS_WINDOWS && /\.(cmd|bat)$/i.test(command || "");
-}
-
-function normalizeExecutablePathForCompare(commandPath) {
-  if (!commandPath) return null;
-
-  let resolved = path.resolve(String(commandPath));
-  try {
-    resolved = fs.realpathSync.native
-      ? fs.realpathSync.native(resolved)
-      : fs.realpathSync(resolved);
-  } catch {
-    // Fallback to path.resolve() above.
-  }
-
-  return IS_WINDOWS ? resolved.toLowerCase() : resolved;
-}
-
-function looksLikeDesktopAppBinary(commandPath) {
-  if (!IS_WINDOWS || !commandPath) return false;
-
-  const normalizedCandidate = normalizeExecutablePathForCompare(commandPath);
-  const normalizedCurrentExec = normalizeExecutablePathForCompare(
-    process.execPath,
-  );
-  if (
-    normalizedCandidate &&
-    normalizedCurrentExec &&
-    normalizedCandidate === normalizedCurrentExec
-  ) {
-    return true;
-  }
-
-  let resolved = path.resolve(String(commandPath));
-  try {
-    resolved = fs.realpathSync.native
-      ? fs.realpathSync.native(resolved)
-      : fs.realpathSync(resolved);
-  } catch {
-    // Keep resolved path fallback.
-  }
-
-  const resourcesDir = path.join(path.dirname(resolved), "resources");
-  return (
-    fileExists(path.join(resourcesDir, "app.asar")) ||
-    directoryExists(path.join(resourcesDir, "app.asar.unpacked"))
-  );
-}
-
-function isHermesSourceRoot(root) {
-  return (
-    directoryExists(root) &&
-    fileExists(path.join(root, "hermes_cli", "main.py"))
-  );
-}
+// NOTE: isCommandScript, normalizeExecutablePathForCompare, looksLikeDesktopAppBinary,
+// isHermesSourceRoot removed — legacy hermes_cli path detection retired.
 
 function findPythonForRoot(root) {
   const override = process.env.NEXUS_AGENT_PYTHON;
@@ -1354,14 +1124,7 @@ function findGitBash() {
   return findOnPath("bash");
 }
 
-function getVenvPython(venvRoot) {
-  return path.join(
-    venvRoot,
-    IS_WINDOWS
-      ? path.join("Scripts", "python.exe")
-      : path.join("bin", "python"),
-  );
-}
+// NOTE: getVenvPython removed — legacy hermes_cli venv path retired.
 
 // resolveGitBinary — locate git.exe on Windows. A fresh installer-driven
 // install only has PortableGit under %LOCALAPPDATA%\hermes\git (never on
@@ -1444,22 +1207,20 @@ function writeDesktopUpdateConfig(config) {
   writeFileAtomic(DESKTOP_UPDATE_CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
-// Match the backend's source resolution but bias toward a real git checkout.
-// Dev → SOURCE_REPO_ROOT. Packaged/CLI install → ACTIVE_NEXUS_ROOT.
-// NEXUS_AGENT_ROOT always wins so devs can pin a worktree.
+// resolveUpdateRoot — resolves the directory for git-based self-update.
+// Simplified after hermes_cli retirement: the update root is the git checkout
+// if available, otherwise NEXUS_AGENT_HOME.
 function resolveUpdateRoot() {
   const candidates = [
     process.env.NEXUS_AGENT_ROOT && path.resolve(process.env.NEXUS_AGENT_ROOT),
-    !IS_PACKAGED && isHermesSourceRoot(SOURCE_REPO_ROOT)
-      ? SOURCE_REPO_ROOT
-      : null,
-    isHermesSourceRoot(ACTIVE_NEXUS_ROOT) ? ACTIVE_NEXUS_ROOT : null,
+    SOURCE_REPO_ROOT,
+    NEXUS_AGENT_HOME,
   ].filter(Boolean);
 
   return (
     candidates.find((c) => directoryExists(path.join(c, ".git"))) ||
     candidates[0] ||
-    ACTIVE_NEXUS_ROOT
+    NEXUS_AGENT_HOME
   );
 }
 
@@ -2165,13 +1926,7 @@ fi
   return { ok: true, handedOff: true, rebuiltApp, targetApp };
 }
 
-function readJson(filePath) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch {
-    return null;
-  }
-}
+// NOTE: readJson removed — was only used by legacy bootstrap marker logic.
 
 // Bootstrap-complete marker helpers. The marker is written ONCE by the
 // first-launch bootstrap runner (Phase 1D) after install.ps1 stages succeed
@@ -2187,45 +1942,7 @@ function readJson(filePath) {
 //     completedAt:  "<ISO 8601>",
 //     desktopVersion: "<app.getVersion()>"  // for forensics
 //   }
-function readBootstrapMarker() {
-  return readJson(BOOTSTRAP_COMPLETE_MARKER);
-}
-
-function isBootstrapComplete() {
-  const marker = readBootstrapMarker();
-  if (!marker || typeof marker !== "object") return false;
-  if (marker.schemaVersion !== BOOTSTRAP_MARKER_SCHEMA_VERSION) return false;
-  if (typeof marker.pinnedCommit !== "string" || marker.pinnedCommit.length < 7)
-    return false;
-  // We DELIBERATELY do NOT verify that the checkout is currently at the
-  // pinned commit -- users update via the in-app update path or `hermes
-  // update`, which moves HEAD legitimately. The marker just attests "we
-  // ran the bootstrap successfully at least once." We DO additionally require
-  // a runnable venv: an interrupted or split-home install can leave the marker
-  // + checkout without a venv, and trusting that spawns a dead backend
-  // ("gateway offline") instead of re-running bootstrap to repair it.
-  return (
-    isHermesSourceRoot(ACTIVE_NEXUS_ROOT) &&
-    fileExists(getVenvPython(NEXUS_VENV_ROOT))
-  );
-}
-
-function writeBootstrapMarker(payload) {
-  fs.mkdirSync(path.dirname(BOOTSTRAP_COMPLETE_MARKER), { recursive: true });
-  const merged = {
-    schemaVersion: BOOTSTRAP_MARKER_SCHEMA_VERSION,
-    pinnedCommit: payload.pinnedCommit || null,
-    pinnedBranch: payload.pinnedBranch || null,
-    completedAt: new Date().toISOString(),
-    desktopVersion: app.getVersion(),
-  };
-  writeFileAtomic(
-    BOOTSTRAP_COMPLETE_MARKER,
-    JSON.stringify(merged, null, 2) + "\n",
-    "utf8",
-  );
-  return merged;
-}
+// NOTE: readBootstrapMarker, isBootstrapComplete, writeBootstrapMarker removed — legacy bootstrap retired.
 
 function resolveWebDist() {
   const override = process.env.NEXUS_AGENT_WEB_DIST;
@@ -2321,25 +2038,7 @@ function writeDefaultProjectDir(dir) {
   }
 }
 
-function createPythonBackend(root, label, dashboardArgs, options = {}) {
-  const python = findPythonForRoot(root);
-  if (!python) return null;
-
-  return {
-    kind: "python",
-    label,
-    command: python,
-    args: ["-m", "hermes_cli.main", ...dashboardArgs],
-    env: {
-      PYTHONPATH: [root, process.env.PYTHONPATH]
-        .filter(Boolean)
-        .join(path.delimiter),
-    },
-    root,
-    bootstrap: Boolean(options.bootstrap),
-    shell: false,
-  };
-}
+// NOTE: createPythonBackend, createActiveBackend removed — legacy hermes_cli paths retired.
 
 // Resolve the prebuilt agent-gateway sidecar that electron-builder bundles
 // under resources/gateway/ (the `extraResources` entry in package.json,
@@ -2378,42 +2077,14 @@ function resolveSidecarBinary() {
   return null;
 }
 
-// createActiveBackend — build a backend pointing at ACTIVE_NEXUS_ROOT, the
-// canonical install location shared with the CLI installer. The venv at
-// NEXUS_VENV_ROOT may not exist yet on first run; bootstrap=true tells
-// ensureRuntime() to create / refresh it before launch.
-function createActiveBackend(dashboardArgs) {
-  const venvPython = getVenvPython(NEXUS_VENV_ROOT);
-
-  return {
-    kind: "python",
-    label: `Hermes at ${ACTIVE_NEXUS_ROOT}`,
-    command: fileExists(venvPython) ? venvPython : findSystemPython(),
-    args: ["-m", "hermes_cli.main", ...dashboardArgs],
-    env: {
-      PYTHONPATH: [ACTIVE_NEXUS_ROOT, process.env.PYTHONPATH]
-        .filter(Boolean)
-        .join(path.delimiter),
-    },
-    root: ACTIVE_NEXUS_ROOT,
-    bootstrap: true,
-    shell: false,
-  };
-}
-
-function resolveHermesBackend(dashboardArgs) {
+function resolveHermesBackend(port) {
   // 0. Prebuilt sidecar — the packaged-app one-click install path. The
   //    agent-gateway binary is built by the gateway CI, staged into
   //    build/sidecar/ by scripts/before-pack.cjs, and shipped by
   //    electron-builder under resources/gateway/. No Python, venv, git, or
-  //    network required on the user's machine. Wins over every env-var
-  //    source below so a packaged install is deterministic; env-var
-  //    developer overrides still apply on dev builds where no sidecar is
-  //    bundled.
+  //    network required on the user's machine.
   const sidecar = resolveSidecarBinary();
   if (sidecar) {
-    const portIdx = dashboardArgs.indexOf("--port");
-    const port = portIdx >= 0 ? dashboardArgs[portIdx + 1] : "9119";
     return {
       kind: "sidecar",
       label: `bundled agent-gateway sidecar (${path.basename(sidecar)})`,
@@ -2425,37 +2096,21 @@ function resolveHermesBackend(dashboardArgs) {
     };
   }
 
-  // 1. Explicit override -- NEXUS_AGENT_ROOT points at a developer
-  //    checkout. Honour it as-is (no bootstrap; the user is driving).
-  const overrideRoot =
-    process.env.NEXUS_AGENT_ROOT && path.resolve(process.env.NEXUS_AGENT_ROOT);
-  if (overrideRoot && isHermesSourceRoot(overrideRoot)) {
-    const backend = createPythonBackend(
-      overrideRoot,
-      `Hermes source at ${overrideRoot}`,
-      dashboardArgs,
-    );
-    if (backend) return backend;
-  }
-
-  // 1.5. External agent-gateway server — NEXUS_AGENT_AGENT_GATEWAY_ROOT points
-  //      at the standalone agent-gateway checkout. Spawns `python -m agent_gateway`
-  //      which starts a FastAPI + WebSocket JSON-RPC server compatible with this
-  //      desktop's expected gateway protocol.
+  // 1. External agent-gateway server — NEXUS_AGENT_AGENT_GATEWAY_ROOT points
+  //    at the standalone agent-gateway checkout. Spawns `python -m agent_gateway`
+  //    which starts a FastAPI + WebSocket JSON-RPC server compatible with this
+  //    desktop's expected gateway protocol.
   const agRoot =
     process.env.NEXUS_AGENT_AGENT_GATEWAY_ROOT &&
     path.resolve(process.env.NEXUS_AGENT_AGENT_GATEWAY_ROOT);
   if (agRoot && directoryExists(path.join(agRoot, "src", "agent_gateway"))) {
     const python = findPythonForRoot(agRoot) || findOnPath("python3");
     if (python) {
-      // Extract port from dashboardArgs (set by startHermes/pickPort)
-      const portIdx = dashboardArgs.indexOf("--port");
-      const port = portIdx >= 0 ? dashboardArgs[portIdx + 1] : "9119";
       return {
         kind: "python",
         label: `agent-gateway server at ${agRoot}`,
         command: python,
-        args: ["-m", "agent_gateway", "--host", "127.0.0.1", "--port", port],
+        args: ["-m", "agent_gateway", "--host", "127.0.0.1", "--port", String(port)],
         env: {
           PYTHONPATH: [path.join(agRoot, "src"), process.env.PYTHONPATH]
             .filter(Boolean)
@@ -2467,297 +2122,19 @@ function resolveHermesBackend(dashboardArgs) {
       };
     }
     rememberLog(
-      `Found agent-gateway at ${agRoot} but no Python found; ` +
-        "falling through to other backend sources.",
+      `Found agent-gateway at ${agRoot} but no Python found.`,
     );
   }
 
-  // 2. Development source -- when running `npm run dev` from a checkout, the
-  //    cloned repo at SOURCE_REPO_ROOT takes precedence over ACTIVE and any
-  //    installed `hermes` on PATH so local Python edits are actually exercised.
-  //    (In dev with no checkout, SOURCE_REPO_ROOT won't pass isHermesSourceRoot.)
-  if (!IS_PACKAGED && isHermesSourceRoot(SOURCE_REPO_ROOT)) {
-    const backend = createPythonBackend(
-      SOURCE_REPO_ROOT,
-      `Hermes source at ${SOURCE_REPO_ROOT}`,
-      dashboardArgs,
-    );
-    if (backend) return backend;
-  }
-
-  // 3. Bootstrap-complete ACTIVE_NEXUS_ROOT -- the canonical install at
-  //    %LOCALAPPDATA%\hermes\nexus-agent (Windows) or ~/.hermes/nexus-agent.
-  //    The bootstrap marker means install.ps1 stages finished and the user
-  //    completed initial configuration; we trust the install and go straight
-  //    to spawning hermes. Updates flow through the in-app update path
-  //    (applyUpdates -> git pull) or `hermes update` from the CLI.
-  if (isBootstrapComplete()) {
-    return createActiveBackend(dashboardArgs);
-  }
-
-  // 4. Existing `hermes` on PATH -- installed via install.ps1 / install.sh from
-  //    a previous tool-only setup, or pip-installed system-wide. Use it but
-  //    do NOT write a bootstrap marker; the user did this themselves and we
-  //    don't want to take ownership of an install we didn't perform.
-  //    NEXUS_AGENT_IGNORE_EXISTING=1 forces the bootstrap path for testing.
-  if (process.env.NEXUS_AGENT_IGNORE_EXISTING !== "1") {
-    let hermesCommand = null;
-    const hermesOverride = process.env.NEXUS_AGENT_CLI;
-
-    if (hermesOverride) {
-      const resolvedOverride = findOnPath(hermesOverride);
-      if (resolvedOverride) {
-        hermesCommand = resolvedOverride;
-      } else if (!isWindowsBinaryPathInWsl(hermesOverride, { isWsl: IS_WSL })) {
-        hermesCommand = hermesOverride;
-      } else {
-        rememberLog(
-          `Ignoring Windows Hermes override under WSL: ${hermesOverride}`,
-        );
-      }
-    } else {
-      hermesCommand = findOnPath("hermes");
-    }
-
-    if (hermesCommand) {
-      if (looksLikeDesktopAppBinary(hermesCommand)) {
-        rememberLog(
-          `Ignoring desktop app executable on PATH while resolving Hermes CLI: ${hermesCommand}`,
-        );
-        hermesCommand = null;
-      }
-    }
-
-    if (hermesCommand) {
-      // Smoke-test the candidate before trusting it. A `hermes` shim
-      // left behind by a half-uninstalled pip install (or a venv
-      // entry-point pointing at a deleted interpreter) still resolves
-      // via findOnPath but explodes on spawn -- the user then sees a
-      // dead backend instead of the first-launch installer. The cheap
-      // `--version` probe (see backend-probes.cjs) catches that case
-      // and lets the resolver fall through to step 6 / bootstrap.
-      const shellForProbe = isCommandScript(hermesCommand);
-      if (verifyHermesCli(hermesCommand, { shell: shellForProbe })) {
-        return {
-          label: `existing Hermes CLI at ${hermesCommand}`,
-          command: hermesCommand,
-          args: dashboardArgs,
-          bootstrap: false,
-          env: {},
-          kind: "command",
-          shell: shellForProbe,
-        };
-      }
-      rememberLog(
-        `Ignoring existing Hermes CLI at ${hermesCommand}: --version probe failed; falling through to bootstrap.`,
-      );
-    }
-  }
-
-  // 5. Last-ditch: pip-installed hermes_cli module via system Python.
-  //    Same rationale as #4 -- the user installed this; we use it but don't
-  //    take ownership.
-  const python = findSystemPython();
-  if (python) {
-    // Same smoke-test rationale as step 4: a system Python in the
-    // SUPPORTED_VERSIONS range can be registered (PEP 514) without
-    // having hermes_cli installed -- common on dev boxes that have
-    // a python.org install from prior unrelated work. Returning that
-    // backend hands the spawn step a guaranteed ModuleNotFoundError.
-    // Verify the import works before trusting the candidate; on
-    // failure, fall through to step 6 so the bootstrap runner pulls
-    // a uv-managed 3.11 into %LOCALAPPDATA%\hermes\nexus-agent\venv.
-    if (canImportHermesCli(python)) {
-      return {
-        kind: "python",
-        label: `installed hermes_cli module via ${python}`,
-        command: python,
-        args: ["-m", "hermes_cli.main", ...dashboardArgs],
-        bootstrap: false,
-        env: {},
-        shell: false,
-      };
-    }
-    rememberLog(
-      `Ignoring system Python ${python}: hermes_cli is not importable; falling through to bootstrap.`,
-    );
-  }
-
-  // 6. Nothing usable yet -- signal the bootstrap runner that we need to
-  //    clone+install. Phase 1D's bootstrap-runner consumes this sentinel
-  //    and drives install.ps1 stages with a progress UI. Until 1D lands,
-  //    callers see the sentinel and surface it as a user-facing error
-  //    explaining what's missing.
-  //
-  //    We deliberately do NOT throw here -- throwing inside
-  //    resolveHermesBackend was the old "no payload" path and forced the
-  //    user into a dead end. With the bootstrap protocol, "no install yet"
-  //    is a recoverable state the GUI can drive through.
-  return {
-    kind: "bootstrap-needed",
-    label: "Hermes Agent not installed yet; bootstrap required",
-    command: null,
-    args: dashboardArgs,
-    bootstrap: true,
-    env: {},
-    shell: false,
-    // Hints for the bootstrap runner / UI layer:
-    activeRoot: ACTIVE_NEXUS_ROOT,
-    installStamp: INSTALL_STAMP, // may be null in dev
-    isPackaged: IS_PACKAGED,
-    platform: process.platform,
-  };
+  // No usable backend found.
+  return null;
 }
 
 async function ensureRuntime(backend) {
-  if (!backend.bootstrap) {
-    await advanceBootProgress("runtime.external", `Using ${backend.label}`, 32);
-    return backend;
-  }
-
-  // backend.kind === 'bootstrap-needed' means resolveHermesBackend couldn't
-  // find anything to spawn. Hand off to the bootstrap runner which drives the
-  // platform installer, writes the bootstrap-complete marker on success, then
-  // we re-resolve to get the now-installed backend.
-  //
-  // Phase 1D status: bootstrap runs but events go to desktop.log only
-  // (renderer window isn't created until later in startBackend). Phase 1E
-  // will rewire startup to spawn the window first and route bootstrap events
-  // to a renderer-side install overlay.
-  if (backend.kind === "bootstrap-needed") {
-    rememberLog(
-      "[bootstrap] no Hermes install found; starting first-launch bootstrap",
-    );
-
-    // Eagerly flip the bootstrap UI state to 'active' so the renderer
-    // shows the install overlay BEFORE the runner finishes fetching the
-    // manifest (which on slow networks can take tens of seconds and would
-    // otherwise leave the user staring at the generic 'Preparing' splash).
-    // We emit a synthetic manifest with an empty stages list -- the real
-    // manifest event will overwrite it once install.ps1 -Manifest returns.
-    try {
-      broadcastBootstrapEvent({
-        type: "manifest",
-        stages: [],
-        protocolVersion: null,
-      });
-    } catch {
-      void 0;
-    }
-
-    bootstrapAbortController = new AbortController();
-
-    const bootstrapResult = await runBootstrap({
-      installStamp: backend.installStamp,
-      activeRoot: backend.activeRoot,
-      sourceRepoRoot: SOURCE_REPO_ROOT,
-      nexusHome: NEXUS_AGENT_HOME,
-      logRoot: path.join(NEXUS_AGENT_HOME, "logs"),
-      abortSignal: bootstrapAbortController.signal,
-      onEvent: (ev) => {
-        // Tee every bootstrap event to (a) the desktop log for forensics
-        // and (b) the renderer for live progress UI. Either may be absent;
-        // tolerate both gracefully so a renderer crash doesn't stall the
-        // bootstrap and a log-write failure doesn't suppress the UI signal.
-        try {
-          rememberLog(`[bootstrap] ${JSON.stringify(ev)}`);
-        } catch {
-          void 0;
-        }
-        try {
-          broadcastBootstrapEvent(ev);
-        } catch {
-          void 0;
-        }
-      },
-      writeMarker: writeBootstrapMarker,
-    });
-
-    bootstrapAbortController = null;
-
-    if (bootstrapResult.cancelled) {
-      const cancelledError = new Error("Nexus Agent install was cancelled.");
-      cancelledError.isBootstrapFailure = true;
-      cancelledError.bootstrapCancelled = true;
-      bootstrapFailure = cancelledError;
-      throw cancelledError;
-    }
-
-    if (!bootstrapResult.ok) {
-      const bootstrapError = new Error(
-        `Nexus Agent bootstrap failed${bootstrapResult.failedStage ? ` at stage '${bootstrapResult.failedStage}'` : ""}: ` +
-          `${bootstrapResult.error || "unknown error"}. ` +
-          `Check ${path.join(NEXUS_AGENT_HOME, "logs", "desktop.log")} for the full transcript.`,
-      );
-      bootstrapError.isBootstrapFailure = true;
-      bootstrapError.failedStage = bootstrapResult.failedStage || null;
-      // Latch the failure so subsequent startHermes() calls return this
-      // same error without re-running install.ps1.  Cleared by the
-      // hermes:bootstrap:reset IPC (renderer's "Reload and retry").
-      bootstrapFailure = bootstrapError;
-      throw bootstrapError;
-    }
-
-    rememberLog(
-      "[bootstrap] bootstrap complete; marker written. Re-resolving backend.",
-    );
-    // Re-resolve now that the install exists. The new resolution lands in
-    // step 3 (bootstrap-complete marker) and we recurse to wire venvPython.
-    return ensureRuntime(resolveHermesBackend(backend.args));
-  }
-
-  // bootstrap=true with a real backend (createActiveBackend path) means we
-  // have a checkout and need to ensure the venv-derived Python command is
-  // wired into the backend before launch. Same code path the old factory
-  // sync flow exited through, minus all the factory/pip/marker machinery
-  // (install.ps1 owns those concerns now and the bootstrap-complete marker
-  // attests they ran successfully).
-  if (!isHermesSourceRoot(ACTIVE_NEXUS_ROOT)) {
-    throw new Error(
-      `Hermes install at ${ACTIVE_NEXUS_ROOT} is missing or incomplete. ` +
-        "Reinstall via the desktop installer or scripts/install.ps1.",
-    );
-  }
-
-  // On Windows, preflight Git Bash. Hermes' terminal tool calls bash.exe
-  // directly (tools/environments/local.py); without it the agent can't run
-  // terminal commands. install.ps1's Stage-Git puts PortableGit at
-  // %LOCALAPPDATA%\hermes\git\, which findGitBash() picks up, so for any
-  // user who completed the bootstrap this is a no-op. For users who got
-  // here via an external `hermes` on PATH, this check still helps.
-  if (IS_WINDOWS && !findGitBash()) {
-    throw new Error(
-      "Git for Windows is required for Nexus Agent on Windows (provides Git Bash, " +
-        "which the agent's terminal tool uses). Install it from " +
-        "https://git-scm.com/download/win or run `winget install -e --id Git.Git`, " +
-        "then relaunch Nexus Agent.",
-    );
-  }
-
-  const venvPython = getVenvPython(NEXUS_VENV_ROOT);
-  if (!fileExists(venvPython)) {
-    // No venv at the expected location AND no bootstrap-needed sentinel
-    // means we have a half-installed checkout: .git exists, source files
-    // exist, but venv is missing or broken. This shouldn't happen in
-    // normal flow because isBootstrapComplete() requires
-    // isHermesSourceRoot() and the bootstrap writes the marker only after
-    // install.ps1 succeeds. If we hit this, the user (or a deleted venv)
-    // broke the invariant; tell them to re-run the install.
-    throw new Error(
-      `Nexus Agent venv missing at ${NEXUS_VENV_ROOT}. Re-run the desktop installer or ` +
-        "`scripts/install.ps1` to rebuild it.",
-    );
-  }
-
-  backend.command = venvPython;
-  backend.label = `Hermes at ${ACTIVE_NEXUS_ROOT} (venv: ${NEXUS_VENV_ROOT})`;
-  updateBootProgress({
-    phase: "runtime.ready",
-    message: "Nexus Agent runtime is ready",
-    progress: 82,
-    running: true,
-    error: null,
-  });
+  // With legacy hermes_cli paths removed, there's no bootstrap flow.
+  // This is now a simple passthrough — kept as a hook for future runtime setup.
+  if (!backend) return null;
+  await advanceBootProgress("runtime.external", `Using ${backend.label}`, 32);
   return backend;
 }
 
@@ -5138,19 +4515,13 @@ async function spawnPoolBackend(profile, entry) {
 
   const port = await pickPort();
   const token = crypto.randomBytes(32).toString("base64url");
-  // --profile wins over the inherited NEXUS_AGENT_HOME env (see _apply_profile_override
-  // step 3 in hermes_cli/main.py), so the child re-homes to this profile.
-  const dashboardArgs = [
-    "--profile",
-    profile,
-    "dashboard",
-    "--no-open",
-    "--host",
-    "127.0.0.1",
-    "--port",
-    String(port),
-  ];
-  const backend = await ensureRuntime(resolveHermesBackend(dashboardArgs));
+  const backend = await ensureRuntime(resolveHermesBackend(port));
+  if (!backend) {
+    throw new Error(
+      "No agent-gateway backend available for profile '" + profile + "'. " +
+        "Set NEXUS_AGENT_AGENT_GATEWAY_ROOT or ensure a sidecar binary is present."
+    );
+  }
   const hermesCwd = resolveHermesCwd();
   const webDist = resolveWebDist();
 
@@ -5256,13 +4627,7 @@ function stopAllPoolBackends() {
 async function startHermes() {
   // Latched-failure short-circuit: once bootstrap has failed in this
   // process, every subsequent startHermes() call re-throws the same error
-  // without re-running install.ps1. This prevents the renderer's
-  // ensureGatewayOpen retries (and any other getConnection callers) from
-  // restarting a 5-10 minute install loop while the user is still reading
-  // the failure overlay.
-  if (bootstrapFailure) {
-    throw bootstrapFailure;
-  }
+  // Latched-failure short-circuit removed — legacy bootstrap path retired.
   if (connectionPromise) return connectionPromise;
 
   connectionPromise = (async () => {
@@ -5312,29 +4677,32 @@ async function startHermes() {
     await advanceBootProgress("backend.port", "Finding an open local port", 16);
     const port = await pickPort();
     const token = crypto.randomBytes(32).toString("base64url");
-    const dashboardArgs = [
-      "dashboard",
-      "--no-open",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(port),
-    ];
-    // Pin the desktop's chosen profile via the global --profile flag. This is
-    // deterministic (it wins over the sticky ~/.hermes/active_profile file) and
-    // resolves NEXUS_AGENT_HOME the same way `hermes -p <name>` does on the CLI. An
-    // unset preference keeps the legacy launch so existing installs are
-    // unaffected.
-    const activeProfile = readActiveDesktopProfile();
-    if (activeProfile) {
-      dashboardArgs.unshift("--profile", activeProfile);
-    }
     await advanceBootProgress(
       "backend.runtime",
-      "Resolving Hermes runtime",
+      "Resolving gateway runtime",
       28,
     );
-    const backend = await ensureRuntime(resolveHermesBackend(dashboardArgs));
+    let backend = await ensureRuntime(resolveHermesBackend(port));
+    if (!backend) {
+      // No sidecar found locally — attempt to download from GitHub.
+      rememberLog("[sidecar] no local binary found; attempting download from GitHub");
+      try {
+        const { downloadAndUpdate } = require("./sidecar-manager.cjs");
+        const result = await downloadAndUpdate(NEXUS_AGENT_HOME);
+        if (result.ok) {
+          backend = await ensureRuntime(resolveHermesBackend(port));
+        }
+      } catch (dlErr) {
+        rememberLog(`[sidecar] download failed: ${dlErr.message}`);
+      }
+    }
+    if (!backend) {
+      throw new Error(
+        "No agent-gateway backend available. " +
+          "Ensure the sidecar binary is bundled, or set NEXUS_AGENT_AGENT_GATEWAY_ROOT, " +
+          "or check your internet connection for auto-download."
+      );
+    }
     const hermesCwd = resolveHermesCwd();
     const webDist = resolveWebDist();
 
@@ -5443,6 +4811,9 @@ async function startHermes() {
       running: true,
       error: null,
     });
+
+    // Fire-and-forget: check for sidecar updates in the background.
+    checkSidecarUpdateOnStartup();
 
     return {
       baseUrl,
@@ -5651,64 +5022,9 @@ ipcMain.handle("nexus:backend:touch", async (_event, profile) => {
 ipcMain.handle("nexus:gateway:ws-url", async (_event, profile) =>
   freshGatewayWsUrl(profile),
 );
-ipcMain.handle("nexus:bootstrap:reset", async () => {
-  // Renderer's "Reload and retry" path. Clear the latched failure and
-  // reset connection state so the next startHermes() call restarts the
-  // full backend flow (including a fresh runBootstrap pass).
-  rememberLog(
-    "[bootstrap] reset requested by renderer; clearing latched failure",
-  );
-  bootstrapFailure = null;
-  connectionPromise = null;
-  bootstrapState = {
-    active: false,
-    manifest: null,
-    stages: {},
-    error: null,
-    log: [],
-    startedAt: null,
-    completedAt: null,
-    unsupportedPlatform: null,
-  };
-  return { ok: true };
-});
-ipcMain.handle("nexus:bootstrap:repair", async () => {
-  // Forceful repair: drop the bootstrap-complete marker so the next
-  // startHermes() re-runs the full installer (refreshing a broken/partial
-  // venv), and clear any latched failure + live connection. The renderer
-  // reloads afterwards to re-drive the boot flow from scratch.
-  rememberLog(
-    "[bootstrap] repair requested by renderer; clearing marker + latched failure",
-  );
-  try {
-    if (fileExists(BOOTSTRAP_COMPLETE_MARKER)) {
-      fs.rmSync(BOOTSTRAP_COMPLETE_MARKER, { force: true });
-    }
-  } catch (error) {
-    rememberLog(
-      `[bootstrap] failed to remove marker during repair: ${error.message}`,
-    );
-  }
-  bootstrapFailure = null;
-  resetHermesConnection();
-  return { ok: true };
-});
-ipcMain.handle("nexus:bootstrap:cancel", async () => {
-  // Renderer's Cancel button during first-launch install. Abort the running
-  // install script (SIGTERM via the runner's abortSignal). runBootstrap
-  // resolves with { cancelled: true }, which surfaces the recovery overlay.
-  if (bootstrapAbortController) {
-    try {
-      bootstrapAbortController.abort();
-    } catch {
-      void 0;
-    }
-    return { ok: true, cancelled: true };
-  }
-  return { ok: false, cancelled: false };
-});
+// NOTE: nexus:bootstrap:reset, nexus:bootstrap:repair, nexus:bootstrap:cancel,
+// nexus:bootstrap:get handlers removed — legacy bootstrap path retired.
 ipcMain.handle("nexus:boot-progress:get", async () => bootProgressState);
-ipcMain.handle("nexus:bootstrap:get", async () => getBootstrapState());
 ipcMain.handle("nexus:connection-config:get", async (_event, profile) =>
   sanitizeDesktopConnectionConfig(readDesktopConnectionConfig(), profile),
 );
@@ -6484,30 +5800,58 @@ ipcMain.handle("nexus:updates:branch:set", async (_event, name) => {
 // real Hermes version instead of the Electron app's own package.json version,
 // which historically drifted (stuck at 0.0.2). Falls back to app.getVersion()
 // when the source tree can't be read (e.g. a packaged build without the repo).
-function resolveHermesVersion() {
-  try {
-    const root = resolveUpdateRoot();
-    const initPath = path.join(root, "hermes_cli", "__init__.py");
-    if (fileExists(initPath)) {
-      const raw = fs.readFileSync(initPath, "utf8");
-      const match = raw.match(/__version__\s*=\s*["']([^"']+)["']/);
-      if (match) {
-        return match[1];
-      }
-    }
-  } catch {
-    // Fall through to the Electron app version below.
-  }
-  return app.getVersion();
-}
+// NOTE: resolveHermesVersion removed — legacy hermes_cli version detection retired.
 
 ipcMain.handle("nexus:version", async () => ({
-  appVersion: resolveHermesVersion(),
+  appVersion: app.getVersion(),
   electronVersion: process.versions.electron,
   nodeVersion: process.versions.node,
   platform: process.platform,
-  hermesRoot: resolveUpdateRoot(),
 }));
+
+// -- Sidecar update IPC ---------------------------------------------------
+const {
+  checkForUpdate: sidecarCheckForUpdate,
+  downloadAndUpdate: sidecarDownloadAndUpdate,
+  readInstalledVersion: sidecarReadInstalledVersion,
+} = require("./sidecar-manager.cjs");
+
+ipcMain.handle("nexus:sidecar:check-update", async () => {
+  try {
+    return await sidecarCheckForUpdate(NEXUS_AGENT_HOME);
+  } catch (error) {
+    return { updateAvailable: false, error: error?.message || String(error) };
+  }
+});
+
+ipcMain.handle("nexus:sidecar:update", async () => {
+  try {
+    return await sidecarDownloadAndUpdate(NEXUS_AGENT_HOME);
+  } catch (error) {
+    return { ok: false, error: error?.message || String(error) };
+  }
+});
+
+ipcMain.handle("nexus:sidecar:version", async () => {
+  return sidecarReadInstalledVersion(NEXUS_AGENT_HOME);
+});
+
+// Silent startup update check — fire-and-forget after backend is running.
+// If an update is available, push a notification to the renderer.
+function checkSidecarUpdateOnStartup() {
+  sidecarCheckForUpdate(NEXUS_AGENT_HOME).then((result) => {
+    if (result && result.updateAvailable) {
+      rememberLog(
+        `[sidecar] update available: ${result.currentVersion || 'none'} → ${result.latestVersion}`,
+      );
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("nexus:sidecar:update-available", result);
+      }
+    }
+  }).catch(() => {
+    // Silent — don't disturb the user if the check fails.
+  });
+}
 
 app.whenReady().then(() => {
   if (IS_MAC) {
@@ -6571,14 +5915,6 @@ function configureSpellChecker() {
 
 app.on("before-quit", () => {
   quitting = true;
-  // Quitting mid-install should stop the installer, not orphan it.
-  if (bootstrapAbortController) {
-    try {
-      bootstrapAbortController.abort();
-    } catch {
-      void 0;
-    }
-  }
 
   if (desktopLogFlushTimer) {
     clearTimeout(desktopLogFlushTimer);

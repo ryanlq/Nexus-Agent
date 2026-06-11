@@ -84,6 +84,9 @@ export interface Translations {
     updateReadyTitle: string
     updateReadyMessage: (count: number) => string
     seeWhatsNew: string
+    gatewayUpdateTitle: string
+    gatewayUpdateMessage: (version: string) => string
+    updateGateway: string
     errors: {
       elevenLabsNeedsKey: string
       elevenLabsRejectedKey: string
@@ -455,6 +458,20 @@ export interface Translations {
     promptScheduleRequired: string
     saveChanges: string
     createAction: string
+    jobTypeLabel: string
+    jobTypeAgent: string
+    jobTypeScript: string
+    scriptLabel: string
+    scriptPlaceholder: string
+    scriptHint: string
+    scriptOnlyHint: string
+    contextFromLabel: string
+    contextFromPlaceholder: string
+    contextFromHint: string
+    contextFromEmpty: string
+    removeContextItem: (title: string) => string
+    scriptRequired: string
+    scriptOrPromptRequired: string
   }
 
   artifacts: {
@@ -491,6 +508,19 @@ export interface Translations {
     copyUrl: string
     copyPath: string
   }
+
+  gateway: {
+    version: (version: string) => string
+    versionUnknown: string
+    noVersion: string
+    checkUpdate: string
+    checking: string
+    upToDate: string
+    updateAvailable: (version: string) => string
+    updating: string
+    updateDone: string
+    updateFailed: string
+  },
 
   sidebar: {
     nav: Record<string, string>

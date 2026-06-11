@@ -4,7 +4,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { BootFailureOverlay } from '@/components/boot-failure-overlay'
-import { DesktopInstallOverlay } from '@/components/desktop-install-overlay'
+// NOTE: DesktopInstallOverlay removed — legacy bootstrap path retired.
 import { DesktopOnboardingOverlay } from '@/components/desktop-onboarding-overlay'
 import { GatewayConnectingOverlay } from '@/components/gateway-connecting-overlay'
 import { Pane, PaneMain } from '@/components/pane-shell'
@@ -53,6 +53,7 @@ import {
   setSessionsTotal
 } from '../store/session'
 import { openUpdatesWindow, startUpdatePoller, stopUpdatePoller } from '../store/updates'
+import { startSidecarListener } from '../store/sidecar'
 
 import { ChatView } from './chat'
 import { useComposerActions } from './chat/hooks/use-composer-actions'
@@ -194,6 +195,7 @@ export function DesktopController() {
 
   useEffect(() => {
     startUpdatePoller()
+    startSidecarListener()
     const unsubscribe = window.nexusAgent?.onOpenUpdatesRequested?.(() => openUpdatesWindow())
 
     return () => {
@@ -663,7 +665,7 @@ export function DesktopController() {
 
   const overlays = (
     <>
-      <DesktopInstallOverlay />
+      {/* NOTE: DesktopInstallOverlay removed — legacy bootstrap retired. */}
       {/* One PTY-backed terminal mounted forever; <TerminalSlot /> placeholders
           decide where it shows. Toggling fullscreen never rebuilds the shell. */}
       <PersistentTerminal cwd={currentCwd} onAddSelectionToChat={composer.addTerminalSelectionAttachment} />

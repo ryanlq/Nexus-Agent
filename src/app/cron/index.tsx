@@ -2,6 +2,7 @@ import type * as React from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { PageLoader } from '@/components/page-loader'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import {
@@ -14,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Textarea } from '@/components/ui/textarea'
 import {
   createCronJob,
@@ -254,7 +256,7 @@ function matchesQuery(job: CronJob, q: string): boolean {
 
   const needle = q.toLowerCase()
 
-  return [jobTitle(job), jobPrompt(job), jobScheduleDisplay(job), jobScheduleExpr(job), jobDeliver(job)].some(value =>
+  return [jobTitle(job), jobPrompt(job), asText(job.script), jobScheduleDisplay(job), jobScheduleExpr(job), jobDeliver(job)].some(value =>
     value.toLowerCase().includes(needle)
   )
 }
@@ -364,7 +366,10 @@ export function CronView({ onClose, setStatusbarItemGroup: _setStatusbarItemGrou
         prompt: values.prompt,
         schedule: values.schedule,
         name: values.name || undefined,
-        deliver: values.deliver || DEFAULT_DELIVER
+        deliver: values.deliver || DEFAULT_DELIVER,
+        script: values.script || undefined,
+        no_agent: values.no_agent,
+        context_from: values.context_from.length > 0 ? values.context_from : undefined
       })
 
       setJobs(current => (current ? [...current, created] : [created]))
@@ -374,7 +379,10 @@ export function CronView({ onClose, setStatusbarItemGroup: _setStatusbarItemGrou
         prompt: values.prompt,
         schedule: values.schedule,
         name: values.name,
-        deliver: values.deliver
+        deliver: values.deliver,
+        script: values.script || undefined,
+        no_agent: values.no_agent,
+        context_from: values.context_from.length > 0 ? values.context_from : undefined
       })
 
       setJobs(current => (current ? current.map(row => (row.id === updated.id ? updated : row)) : current))
@@ -450,7 +458,7 @@ export function CronView({ onClose, setStatusbarItemGroup: _setStatusbarItemGrou
             </div>
           </div>
         )}
-        <CronEditorDialog editor={editor} onClose={() => setEditor({ mode: 'closed' })} onSave={handleEditorSave} />
+        <CronEditorDialog editor={editor} jobs={jobs ?? []} onClose={() => setEditor({ mode: 'closed' })} onSave={handleEditorSave} />
 
         <Dialog onOpenChange={open => !open && !deleting && setPendingDelete(null)} open={pendingDelete !== null}>
           <DialogContent className="max-w-md">
@@ -514,6 +522,9 @@ function CronJobRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">{jobTitle(job)}</span>
           <StatePill tone={STATE_TONE[state] ?? 'muted'}>{c.states[state] ?? state}</StatePill>
+          {job.no_agent && (
+            <StatePill tone="muted">{c.jobTypeScript}</StatePill>
+          )}
           {deliver && deliver !== DEFAULT_DELIVER && (
             <StatePill tone="muted">{c.deliveryLabels[deliver] ?? deliver}</StatePill>
           )}
@@ -599,10 +610,12 @@ function EmptyState({
 
 function CronEditorDialog({
   editor,
+  jobs,
   onClose,
   onSave
 }: {
   editor: EditorState
+  jobs: CronJob[]
   onClose: () => void
   onSave: (values: EditorValues) => Promise<void>
 }) {
@@ -617,6 +630,9 @@ function CronEditorDialog({
   const [schedule, setSchedule] = useState('')
   const [schedulePreset, setSchedulePreset] = useState('daily')
   const [deliver, setDeliver] = useState(DEFAULT_DELIVER)
+  const [noAgent, setNoAgent] = useState(false)
+  const [script, setScript] = useState('')
+  const [contextFrom, setContextFrom] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<null | string>(null)
 
@@ -630,6 +646,9 @@ function CronEditorDialog({
     setSchedule(initial ? jobScheduleExpr(initial) : (SCHEDULE_OPTIONS[0].expr ?? ''))
     setSchedulePreset(initial ? scheduleOptionForExpr(jobScheduleExpr(initial)).value : 'daily')
     setDeliver(initial ? jobDeliver(initial) : DEFAULT_DELIVER)
+    setNoAgent(initial?.no_agent ?? false)
+    setScript(asText(initial?.script))
+    setContextFrom(initial?.context_from ?? [])
     setError(null)
     setSaving(false)
   }, [initial, open])
@@ -652,13 +671,35 @@ function CronEditorDialog({
 
   const scheduleHint = scheduleSummary(selectedScheduleOption, schedule, c)
 
+  // Other jobs available for context_from (exclude self when editing)
+  const availableContextJobs = jobs.filter(j => {
+    if (isEdit && initial && j.id === initial.id) return false
+    if (contextFrom.includes(j.id)) return false
+    return true
+  })
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     const trimmedPrompt = prompt.trim()
     const trimmedSchedule = schedule.trim()
+    const trimmedScript = script.trim()
 
-    if (!trimmedPrompt || !trimmedSchedule) {
+    if (!trimmedSchedule) {
       setError(c.promptScheduleRequired)
+
+      return
+    }
+
+    // Script-only mode: script is required
+    if (noAgent && !trimmedScript) {
+      setError(c.scriptRequired)
+
+      return
+    }
+
+    // Agent mode: prompt or script must be present
+    if (!noAgent && !trimmedPrompt && !trimmedScript) {
+      setError(c.scriptOrPromptRequired)
 
       return
     }
@@ -668,10 +709,13 @@ function CronEditorDialog({
 
     try {
       await onSave({
+        context_from: contextFrom,
         deliver,
         name: name.trim(),
+        no_agent: noAgent,
         prompt: trimmedPrompt,
-        schedule: trimmedSchedule
+        schedule: trimmedSchedule,
+        script: trimmedScript
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : c.failedSave)
@@ -689,6 +733,20 @@ function CronEditorDialog({
         </DialogHeader>
 
         <form className="grid gap-4" onSubmit={handleSubmit}>
+          <Field htmlFor="cron-job-type" label={c.jobTypeLabel}>
+            <SegmentedControl
+              onChange={id => {
+                setNoAgent(id === 'script')
+                setError(null)
+              }}
+              options={[
+                { id: 'agent' as const, label: c.jobTypeAgent },
+                { id: 'script' as const, label: c.jobTypeScript }
+              ]}
+              value={noAgent ? 'script' : 'agent'}
+            />
+          </Field>
+
           <Field htmlFor="cron-name" label={c.nameLabel} optional optionalLabel={c.optional}>
             <Input
               autoFocus
@@ -699,7 +757,12 @@ function CronEditorDialog({
             />
           </Field>
 
-          <Field htmlFor="cron-prompt" label={c.promptLabel}>
+          <Field
+            htmlFor="cron-prompt"
+            label={c.promptLabel}
+            optional={noAgent}
+            optionalLabel={c.optional}
+          >
             <Textarea
               className="min-h-24 font-mono"
               id="cron-prompt"
@@ -707,6 +770,22 @@ function CronEditorDialog({
               placeholder={c.promptPlaceholder}
               value={prompt}
             />
+          </Field>
+
+          <Field
+            htmlFor="cron-script"
+            label={c.scriptLabel}
+            optional={!noAgent}
+            optionalLabel={c.optional}
+          >
+            <Input
+              className="font-mono"
+              id="cron-script"
+              onChange={event => setScript(event.target.value)}
+              placeholder={c.scriptPlaceholder}
+              value={script}
+            />
+            <FieldHint>{noAgent ? c.scriptOnlyHint : c.scriptHint}</FieldHint>
           </Field>
 
           <div className="grid items-start gap-4 sm:grid-cols-2">
@@ -761,6 +840,63 @@ function CronEditorDialog({
             </div>
           )}
 
+          {jobs.length > 0 && (
+            <Field
+              htmlFor="cron-context-from"
+              label={c.contextFromLabel}
+              optional
+              optionalLabel={c.optional}
+            >
+              <div className="space-y-1.5">
+                {contextFrom.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {contextFrom.map(jobId => {
+                      const refJob = jobs.find(j => j.id === jobId)
+                      const label = refJob ? jobTitle(refJob) : jobId
+
+                      return (
+                        <Badge key={jobId} className="gap-1 pr-0.5" variant="outline">
+                          <span>{truncate(label, 30)}</span>
+                          <button
+                            aria-label={c.removeContextItem(label)}
+                            className="ml-0.5 rounded-sm p-0.5 hover:bg-muted"
+                            onClick={() => setContextFrom(prev => prev.filter(id => id !== jobId))}
+                            type="button"
+                          >
+                            <Codicon name="close" size="0.625rem" />
+                          </button>
+                        </Badge>
+                      )
+                    })}
+                  </div>
+                )}
+                {availableContextJobs.length > 0 ? (
+                  <Select
+                    onValueChange={jobId => {
+                      setContextFrom(prev => [...prev, jobId])
+                      setError(null)
+                    }}
+                    value=""
+                  >
+                    <SelectTrigger className="h-9 rounded-md" id="cron-context-from">
+                      <SelectValue placeholder={c.contextFromPlaceholder} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableContextJobs.map(j => (
+                        <SelectItem key={j.id} value={j.id}>
+                          {truncate(jobTitle(j), 40)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : contextFrom.length > 0 ? null : (
+                  <p className="text-[0.66rem] text-muted-foreground">{c.contextFromEmpty}</p>
+                )}
+                <FieldHint>{c.contextFromHint}</FieldHint>
+              </div>
+            </Field>
+          )}
+
           {error && (
             <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
@@ -813,10 +949,13 @@ function FieldHint({ children }: { children: React.ReactNode }) {
 type EditorState = { mode: 'closed' } | { mode: 'create' } | { job: CronJob; mode: 'edit' }
 
 interface EditorValues {
+  context_from: string[]
   deliver: string
   name: string
+  no_agent: boolean
   prompt: string
   schedule: string
+  script: string
 }
 
 interface ScheduleOption {

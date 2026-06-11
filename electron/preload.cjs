@@ -102,21 +102,18 @@ contextBridge.exposeInMainWorld('nexusAgent', {
     ipcRenderer.on('nexus:boot-progress', listener)
     return () => ipcRenderer.removeListener('nexus:boot-progress', listener)
   },
-  // First-launch bootstrap progress -- emitted by the install.ps1 stage
-  // runner in main.cjs (apps/desktop/electron/bootstrap-runner.cjs).
-  // Renderer's install overlay subscribes to live events and queries the
-  // current snapshot via getBootstrapState() to recover after a devtools
-  // reload mid-bootstrap.
-  getBootstrapState: () => ipcRenderer.invoke('nexus:bootstrap:get'),
-  resetBootstrap: () => ipcRenderer.invoke('nexus:bootstrap:reset'),
-  repairBootstrap: () => ipcRenderer.invoke('nexus:bootstrap:repair'),
-  cancelBootstrap: () => ipcRenderer.invoke('nexus:bootstrap:cancel'),
-  onBootstrapEvent: callback => {
-    const listener = (_event, payload) => callback(payload)
-    ipcRenderer.on('nexus:bootstrap:event', listener)
-    return () => ipcRenderer.removeListener('nexus:bootstrap:event', listener)
-  },
+  // NOTE: bootstrap IPC methods removed — legacy bootstrap path retired.
   getVersion: () => ipcRenderer.invoke('nexus:version'),
+  sidecar: {
+    checkUpdate: () => ipcRenderer.invoke('nexus:sidecar:check-update'),
+    update: () => ipcRenderer.invoke('nexus:sidecar:update'),
+    getVersion: () => ipcRenderer.invoke('nexus:sidecar:version'),
+    onUpdateAvailable: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('nexus:sidecar:update-available', listener)
+      return () => ipcRenderer.removeListener('nexus:sidecar:update-available', listener)
+    },
+  },
   updates: {
     check: () => ipcRenderer.invoke('nexus:updates:check'),
     apply: opts => ipcRenderer.invoke('nexus:updates:apply', opts),

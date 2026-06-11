@@ -68,12 +68,14 @@ declare global {
       onBackendExit: (callback: (payload: BackendExit) => void) => () => void
       onPowerResume?: (callback: () => void) => () => void
       onBootProgress: (callback: (payload: DesktopBootProgress) => void) => () => void
-      getBootstrapState: () => Promise<DesktopBootstrapState>
-      resetBootstrap: () => Promise<{ ok: boolean }>
-      repairBootstrap: () => Promise<{ ok: boolean }>
-      cancelBootstrap: () => Promise<{ ok: boolean; cancelled: boolean }>
-      onBootstrapEvent: (callback: (payload: DesktopBootstrapEvent) => void) => () => void
+      // NOTE: bootstrap methods removed — legacy bootstrap path retired.
       getVersion: () => Promise<DesktopVersionInfo>
+      sidecar: {
+        checkUpdate: () => Promise<SidecarUpdateCheck>
+        update: () => Promise<SidecarUpdateResult>
+        getVersion: () => Promise<SidecarVersion | null>
+        onUpdateAvailable: (callback: (info: SidecarUpdateCheck) => void) => () => void
+      }
       updates: {
         check: () => Promise<DesktopUpdateStatus>
         apply: (opts?: DesktopUpdateApplyOptions) => Promise<DesktopUpdateApplyResult>
@@ -256,65 +258,7 @@ export interface DesktopBootProgress {
   timestamp: number
 }
 
-// First-launch install ("bootstrap") event types -- emitted by
-// electron/bootstrap-runner.cjs and observed by the renderer install overlay.
-// Mirrors the event shapes emitted by runBootstrap()'s onEvent callback.
-
-export interface DesktopBootstrapStageDescriptor {
-  name: string
-  title?: string
-  category?: string
-  needs_user_input?: boolean
-}
-
-export type DesktopBootstrapStageState = 'pending' | 'running' | 'succeeded' | 'skipped' | 'failed'
-
-export interface DesktopBootstrapStageResult {
-  state: DesktopBootstrapStageState
-  durationMs: number | null
-  startedAt: number | null
-  json: { ok: boolean; skipped?: boolean; reason?: string | null; stage: string } | null
-  error: string | null
-}
-
-export interface DesktopBootstrapUnsupportedPlatform {
-  platform: string
-  activeRoot: string
-  installCommand: string
-  docsUrl: string
-}
-
-export interface DesktopBootstrapState {
-  active: boolean
-  manifest: { type: 'manifest'; stages: DesktopBootstrapStageDescriptor[]; protocolVersion: number | null } | null
-  stages: Record<string, DesktopBootstrapStageResult>
-  error: string | null
-  log: Array<{ ts: number; stage: string | null; line: string; stream?: 'stdout' | 'stderr' }>
-  startedAt: number | null
-  completedAt: number | null
-  unsupportedPlatform: DesktopBootstrapUnsupportedPlatform | null
-}
-
-export type DesktopBootstrapEvent =
-  | { type: 'manifest'; stages: DesktopBootstrapStageDescriptor[]; protocolVersion: number | null }
-  | {
-      type: 'stage'
-      name: string
-      state: DesktopBootstrapStageState
-      durationMs?: number
-      json?: DesktopBootstrapStageResult['json']
-      error?: string | null
-    }
-  | { type: 'log'; stage?: string | null; line: string; stream?: 'stdout' | 'stderr' }
-  | { type: 'complete'; marker: Record<string, unknown> }
-  | { type: 'failed'; stage?: string | null; error: string }
-  | {
-      type: 'unsupported-platform'
-      platform: string
-      activeRoot: string
-      installCommand: string
-      docsUrl: string
-    }
+// NOTE: DesktopBootstrap* types removed — legacy bootstrap path retired.
 
 export interface HermesApiRequest {
   path: string
@@ -391,4 +335,29 @@ export interface HermesSelectPathsOptions {
 export interface BackendExit {
   code: number | null
   signal: string | null
+}
+
+// Sidecar update types
+export interface SidecarVersion {
+  schemaVersion: number
+  version: string
+  platform: string
+  arch: string
+  downloadedAt: string
+  source: string
+}
+
+export interface SidecarUpdateCheck {
+  updateAvailable: boolean
+  currentVersion: string | null
+  latestVersion: string | null
+  asset?: { name: string; url: string; size: number }
+  error?: string
+}
+
+export interface SidecarUpdateResult {
+  ok: boolean
+  version?: string
+  error?: string
+  message?: string
 }

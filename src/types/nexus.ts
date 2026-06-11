@@ -415,6 +415,7 @@ export interface AnalyticsTotals {
 }
 
 export interface CronJob {
+  context_from?: string[]
   deliver?: null | string
   enabled: boolean
   id: string
@@ -422,6 +423,7 @@ export interface CronJob {
   last_run_at?: null | string
   name?: null | string
   next_run_at?: null | string
+  no_agent?: boolean
   prompt?: null | string
   schedule?: CronJobSchedule
   schedule_display?: null | string
@@ -430,10 +432,13 @@ export interface CronJob {
 }
 
 export interface CronJobCreatePayload {
+  context_from?: string[]
   deliver?: string
   name?: string
-  prompt: string
+  no_agent?: boolean
+  prompt?: string
   schedule: string
+  script?: string
 }
 
 export interface CronJobSchedule {
@@ -443,11 +448,14 @@ export interface CronJobSchedule {
 }
 
 export interface CronJobUpdates {
+  context_from?: string[]
   deliver?: string
   enabled?: boolean
   name?: string
+  no_agent?: boolean
   prompt?: string
   schedule?: string
+  script?: string
 }
 
 export interface ProfileCreatePayload {

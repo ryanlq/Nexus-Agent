@@ -2067,7 +2067,12 @@ function resolveSidecarBinary() {
   const packaged = path.join(resourcesRoot, "gateway", filename);
   if (fileExists(packaged)) return packaged;
 
-  // 2. Dev mode: build/sidecar/<binary> (staged by scripts/before-pack.cjs
+  // 2. User-downloaded binary: NEXUS_AGENT_HOME/gateway/<binary>
+  //    Saved there by sidecar-manager.cjs downloadAndUpdate().
+  const downloaded = path.join(NEXUS_AGENT_HOME, "gateway", filename);
+  if (fileExists(downloaded)) return downloaded;
+
+  // 3. Dev mode: build/sidecar/<binary> (staged by scripts/before-pack.cjs
   //    or manually placed). This lets developers run against the exact same
   //    prebuilt binary that ships in the packaged app, catching issues like
   //    stale builds before they reach CI.

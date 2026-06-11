@@ -174,22 +174,41 @@ function findAssetForPlatform(release) {
 // ---------------------------------------------------------------------------
 
 function downloadBinary(url, destPath, options = {}) {
+  const DOWNLOAD_TIMEOUT_MS = options.timeoutMs || 60_000
+
   return new Promise((resolve, reject) => {
     const tmpPath = destPath + `.tmp-${crypto.randomBytes(6).toString('hex')}`
     const out = fs.createWriteStream(tmpPath)
     let downloaded = 0
     let redirectCount = 0
     const maxRedirects = 5
+    let req = null
+    let timer = null
+
+    function cleanup() {
+      if (timer) { clearTimeout(timer); timer = null }
+      if (req) { req.removeAllListeners(); req = null }
+    }
+
+    function fail(err) {
+      cleanup()
+      out.close()
+      try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
+      reject(err)
+    }
 
     function doRequest(requestUrl) {
       if (redirectCount >= maxRedirects) {
-        out.close()
-        try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
-        reject(new Error(`Too many redirects (${maxRedirects})`))
+        fail(new Error(`Too many redirects (${maxRedirects})`))
         return
       }
 
-      const req = https.get(requestUrl, {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        fail(new Error(`Download timed out after ${DOWNLOAD_TIMEOUT_MS}ms`))
+      }, DOWNLOAD_TIMEOUT_MS)
+
+      req = https.get(requestUrl, {
         headers: { 'User-Agent': 'hermes-desktop-sidecar-manager' },
       }, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 303) {
@@ -199,9 +218,7 @@ function downloadBinary(url, destPath, options = {}) {
           return
         }
         if (res.statusCode !== 200) {
-          out.close()
-          try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
-          reject(new Error(`Download failed: HTTP ${res.statusCode}`))
+          fail(new Error(`Download failed: HTTP ${res.statusCode}`))
           return
         }
 
@@ -214,6 +231,7 @@ function downloadBinary(url, destPath, options = {}) {
 
         res.pipe(out)
         out.on('finish', () => {
+          cleanup()
           out.close()
           // chmod +x on POSIX
           if (process.platform !== 'win32') {
@@ -229,18 +247,16 @@ function downloadBinary(url, destPath, options = {}) {
           resolve(destPath)
         })
         out.on('error', (err) => {
-          try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
-          reject(err)
+          fail(err)
         })
       })
 
       req.on('error', (err) => {
-        try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
-        reject(err)
+        fail(err)
       })
 
       if (options.abortSignal) {
-        const onAbort = () => { req.destroy(new Error('Download cancelled')) }
+        const onAbort = () => { fail(new Error('Download cancelled')) }
         if (options.abortSignal.aborted) { onAbort(); return }
         options.abortSignal.addEventListener('abort', onAbort, { once: true })
       }

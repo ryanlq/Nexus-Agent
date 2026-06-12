@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { IconLayoutDashboard } from '@tabler/icons-react'
 
@@ -24,7 +24,7 @@ interface GatewayMenuPanelProps {
   gatewayState: string
   inferenceStatus: RuntimeReadinessResult | null
   logLines: readonly string[]
-  onOpenSystem: () => void
+  onOpenLogs: () => void
   statusSnapshot: StatusResponse | null
 }
 
@@ -49,7 +49,7 @@ export function GatewayMenuPanel({
   gatewayState,
   inferenceStatus,
   logLines,
-  onOpenSystem,
+  onOpenLogs,
   statusSnapshot
 }: GatewayMenuPanelProps) {
   const sidecarVersion = useStore($sidecarVersion)
@@ -101,6 +101,12 @@ export function GatewayMenuPanel({
     // Don't reset restarting — gateway will reconnect and component re-renders
   }
 
+  useEffect(() => {
+    if (gatewayState === 'open' && restarting) {
+      setRestarting(false)
+    }
+  }, [gatewayState, restarting])
+
   // Pick the right label for the update button
   let updateLabel: string | null = null
 
@@ -130,11 +136,11 @@ export function GatewayMenuPanel({
           </span>
         </div>
         <div className="flex items-center">
-          <Tip label="Open system panel">
+          <Tip label="Open logs">
             <Button
-              aria-label="Open system panel"
+              aria-label="Open logs"
               className="text-muted-foreground hover:text-foreground"
-              onClick={onOpenSystem}
+              onClick={onOpenLogs}
               size="icon-sm"
               variant="ghost"
             >
@@ -208,7 +214,7 @@ export function GatewayMenuPanel({
           </ul>
           <button
             className="mt-1.5 text-[0.66rem] font-medium text-muted-foreground hover:text-foreground"
-            onClick={onOpenSystem}
+            onClick={onOpenLogs}
             type="button"
           >
             View all logs →

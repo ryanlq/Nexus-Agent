@@ -9,26 +9,20 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
-  getActionStatus,
   getLogs,
-  getStatus,
   getUsageAnalytics,
-  restartGateway,
   searchSessions
 } from '@/nexus'
 import type {
-  ActionStatusResponse,
   AnalyticsResponse,
   SessionInfo,
-  SessionSearchResult as SessionSearchApiResult,
-  StatusResponse
+  SessionSearchResult as SessionSearchApiResult
 } from '@/nexus'
 import { useI18n } from '@/i18n'
 import { sessionTitle } from '@/lib/chat-runtime'
-import { Activity, AlertCircle, BarChart3, Pin } from '@/lib/icons'
+import { AlertCircle, BarChart3, FileText, Pin } from '@/lib/icons'
 import { exportSession } from '@/lib/session-export'
 import { cn } from '@/lib/utils'
-import { upsertDesktopActionTask } from '@/store/activity'
 import { $pinnedSessionIds, pinSession, unpinSession } from '@/store/layout'
 import { $sessions } from '@/store/session'
 
@@ -40,9 +34,9 @@ import { OverlayMain, OverlayNavItem, OverlaySidebar, OverlaySplitLayout } from 
 import { OverlayView } from '../overlays/overlay-view'
 import { ARTIFACTS_ROUTE, MESSAGING_ROUTE, NEW_CHAT_ROUTE, SETTINGS_ROUTE, SKILLS_ROUTE } from '../routes'
 
-export type CommandCenterSection = 'sessions' | 'system' | 'usage'
+export type CommandCenterSection = 'logs' | 'sessions' | 'usage'
 
-const SECTIONS = ['sessions', 'system', 'usage'] as const satisfies readonly CommandCenterSection[]
+const SECTIONS = ['sessions', 'logs', 'usage'] as const satisfies readonly CommandCenterSection[]
 
 const USAGE_PERIODS = [7, 30, 90] as const
 type UsagePeriod = (typeof USAGE_PERIODS)[number]
@@ -162,11 +156,8 @@ export function CommandCenterView({
   const [query, setQuery] = useState('')
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchGroups, setSearchGroups] = useState<CommandCenterSearchGroup[]>([])
-  const [status, setStatus] = useState<StatusResponse | null>(null)
   const [logs, setLogs] = useState<string[]>([])
-  const [systemLoading, setSystemLoading] = useState(false)
   const [systemError, setSystemError] = useState('')
-  const [systemAction, setSystemAction] = useState<ActionStatusResponse | null>(null)
   const [usagePeriod, setUsagePeriod] = useState<UsagePeriod>(30)
   const [usage, setUsage] = useState<AnalyticsResponse | null>(null)
   const [usageLoading, setUsageLoading] = useState(false)
@@ -244,25 +235,18 @@ export function CommandCenterView({
     [cc, sessionsById]
   )
 
-  const refreshSystem = useCallback(async () => {
-    setSystemLoading(true)
+  const refreshLogs = useCallback(async () => {
     setSystemError('')
 
     try {
-      const [nextStatus, nextLogs] = await Promise.all([
-        getStatus(),
-        getLogs({
-          file: 'agent',
-          lines: 120
-        })
-      ])
+      const nextLogs = await getLogs({
+        file: 'agent',
+        lines: 120
+      })
 
-      setStatus(nextStatus)
       setLogs(nextLogs.lines)
     } catch (error) {
       setSystemError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setSystemLoading(false)
     }
   }, [])
 
@@ -326,10 +310,10 @@ export function CommandCenterView({
   }, [debouncedQuery, searchProviders])
 
   useEffect(() => {
-    if (section === 'system' && !status && !systemLoading) {
-      void refreshSystem()
+    if (section === 'logs' && logs.length === 0) {
+      void refreshLogs()
     }
-  }, [refreshSystem, section, status, systemLoading])
+  }, [refreshLogs, section, logs.length])
 
   useEffect(() => {
     if (section === 'usage') {
@@ -338,8 +322,8 @@ export function CommandCenterView({
   }, [refreshUsage, section, usagePeriod])
 
   useRefreshHotkey(() => {
-    if (section === 'system') {
-      void refreshSystem()
+    if (section === 'logs') {
+      void refreshLogs()
     } else if (section === 'usage') {
       void refreshUsage(usagePeriod)
     }
@@ -348,47 +332,6 @@ export function CommandCenterView({
   const showGlobalSearchResults = debouncedQuery.length > 0
   const hasGlobalSearchResults = searchGroups.length > 0
   const sessionListHasResults = filteredSessions.length > 0
-
-  const runSystemAction = useCallback(
-    async (kind: 'restart') => {
-      setSystemError('')
-
-      try {
-        const started = await restartGateway()
-        let nextStatus: ActionStatusResponse | null = null
-
-        for (let attempt = 0; attempt < 18; attempt += 1) {
-          await new Promise(resolve => window.setTimeout(resolve, 1200))
-          const polled = await getActionStatus(started.name, 180)
-          nextStatus = polled
-          setSystemAction(polled)
-          upsertDesktopActionTask(polled)
-
-          if (!polled.running) {
-            break
-          }
-        }
-
-        if (!nextStatus) {
-          const pendingStatus = {
-            exit_code: null,
-            lines: [cc.actionStartedWaiting],
-            name: started.name,
-            pid: started.pid,
-            running: true
-          }
-
-          setSystemAction(pendingStatus)
-          upsertDesktopActionTask(pendingStatus)
-        }
-      } catch (error) {
-        setSystemError(error instanceof Error ? error.message : String(error))
-      } finally {
-        void refreshSystem()
-      }
-    },
-    [cc, refreshSystem]
-  )
 
   const handleSearchSelect = useCallback(
     (result: CommandCenterSearchResult) => {
@@ -429,7 +372,7 @@ export function CommandCenterView({
           {SECTIONS.map(value => (
             <OverlayNavItem
               active={section === value}
-              icon={value === 'sessions' ? Pin : value === 'system' ? Activity : BarChart3}
+              icon={value === 'sessions' ? Pin : value === 'logs' ? FileText : BarChart3}
               key={value}
               label={cc.sections[value]}
               onClick={() => setSection(value)}
@@ -443,10 +386,10 @@ export function CommandCenterView({
               <h2 className="text-sm font-semibold text-foreground">{cc.sections[section]}</h2>
               <p className="text-xs text-muted-foreground">{cc.sectionDescriptions[section]}</p>
             </div>
-            {section === 'system' && (
-              <OverlayActionButton disabled={systemLoading} onClick={() => void refreshSystem()}>
-                <IconRefresh className={cn('mr-1.5 size-3.5', systemLoading && 'animate-spin')} />
-                {systemLoading ? cc.refreshing : cc.refresh}
+            {section === 'logs' && (
+              <OverlayActionButton onClick={() => void refreshLogs()}>
+                <IconRefresh className="mr-1.5 size-3.5" />
+                {cc.refresh}
               </OverlayActionButton>
             )}
             {section === 'usage' && (
@@ -608,61 +551,20 @@ export function CommandCenterView({
               usage={usage}
             />
           ) : (
-            <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3">
-              <OverlayCard className="p-3 text-sm">
-                {status ? (
-                  <div className="grid gap-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              'size-2 rounded-full',
-                              status.gateway_running ? 'bg-emerald-500' : 'bg-amber-500'
-                            )}
-                          />
-                          <span className="font-medium text-foreground">
-                            {status.gateway_running ? cc.gatewayRunning : cc.gatewayStopped}
-                          </span>
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {cc.nexusActiveSessions(status.version, status.active_sessions)}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-                        <OverlayActionButton className="h-7 px-2.5" onClick={() => void runSystemAction('restart')}>
-                          {cc.restartMessaging}
-                        </OverlayActionButton>
-                        {/* agent-gateway: "Update Hermes" hidden — agent-gateway is not Hermes */}
-                      </div>
-                    </div>
-                    {systemAction && (
-                      <div className="text-xs text-muted-foreground">
-                        {systemAction.name} ·{' '}
-                        {systemAction.running ? cc.actionRunning : systemAction.exit_code === 0 ? cc.actionDone : cc.actionFailed}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground">{cc.loadingStatus}</div>
+            <OverlayCard className="min-h-0 flex-1 overflow-hidden p-2">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">{cc.recentLogs}</span>
+                {systemError && (
+                  <span className="inline-flex items-center gap-1 text-xs text-destructive">
+                    <AlertCircle className="size-3.5" />
+                    {systemError}
+                  </span>
                 )}
-              </OverlayCard>
-
-              <OverlayCard className="min-h-0 overflow-hidden p-2">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">{cc.recentLogs}</span>
-                  {systemError && (
-                    <span className="inline-flex items-center gap-1 text-xs text-destructive">
-                      <AlertCircle className="size-3.5" />
-                      {systemError}
-                    </span>
-                  )}
-                </div>
-                <pre className="h-full min-h-0 overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-[0.65rem] leading-relaxed text-muted-foreground">
-                  {logs.length ? logs.join('\n') : cc.noLogs}
-                </pre>
-              </OverlayCard>
-            </div>
+              </div>
+              <pre className="h-full min-h-0 overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-[0.65rem] leading-relaxed text-muted-foreground">
+                {logs.length ? logs.join('\n') : cc.noLogs}
+              </pre>
+            </OverlayCard>
           )}
         </OverlayMain>
       </OverlaySplitLayout>

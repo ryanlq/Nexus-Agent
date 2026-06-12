@@ -8,7 +8,6 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { getHermesConfigRecord, listSessions } from '@/nexus'
 import { sessionTitle } from '@/lib/chat-runtime'
 import {
-  Activity,
   Archive,
   BarChart3,
   Check,
@@ -16,6 +15,7 @@ import {
   ChevronRight,
   Clock,
   Cpu,
+  FileText,
   Globe,
   type IconComponent,
   Info,
@@ -215,11 +215,11 @@ export function CommandPalette() {
             run: go(`${COMMAND_CENTER_ROUTE}?section=sessions`)
           },
           {
-            icon: Activity,
-            id: 'cc-system',
-            keywords: ['command center', 'system', 'status', 'logs'],
-            label: 'System',
-            run: go(`${COMMAND_CENTER_ROUTE}?section=system`)
+            icon: FileText,
+            id: 'cc-logs',
+            keywords: ['command center', 'logs', 'gateway'],
+            label: 'Logs',
+            run: go(`${COMMAND_CENTER_ROUTE}?section=logs`)
           },
           {
             icon: BarChart3,

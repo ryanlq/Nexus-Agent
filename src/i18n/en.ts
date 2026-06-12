@@ -260,10 +260,10 @@ export const en: Translations = {
   commandCenter: {
     close: 'Close command center',
     searchPlaceholder: 'Search sessions, views, and actions',
-    sections: { sessions: 'Sessions', system: 'System', usage: 'Usage' },
+    sections: { logs: 'Logs', sessions: 'Sessions', usage: 'Usage' },
     sectionDescriptions: {
+      logs: 'Gateway logs',
       sessions: 'Search and manage sessions',
-      system: 'Status, logs, and system actions',
       usage: 'Token, cost, and skill activity over time'
     },
     nav: {
@@ -275,7 +275,7 @@ export const en: Translations = {
     },
     sectionEntries: {
       sessions: { title: 'Sessions panel', detail: 'Search, pin, and manage sessions' },
-      system: { title: 'System panel', detail: 'Gateway status, logs, restart/update' },
+      logs: { title: 'Logs panel', detail: 'View gateway logs' },
       usage: { title: 'Usage panel', detail: 'Token, cost, and skill activity' }
     },
     providerNavigate: 'Navigate',
@@ -288,16 +288,6 @@ export const en: Translations = {
     exportSession: 'Export session',
     deleteSession: 'Delete session',
     noSessions: 'No sessions yet.',
-    gatewayRunning: 'Messaging gateway running',
-    gatewayStopped: 'Messaging gateway stopped',
-    nexusActiveSessions: (version, count) => `Nexus Agent ${version} · Active sessions ${count}`,
-    restartMessaging: 'Restart messaging',
-    updateNexusAgent: 'Update Nexus Agent',
-    actionRunning: 'running',
-    actionDone: 'done',
-    actionFailed: 'failed',
-    actionStartedWaiting: 'Action started, waiting for status...',
-    loadingStatus: 'Loading status...',
     recentLogs: 'Recent logs',
     noLogs: 'No logs loaded yet.',
     days: count => `${count}d`,

@@ -343,10 +343,10 @@ export const zh: Translations = {
   commandCenter: {
     close: '关闭命令中心',
     searchPlaceholder: '搜索会话、视图与操作',
-    sections: { sessions: '会话', system: '系统', usage: '用量' },
+    sections: { logs: '日志', sessions: '会话', usage: '用量' },
     sectionDescriptions: {
+      logs: '网关日志',
       sessions: '搜索与管理会话',
-      system: '状态、日志与系统操作',
       usage: '一段时间内的词元、成本与技能活动'
     },
     nav: {
@@ -358,7 +358,7 @@ export const zh: Translations = {
     },
     sectionEntries: {
       sessions: { title: '会话面板', detail: '搜索、置顶与管理会话' },
-      system: { title: '系统面板', detail: '网关状态、日志、重启/更新' },
+      logs: { title: '日志面板', detail: '查看网关日志' },
       usage: { title: '用量面板', detail: '词元、成本与技能活动' }
     },
     providerNavigate: '导航',
@@ -371,16 +371,6 @@ export const zh: Translations = {
     exportSession: '导出会话',
     deleteSession: '删除会话',
     noSessions: '暂无会话。',
-    gatewayRunning: '消息网关运行中',
-    gatewayStopped: '消息网关已停止',
-    nexusActiveSessions: (version, count) => `Nexus Agent ${version} · 活跃会话 ${count}`,
-    restartMessaging: '重启消息服务',
-    updateNexusAgent: '更新 Nexus Agent',
-    actionRunning: '运行中',
-    actionDone: '完成',
-    actionFailed: '失败',
-    actionStartedWaiting: '操作已启动,等待状态…',
-    loadingStatus: '正在加载状态…',
     recentLogs: '最近日志',
     noLogs: '尚未加载日志。',
     days: count => `${count} 天`,

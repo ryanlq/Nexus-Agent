@@ -127,7 +127,7 @@ export function useStatusbarItems({
         gatewayState={gatewayState}
         inferenceStatus={inferenceStatus}
         logLines={gatewayLogLines}
-        onOpenSystem={() => openCommandCenterSection('system')}
+        onOpenLogs={() => openCommandCenterSection('logs')}
         statusSnapshot={statusSnapshot}
       />
     ),

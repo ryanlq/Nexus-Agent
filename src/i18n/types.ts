@@ -244,10 +244,10 @@ export interface Translations {
   commandCenter: {
     close: string
     searchPlaceholder: string
-    sections: Record<'sessions' | 'system' | 'usage', string>
-    sectionDescriptions: Record<'sessions' | 'system' | 'usage', string>
+    sections: Record<'logs' | 'sessions' | 'usage', string>
+    sectionDescriptions: Record<'logs' | 'sessions' | 'usage', string>
     nav: Record<'newChat' | 'settings' | 'skills' | 'messaging' | 'artifacts', { title: string; detail: string }>
-    sectionEntries: Record<'sessions' | 'system' | 'usage', { title: string; detail: string }>
+    sectionEntries: Record<'logs' | 'sessions' | 'usage', { title: string; detail: string }>
     providerNavigate: string
     providerSessions: string
     refresh: string
@@ -258,16 +258,6 @@ export interface Translations {
     exportSession: string
     deleteSession: string
     noSessions: string
-    gatewayRunning: string
-    gatewayStopped: string
-    nexusActiveSessions: (version: string, count: number) => string
-    restartMessaging: string
-    updateNexusAgent: string
-    actionRunning: string
-    actionDone: string
-    actionFailed: string
-    actionStartedWaiting: string
-    loadingStatus: string
     recentLogs: string
     noLogs: string
     days: (count: number) => string

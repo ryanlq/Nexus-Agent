@@ -220,6 +220,17 @@ export function renameSession(
   })
 }
 
+export function handoffSessionToEmail(
+  sessionId: string,
+  profile?: string | null
+): Promise<{ ok: boolean; message_id: string; recipient: string }> {
+  return window.nexusAgent.api<{ ok: boolean; message_id: string; recipient: string }>({
+    ...(profile ? { profile } : {}),
+    path: `/api/sessions/${encodeURIComponent(sessionId)}/handoff/email`,
+    method: 'POST'
+  })
+}
+
 export function getGlobalModelInfo(): Promise<ModelInfoResponse> {
   return window.nexusAgent.api<ModelInfoResponse>({
     ...profileScoped(),

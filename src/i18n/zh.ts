@@ -767,7 +767,10 @@ export const zh: Translations = {
       ageNow: '刚刚',
       ageDay: '天',
       ageHour: '时',
-      ageMin: '分'
+      ageMin: '分',
+      continueViaEmail: '通过邮件继续',
+      continueViaEmailSent: '会话已发送到邮箱',
+      continueViaEmailFailed: '无法发送会话到邮箱'
     }
   },
 

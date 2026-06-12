@@ -566,6 +566,9 @@ export interface Translations {
       ageDay: string
       ageHour: string
       ageMin: string
+      continueViaEmail: string
+      continueViaEmailSent: string
+      continueViaEmailFailed: string
     }
   }
 

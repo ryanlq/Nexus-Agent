@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { renameSession } from '@/nexus'
+import { getMessagingPlatforms, handoffSessionToEmail, renameSession } from '@/nexus'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { exportSession } from '@/lib/session-export'
@@ -43,10 +43,40 @@ interface ItemSpec {
   variant?: 'destructive'
 }
 
+// Module-level cache for email adapter availability — checked once, then cached.
+let _emailEnabledCache: boolean | null = null
+let _emailEnabledPromise: Promise<boolean> | null = null
+
+async function checkEmailEnabled(): Promise<boolean> {
+  if (_emailEnabledCache !== null) return _emailEnabledCache
+  if (_emailEnabledPromise) return _emailEnabledPromise
+
+  _emailEnabledPromise = (async () => {
+    try {
+      const { platforms } = await getMessagingPlatforms()
+      const email = platforms.find(p => p.id === 'email')
+      _emailEnabledCache = (email?.enabled ?? false) && (email?.configured ?? false)
+      return _emailEnabledCache
+    } catch {
+      _emailEnabledCache = false
+      return false
+    } finally {
+      _emailEnabledPromise = null
+    }
+  })()
+
+  return _emailEnabledPromise
+}
+
 function useSessionActions({ sessionId, title, pinned = false, profile, onPin, onArchive, onDelete }: SessionActions) {
   const { t } = useI18n()
   const r = t.sidebar.row
   const [renameOpen, setRenameOpen] = useState(false)
+  const [emailEnabled, setEmailEnabled] = useState(false)
+
+  useEffect(() => {
+    void checkEmailEnabled().then(setEmailEnabled)
+  }, [])
 
   const items: ItemSpec[] = [
     {
@@ -77,6 +107,22 @@ function useSessionActions({ sessionId, title, pinned = false, profile, onPin, o
         void exportSession(sessionId, { title })
       }
     },
+    ...(emailEnabled
+      ? [
+          {
+            disabled: !sessionId,
+            icon: 'mail' as const,
+            label: r.continueViaEmail,
+            onSelect: () => {
+              triggerHaptic('selection')
+              void handoffSessionToEmail(sessionId, profile).then(
+                () => notify({ durationMs: 3_000, kind: 'success', message: r.continueViaEmailSent }),
+                err => notifyError(err, r.continueViaEmailFailed)
+              )
+            }
+          }
+        ]
+      : []),
     {
       disabled: !sessionId,
       icon: 'edit',

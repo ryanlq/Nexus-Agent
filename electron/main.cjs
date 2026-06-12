@@ -2083,28 +2083,11 @@ function resolveSidecarBinary() {
 }
 
 function resolveHermesBackend(port) {
-  // 0. Prebuilt sidecar — the packaged-app one-click install path. The
-  //    agent-gateway binary is built by the gateway CI, staged into
-  //    build/sidecar/ by scripts/before-pack.cjs, and shipped by
-  //    electron-builder under resources/gateway/. No Python, venv, git, or
-  //    network required on the user's machine.
-  const sidecar = resolveSidecarBinary();
-  if (sidecar) {
-    return {
-      kind: "sidecar",
-      label: `bundled agent-gateway sidecar (${path.basename(sidecar)})`,
-      command: sidecar,
-      args: ["--host", "127.0.0.1", "--port", String(port)],
-      env: {},
-      bootstrap: false,
-      shell: false,
-    };
-  }
-
-  // 1. External agent-gateway server — NEXUS_AGENT_AGENT_GATEWAY_ROOT points
+  // 0. External agent-gateway server — NEXUS_AGENT_AGENT_GATEWAY_ROOT points
   //    at the standalone agent-gateway checkout. Spawns `python -m agent_gateway`
   //    which starts a FastAPI + WebSocket JSON-RPC server compatible with this
-  //    desktop's expected gateway protocol.
+  //    desktop's expected gateway protocol. Takes priority over the sidecar
+  //    binary so developers always run live source code in dev:gateway mode.
   const agRoot =
     process.env.NEXUS_AGENT_AGENT_GATEWAY_ROOT &&
     path.resolve(process.env.NEXUS_AGENT_AGENT_GATEWAY_ROOT);
@@ -2129,6 +2112,24 @@ function resolveHermesBackend(port) {
     rememberLog(
       `Found agent-gateway at ${agRoot} but no Python found.`,
     );
+  }
+
+  // 1. Prebuilt sidecar — the packaged-app one-click install path. The
+  //    agent-gateway binary is built by the gateway CI, staged into
+  //    build/sidecar/ by scripts/before-pack.cjs, and shipped by
+  //    electron-builder under resources/gateway/. No Python, venv, git, or
+  //    network required on the user's machine.
+  const sidecar = resolveSidecarBinary();
+  if (sidecar) {
+    return {
+      kind: "sidecar",
+      label: `bundled agent-gateway sidecar (${path.basename(sidecar)})`,
+      command: sidecar,
+      args: ["--host", "127.0.0.1", "--port", String(port)],
+      env: {},
+      bootstrap: false,
+      shell: false,
+    };
   }
 
   // No usable backend found.

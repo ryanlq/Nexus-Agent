@@ -638,7 +638,10 @@ export const en: Translations = {
       ageNow: 'now',
       ageDay: 'd',
       ageHour: 'h',
-      ageMin: 'm'
+      ageMin: 'm',
+      continueViaEmail: 'Continue via Email',
+      continueViaEmailSent: 'Session sent to email',
+      continueViaEmailFailed: 'Could not send session to email'
     }
   },
 

@@ -218,6 +218,7 @@ interface ChatSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onNavigate: (item: SidebarNavItem) => void
   onLoadMoreSessions: () => void
   onLoadMoreProfileSessions?: (profile: string) => Promise<void> | void
+  onRefreshSessions?: () => void
   onResumeSession: (sessionId: string) => void
   onDeleteSession: (sessionId: string) => void
   onArchiveSession: (sessionId: string) => void
@@ -229,6 +230,7 @@ export function ChatSidebar({
   onNavigate,
   onLoadMoreSessions,
   onLoadMoreProfileSessions,
+  onRefreshSessions,
   onResumeSession,
   onDeleteSession,
   onArchiveSession,
@@ -700,33 +702,48 @@ export function ChatSidebar({
             forceEmptyState={showSessionSkeletons}
             groups={showAllProfiles ? profileGroups : agentsGrouped ? agentGroups : undefined}
             headerAction={
-              // Always reserve the icon-xs (size-6) slot so the header keeps the
-              // same height whether or not the toggle renders — otherwise the
-              // "Sessions" label jumps when switching to the ALL-profiles view.
-              // Grouping operates on unpinned recents; if everything is pinned
-              // the toggle does nothing, and it's irrelevant in the ALL-profiles
-              // view (always grouped by profile), so hide the button (not the slot).
-              <div className="grid size-6 shrink-0 place-items-center">
-                {!showAllProfiles && agentSessions.length > 0 ? (
-                  <Tip label={agentsGrouped ? s.groupTitleGrouped : s.groupTitleUngrouped}>
+              <div className="flex items-center gap-0.5">
+                {onRefreshSessions ? (
+                  <Tip label={s.syncSessions}>
                     <Button
-                      aria-label={agentsGrouped ? s.groupAriaGrouped : s.groupAriaUngrouped}
+                      aria-label={s.syncSessions}
                       className={cn(
-                        'text-(--ui-text-tertiary) opacity-70 hover:bg-(--ui-control-hover-background) hover:text-foreground hover:opacity-100 focus-visible:opacity-100',
-                        agentsGrouped && 'bg-(--ui-control-active-background) text-foreground opacity-100'
+                        'text-(--ui-text-tertiary) opacity-70 hover:bg-(--ui-control-hover-background) hover:text-foreground hover:opacity-100 focus-visible:opacity-100'
                       )}
+                      disabled={sessionsLoading}
                       onClick={event => {
                         event.stopPropagation()
-                        setSidebarRecentsOpen(true)
-                        setSidebarAgentsGrouped(!agentsGrouped)
+                        onRefreshSessions()
                       }}
                       size="icon-xs"
                       variant="ghost"
                     >
-                      <Codicon name={agentsGrouped ? 'list-unordered' : 'root-folder'} size="0.75rem" />
+                      <Codicon className={cn(sessionsLoading && 'animate-spin')} name="refresh" size="0.75rem" />
                     </Button>
                   </Tip>
                 ) : null}
+                <div className="grid size-6 shrink-0 place-items-center">
+                  {!showAllProfiles && agentSessions.length > 0 ? (
+                    <Tip label={agentsGrouped ? s.groupTitleGrouped : s.groupTitleUngrouped}>
+                      <Button
+                        aria-label={agentsGrouped ? s.groupAriaGrouped : s.groupAriaUngrouped}
+                        className={cn(
+                          'text-(--ui-text-tertiary) opacity-70 hover:bg-(--ui-control-hover-background) hover:text-foreground hover:opacity-100 focus-visible:opacity-100',
+                          agentsGrouped && 'bg-(--ui-control-active-background) text-foreground opacity-100'
+                        )}
+                        onClick={event => {
+                          event.stopPropagation()
+                          setSidebarRecentsOpen(true)
+                          setSidebarAgentsGrouped(!agentsGrouped)
+                        }}
+                        size="icon-xs"
+                        variant="ghost"
+                      >
+                        <Codicon name={agentsGrouped ? 'list-unordered' : 'root-folder'} size="0.75rem" />
+                      </Button>
+                    </Tip>
+                  ) : null}
+                </div>
               </div>
             }
             label={s.sessions}

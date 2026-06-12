@@ -531,6 +531,7 @@ export interface Translations {
     results: string
     pinned: string
     sessions: string
+    syncSessions: string
     groupAriaGrouped: string
     groupAriaUngrouped: string
     groupTitleGrouped: string

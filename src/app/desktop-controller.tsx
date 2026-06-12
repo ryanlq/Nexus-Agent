@@ -659,6 +659,7 @@ export function DesktopController() {
       onLoadMoreSessions={loadMoreSessions}
       onNavigate={selectSidebarItem}
       onNewSessionInWorkspace={startSessionInWorkspace}
+      onRefreshSessions={refreshSessions}
       onResumeSession={sessionId => navigate(sessionRoute(sessionId))}
     />
   )

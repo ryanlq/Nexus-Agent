@@ -368,6 +368,9 @@ export const en: Translations = {
     failedUpdate: name => `Failed to update ${name}`,
     failedSave: name => `Failed to save ${name}`,
     failedClear: key => `Failed to clear ${key}`,
+    testConnection: 'Test connection',
+    testing: 'Testing…',
+    testFailed: 'Connection test failed',
     fieldCopy: {},
     platformIntro: {}
   },

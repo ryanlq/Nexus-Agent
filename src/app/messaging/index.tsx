@@ -9,12 +9,13 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import {
   getMessagingPlatforms,
+  testMessagingPlatform,
   type MessagingEnvVarInfo,
   type MessagingPlatformInfo,
   updateMessagingPlatform
 } from '@/nexus'
 import { type Translations, useI18n } from '@/i18n'
-import { AlertTriangle, ExternalLink, Save, Trash2 } from '@/lib/icons'
+import { AlertTriangle, ExternalLink, Save, Trash2, Zap } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
 
@@ -67,7 +68,7 @@ const trimEdits = (edits: Record<string, string>): Record<string, string> =>
   )
 
 const FIELD_COPY: Record<string, { advanced?: boolean; help?: string; label: string; placeholder?: string }> = {
-  TELEGRAM_BOT_TOKEN: {
+  TELEGRAM_TOKEN: {
     label: 'Bot token',
     help: 'Create a bot with @BotFather, then paste the token it gives you.',
     placeholder: 'Paste Telegram bot token'
@@ -81,7 +82,7 @@ const FIELD_COPY: Record<string, { advanced?: boolean; help?: string; label: str
     help: 'Only needed on networks where Telegram is blocked.',
     advanced: true
   },
-  DISCORD_BOT_TOKEN: {
+  DISCORD_TOKEN: {
     label: 'Bot token',
     help: 'Create an application in the Discord Developer Portal, add a bot, then paste its token.'
   },
@@ -135,7 +136,7 @@ const FIELD_COPY: Record<string, { advanced?: boolean; help?: string; label: str
     label: 'QQ home channel name',
     advanced: true
   },
-  SLACK_BOT_TOKEN: {
+  SLACK_TOKEN: {
     label: 'Slack bot token',
     help: 'Use the bot token from OAuth & Permissions after installing your Slack app.',
     placeholder: 'Paste Slack bot token'
@@ -373,6 +374,24 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
     }
   }
 
+  async function handleTest(platform: MessagingPlatformInfo) {
+    setSaving(`test:${platform.id}`)
+
+    try {
+      const result = await testMessagingPlatform(platform.id)
+      await refreshPlatforms()
+      if (result.ok) {
+        notify({ kind: 'success', title: result.message, message: m.setupUpdated(platform.name) })
+      } else {
+        notify({ kind: 'error', title: m.testFailed, message: result.message })
+      }
+    } catch (err) {
+      notifyError(err, m.testFailed)
+    } finally {
+      setSaving(null)
+    }
+  }
+
   return (
     <PageSearchShell
       {...props}
@@ -414,6 +433,7 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
                   }))
                 }
                 onSave={() => void handleSave(selected)}
+                onTest={() => void handleTest(selected)}
                 onToggle={enabled => void handleToggle(selected, enabled)}
                 platform={selected}
                 saving={saving}
@@ -460,6 +480,7 @@ function PlatformDetail({
   onClear,
   onEdit,
   onSave,
+  onTest,
   onToggle,
   platform,
   saving
@@ -468,6 +489,7 @@ function PlatformDetail({
   onClear: (key: string) => void
   onEdit: (key: string, value: string) => void
   onSave: () => void
+  onTest: () => void
   onToggle: (enabled: boolean) => void
   platform: MessagingPlatformInfo
   saving: string | null
@@ -615,6 +637,15 @@ function PlatformDetail({
 
           <div className="ml-auto flex items-center gap-2">
             {hasEdits && <span className="text-xs text-muted-foreground">{m.unsavedChanges}</span>}
+            <Button
+              disabled={!platform.configured || saving === `test:${platform.id}`}
+              onClick={onTest}
+              size="sm"
+              variant="outline"
+            >
+              <Zap />
+              {saving === `test:${platform.id}` ? m.testing : m.testConnection}
+            </Button>
             <Button disabled={!hasEdits || isSavingEnv} onClick={onSave} size="sm">
               <Save />
               {isSavingEnv ? m.saving : m.saveChanges}

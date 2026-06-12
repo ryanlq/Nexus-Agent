@@ -451,17 +451,20 @@ export const zh: Translations = {
     failedUpdate: name => `更新 ${name} 失败`,
     failedSave: name => `保存 ${name} 失败`,
     failedClear: key => `清除 ${key} 失败`,
+    testConnection: '测试连接',
+    testing: '测试中…',
+    testFailed: '连接测试失败',
     fieldCopy: {
-      TELEGRAM_BOT_TOKEN: { label: 'Bot 令牌', help: '用 @BotFather 创建一个机器人,然后粘贴它给你的令牌。' },
+      TELEGRAM_TOKEN: { label: 'Bot 令牌', help: '用 @BotFather 创建一个机器人,然后粘贴它给你的令牌。' },
       TELEGRAM_ALLOWED_USERS: {
         label: '允许的 Telegram 用户 ID',
         help: '推荐。来自 @userinfobot 的逗号分隔数字 ID。不设置则任何人都能私信你的机器人。'
       },
       TELEGRAM_PROXY: { label: '代理 URL', help: '仅在 Telegram 被屏蔽的网络中需要。' },
-      DISCORD_BOT_TOKEN: { label: 'Bot 令牌', help: '在 Discord 开发者门户创建应用,添加机器人,然后粘贴其令牌。' },
+      DISCORD_TOKEN: { label: 'Bot 令牌', help: '在 Discord 开发者门户创建应用,添加机器人,然后粘贴其令牌。' },
       DISCORD_ALLOWED_USERS: { label: '允许的 Discord 用户 ID', help: '推荐。逗号分隔的 Discord 用户 ID。' },
       DISCORD_REPLY_TO_MODE: { label: '回复方式', help: 'first、all 或 off。' },
-      SLACK_BOT_TOKEN: { label: 'Slack bot 令牌', help: '安装 Slack 应用后,在 OAuth & Permissions 中找到 bot 令牌。' },
+      SLACK_TOKEN: { label: 'Slack bot 令牌', help: '安装 Slack 应用后,在 OAuth & Permissions 中找到 bot 令牌。' },
       SLACK_APP_TOKEN: { label: 'Slack app 令牌', help: 'Socket Mode 需要 app 级令牌。' },
       SLACK_ALLOWED_USERS: { label: '允许的 Slack 用户 ID', help: '推荐。逗号分隔的 Slack 用户 ID。' },
       MATTERMOST_URL: { label: '服务器 URL' },

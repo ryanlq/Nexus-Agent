@@ -523,6 +523,8 @@ export interface Translations {
     updating: string
     updateDone: string
     updateFailed: string
+    restart: string
+    restarting: string
   },
 
   sidebar: {

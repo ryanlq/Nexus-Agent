@@ -788,7 +788,9 @@ export const zh: Translations = {
     updateAvailable: (version: string) => `更新到 ${version}`,
     updating: '更新中…',
     updateDone: '已更新！重启后生效。',
-    updateFailed: '更新失败'
+    updateFailed: '更新失败',
+    restart: '重启',
+    restarting: '重启中…'
   },
 
   composer: {

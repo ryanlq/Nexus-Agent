@@ -1,10 +1,11 @@
+import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { IconLayoutDashboard } from '@tabler/icons-react'
 
 import { StatusDot, type StatusTone } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
-import { Activity, AlertCircle, Download, Loader2 } from '@/lib/icons'
+import { Activity, AlertCircle, Download, Loader2, RefreshCw } from '@/lib/icons'
 import type { RuntimeReadinessResult } from '@/lib/runtime-readiness'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/i18n'
@@ -17,6 +18,7 @@ import {
   checkSidecarUpdate
 } from '@/store/sidecar'
 import type { StatusResponse } from '@/types/nexus'
+import { restartGateway } from '@/nexus'
 
 interface GatewayMenuPanelProps {
   gatewayState: string
@@ -87,6 +89,17 @@ export function GatewayMenuPanel({
 
   const handleCheckUpdate = () => void checkSidecarUpdate()
   const handleUpdate = () => void applySidecarUpdate()
+  const [restarting, setRestarting] = useState(false)
+
+  const handleRestart = async () => {
+    setRestarting(true)
+    try {
+      await restartGateway()
+    } catch {
+      // Gateway restarts, connection may drop briefly
+    }
+    // Don't reset restarting — gateway will reconnect and component re-renders
+  }
 
   // Pick the right label for the update button
   let updateLabel: string | null = null
@@ -142,6 +155,16 @@ export function GatewayMenuPanel({
           Gateway {versionLabel}
         </span>
         <div className="flex items-center gap-1">
+          <Button
+            className="h-6 gap-1 px-2 text-xs"
+            disabled={restarting || !gatewayOpen}
+            onClick={handleRestart}
+            size="sm"
+            variant="ghost"
+          >
+            <RefreshCw className={cn('size-3', restarting && 'animate-spin')} />
+            {restarting ? t.gateway.restarting : t.gateway.restart}
+          </Button>
           {updateAvailable && !sidecarUpdating ? (
             <Button
               className="h-6 gap-1 px-2 text-xs"

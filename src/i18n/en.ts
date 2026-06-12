@@ -659,7 +659,9 @@ export const en: Translations = {
     updateAvailable: (version: string) => `Update to ${version}`,
     updating: 'Updating…',
     updateDone: 'Updated! Restart to apply.',
-    updateFailed: 'Update failed'
+    updateFailed: 'Update failed',
+    restart: 'Restart',
+    restarting: 'Restarting…'
   },
 
   composer: {

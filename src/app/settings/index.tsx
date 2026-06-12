@@ -2,7 +2,7 @@ import { IconDownload, IconRefresh, IconUpload } from '@tabler/icons-react'
 import { useRef } from 'react'
 
 import { Tip } from '@/components/ui/tooltip'
-import { getHermesConfigDefaults, getHermesConfigRecord, saveHermesConfig } from '@/nexus'
+import { getGatewayConfigDefaults, getGatewayConfigRecord, saveGatewayConfig } from '@/nexus'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { Archive, Globe, Info } from '@/lib/icons'
@@ -36,7 +36,7 @@ export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChang
 
   const exportConfig = async () => {
     try {
-      const cfg = await getHermesConfigRecord()
+      const cfg = await getGatewayConfigRecord()
       const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -56,7 +56,7 @@ export function SettingsView({ gateway, onClose, onConfigSaved, onMainModelChang
     }
 
     try {
-      await saveHermesConfig(await getHermesConfigDefaults())
+      await saveGatewayConfig(await getGatewayConfigDefaults())
       triggerHaptic('success')
       onConfigSaved?.()
     } catch (err) {

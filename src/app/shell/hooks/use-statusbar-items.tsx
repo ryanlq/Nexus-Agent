@@ -39,7 +39,7 @@ import {
   setYoloActive
 } from '@/store/session'
 import { $subagentsBySession, activeSubagentCount } from '@/store/subagents'
-import { $desktopVersion, $updateApply, $updateStatus, setUpdateOverlayOpen } from '@/store/updates'
+import { $desktopVersion } from '@/store/version'
 import type { StatusResponse } from '@/types/nexus'
 
 import { CRON_ROUTE } from '../../routes'
@@ -92,8 +92,6 @@ export function useStatusbarItems({
   const turnStartedAt = useStore($turnStartedAt)
   const workingSessionIds = useStore($workingSessionIds)
   const subagentsBySession = useStore($subagentsBySession)
-  const updateStatus = useStore($updateStatus)
-  const updateApply = useStore($updateApply)
   const desktopVersion = useStore($desktopVersion)
 
   const contextUsage = useMemo(() => usageContextLabel(currentUsage), [currentUsage])
@@ -176,48 +174,17 @@ export function useStatusbarItems({
 
   const versionItem = useMemo<StatusbarItem>(() => {
     const appVersion = desktopVersion?.appVersion
-    const sha = updateStatus?.currentSha?.slice(0, 7) ?? null
-    const behind = updateStatus?.behind ?? 0
-    const applying = updateApply.applying || updateApply.stage === 'restart'
-    const base = appVersion ? `v${appVersion}` : (sha ?? 'unknown')
-    const behindHint = !applying && behind > 0 ? ` (+${behind})` : ''
-
-    const label = applying
-      ? updateApply.stage === 'restart'
-        ? `${base} · restart`
-        : `${base} · update`
-      : `${base}${behindHint}`
-
-    const tooltip = [
-      applying ? updateApply.message || 'Update in progress' : null,
-      !applying && behind > 0 && `${behind} commit${behind === 1 ? '' : 's'} behind ${updateStatus?.branch ?? '…'}`,
-      appVersion && `Nexus Agent v${appVersion}`,
-      sha && `commit ${sha}`,
-      updateStatus?.branch && `branch ${updateStatus.branch}`
-    ]
-      .filter(Boolean)
-      .join(' · ')
+    const label = appVersion ? `v${appVersion}` : 'unknown'
 
     return {
-      className: !applying && behind > 0 ? 'text-primary hover:text-primary' : undefined,
-      detail: appVersion && sha && !applying ? sha : undefined,
-      hidden: !appVersion && !sha,
-      icon: applying ? <Loader2 className="size-3 animate-spin" /> : <Hash className="size-3" />,
+      hidden: !appVersion,
+      icon: <Hash className="size-3" />,
       id: 'version',
       label,
-      onSelect: () => setUpdateOverlayOpen(true),
-      title: tooltip || undefined,
+      title: appVersion ? `Nexus Agent v${appVersion}` : undefined,
       variant: 'action'
     }
-  }, [
-    desktopVersion?.appVersion,
-    updateApply.applying,
-    updateApply.message,
-    updateApply.stage,
-    updateStatus?.behind,
-    updateStatus?.branch,
-    updateStatus?.currentSha
-  ])
+  }, [desktopVersion?.appVersion])
 
   const coreLeftStatusbarItems = useMemo<readonly StatusbarItem[]>(
     () => [

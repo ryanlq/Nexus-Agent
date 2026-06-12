@@ -55,13 +55,13 @@ contextBridge.exposeInMainWorld('nexusAgent', {
     start: options => ipcRenderer.invoke('nexus:terminal:start', options),
     write: (id, data) => ipcRenderer.invoke('nexus:terminal:write', id, data),
     onData: (id, callback) => {
-      const channel = `hermes:terminal:${id}:data`
+      const channel = `nexus:terminal:${id}:data`
       const listener = (_event, payload) => callback(payload)
       ipcRenderer.on(channel, listener)
       return () => ipcRenderer.removeListener(channel, listener)
     },
     onExit: (id, callback) => {
-      const channel = `hermes:terminal:${id}:exit`
+      const channel = `nexus:terminal:${id}:exit`
       const listener = (_event, payload) => callback(payload)
       ipcRenderer.on(channel, listener)
       return () => ipcRenderer.removeListener(channel, listener)
@@ -71,11 +71,6 @@ contextBridge.exposeInMainWorld('nexusAgent', {
     const listener = () => callback()
     ipcRenderer.on('nexus:close-preview-requested', listener)
     return () => ipcRenderer.removeListener('nexus:close-preview-requested', listener)
-  },
-  onOpenUpdatesRequested: callback => {
-    const listener = () => callback()
-    ipcRenderer.on('nexus:open-updates', listener)
-    return () => ipcRenderer.removeListener('nexus:open-updates', listener)
   },
   onWindowStateChanged: callback => {
     const listener = (_event, payload) => callback(payload)
@@ -114,15 +109,4 @@ contextBridge.exposeInMainWorld('nexusAgent', {
       return () => ipcRenderer.removeListener('nexus:sidecar:update-available', listener)
     },
   },
-  updates: {
-    check: () => ipcRenderer.invoke('nexus:updates:check'),
-    apply: opts => ipcRenderer.invoke('nexus:updates:apply', opts),
-    getBranch: () => ipcRenderer.invoke('nexus:updates:branch:get'),
-    setBranch: name => ipcRenderer.invoke('nexus:updates:branch:set', name),
-    onProgress: callback => {
-      const listener = (_event, payload) => callback(payload)
-      ipcRenderer.on('nexus:updates:progress', listener)
-      return () => ipcRenderer.removeListener('nexus:updates:progress', listener)
-    }
-  }
 })

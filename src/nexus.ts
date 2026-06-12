@@ -13,8 +13,8 @@ import type {
   CronJobUpdates,
   ElevenLabsVoicesResponse,
   EnvVarInfo,
-  HermesConfig,
-  HermesConfigRecord,
+  GatewayConfig,
+  GatewayConfigRecord,
   LogsResponse,
   MessagingPlatformsResponse,
   MessagingPlatformTestResponse,
@@ -64,8 +64,8 @@ export type {
   ElevenLabsVoicesResponse,
   EnvVarInfo,
   GatewayReadyPayload,
-  HermesConfig,
-  HermesConfigRecord,
+  GatewayConfig,
+  GatewayConfigRecord,
   LogsResponse,
   MessagingEnvVarInfo,
   MessagingHomeChannel,
@@ -276,41 +276,41 @@ export function getLogs(params: {
   })
 }
 
-export async function getHermesConfig(): Promise<HermesConfig> {
+export async function getGatewayConfig(): Promise<GatewayConfig> {
   // GET /api/config returns { config: {...}, agents: [...] }.
   // Extract just the config dict so callers see { display: {...}, terminal: {...} }
   // instead of the wrapping response envelope.
-  const result = await window.nexusAgent.api<{ config: HermesConfig; agents: unknown[] }>({
+  const result = await window.nexusAgent.api<{ config: GatewayConfig; agents: unknown[] }>({
     ...profileScoped(),
     path: '/api/config'
   })
   return result.config ?? {}
 }
 
-export async function getHermesConfigRecord(): Promise<HermesConfigRecord> {
-  // Same as getHermesConfig but returns the more permissive Record type.
-  const result = await window.nexusAgent.api<{ config: HermesConfigRecord; agents: unknown[] }>({
+export async function getGatewayConfigRecord(): Promise<GatewayConfigRecord> {
+  // Same as getGatewayConfig but returns the more permissive Record type.
+  const result = await window.nexusAgent.api<{ config: GatewayConfigRecord; agents: unknown[] }>({
     ...profileScoped(),
     path: '/api/config'
   })
   return result.config ?? {}
 }
 
-export function getHermesConfigDefaults(): Promise<HermesConfigRecord> {
-  return window.nexusAgent.api<HermesConfigRecord>({
+export function getGatewayConfigDefaults(): Promise<GatewayConfigRecord> {
+  return window.nexusAgent.api<GatewayConfigRecord>({
     ...profileScoped(),
     path: '/api/config/defaults'
   })
 }
 
-export function getHermesConfigSchema(): Promise<ConfigSchemaResponse> {
+export function getGatewayConfigSchema(): Promise<ConfigSchemaResponse> {
   return window.nexusAgent.api<ConfigSchemaResponse>({
     ...profileScoped(),
     path: '/api/config/schema'
   })
 }
 
-export function saveHermesConfig(config: HermesConfigRecord): Promise<{ ok: boolean }> {
+export function saveGatewayConfig(config: GatewayConfigRecord): Promise<{ ok: boolean }> {
   return window.nexusAgent.api<{ ok: boolean }>({
     ...profileScoped(),
     path: '/api/config',

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-import type { HermesConnection } from '@/global'
+import type { GatewayConnection } from '@/global'
 import { NexusGateway } from '@/nexus'
 import { translateNow } from '@/i18n'
 import { isGatewayReauthRequired, resolveGatewayWsUrl } from '@/lib/gateway-ws-url'
@@ -40,7 +40,7 @@ interface GatewayBootOptions {
     connection: Awaited<ReturnType<NonNullable<typeof window.nexusAgent>['getConnection']>> | null
   ) => void
   onGatewayReady: (gateway: NexusGateway | null) => void
-  refreshHermesConfig: () => Promise<void>
+  refreshGatewayConfig: () => Promise<void>
   refreshSessions: () => Promise<void>
 }
 
@@ -48,14 +48,14 @@ export function useGatewayBoot({
   handleGatewayEvent,
   onConnectionReady,
   onGatewayReady,
-  refreshHermesConfig,
+  refreshGatewayConfig,
   refreshSessions
 }: GatewayBootOptions) {
   const callbacksRef = useRef({
     handleGatewayEvent,
     onConnectionReady,
     onGatewayReady,
-    refreshHermesConfig,
+    refreshGatewayConfig,
     refreshSessions
   })
 
@@ -63,7 +63,7 @@ export function useGatewayBoot({
     handleGatewayEvent,
     onConnectionReady,
     onGatewayReady,
-    refreshHermesConfig,
+    refreshGatewayConfig,
     refreshSessions
   }
 
@@ -71,7 +71,7 @@ export function useGatewayBoot({
     let cancelled = false
     const desktop = window.nexusAgent
 
-    const publish = (next: HermesConnection | null) => {
+    const publish = (next: GatewayConnection | null) => {
       callbacksRef.current.onConnectionReady(next)
       setConnection(next)
     }
@@ -143,7 +143,7 @@ export function useGatewayBoot({
 
         reconnectAttempt = 0
         // Resync state that may have moved on the backend while we were asleep.
-        await callbacksRef.current.refreshHermesConfig().catch(() => undefined)
+        await callbacksRef.current.refreshGatewayConfig().catch(() => undefined)
         await callbacksRef.current.refreshSessions().catch(() => undefined)
       } catch (err) {
         // OAuth session expired mid-reconnect: surface the actionable "sign in
@@ -335,7 +335,7 @@ export function useGatewayBoot({
           message: 'Loading Nexus Agent settings',
           progress: 97
         })
-        await callbacksRef.current.refreshHermesConfig()
+        await callbacksRef.current.refreshGatewayConfig()
 
         if (cancelled) {
           return

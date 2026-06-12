@@ -8,15 +8,15 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
   getElevenLabsVoices,
-  getHermesConfigDefaults,
-  getHermesConfigRecord,
-  getHermesConfigSchema,
-  saveHermesConfig
+  getGatewayConfigDefaults,
+  getGatewayConfigRecord,
+  getGatewayConfigSchema,
+  saveGatewayConfig
 } from '@/nexus'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
-import type { ConfigFieldSchema, HermesConfigRecord } from '@/types/nexus'
+import type { ConfigFieldSchema, GatewayConfigRecord } from '@/types/nexus'
 
 import { CONTROL_TEXT, EMPTY_SELECT_VALUE, FIELD_DESCRIPTIONS, FIELD_LABELS, AGENT_GATEWAY_SECTIONS as SECTIONS } from './constants'
 import { enumOptionsFor, getNested, prettyName, setNested } from './helpers'
@@ -186,8 +186,8 @@ export function ConfigSettings({
   onMainModelChanged?: (provider: string, model: string) => void
   importInputRef: React.RefObject<HTMLInputElement | null>
 }) {
-  const [config, setConfig] = useState<HermesConfigRecord | null>(null)
-  const [_defaults, setDefaults] = useState<HermesConfigRecord | null>(null)
+  const [config, setConfig] = useState<GatewayConfigRecord | null>(null)
+  const [_defaults, setDefaults] = useState<GatewayConfigRecord | null>(null)
   const [schema, setSchema] = useState<Record<string, ConfigFieldSchema> | null>(null)
   const [elevenLabsVoiceOptions, setElevenLabsVoiceOptions] = useState<string[] | null>(null)
   const [elevenLabsVoiceLabels, setElevenLabsVoiceLabels] = useState<Record<string, string>>({})
@@ -196,7 +196,7 @@ export function ConfigSettings({
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([getHermesConfigRecord(), getHermesConfigDefaults(), getHermesConfigSchema()])
+    Promise.all([getGatewayConfigRecord(), getGatewayConfigDefaults(), getGatewayConfigSchema()])
       .then(([c, d, s]) => {
         if (cancelled) {
           return
@@ -249,7 +249,7 @@ export function ConfigSettings({
     const t = window.setTimeout(() => {
       void (async () => {
         try {
-          await saveHermesConfig(config)
+          await saveGatewayConfig(config)
 
           if (saveVersionRef.current === v) {
             onConfigSaved?.()
@@ -265,7 +265,7 @@ export function ConfigSettings({
     return () => window.clearTimeout(t)
   }, [config, onConfigSaved, saveVersion])
 
-  const updateConfig = (next: HermesConfigRecord) => {
+  const updateConfig = (next: GatewayConfigRecord) => {
     saveVersionRef.current += 1
     setConfig(next)
     setSaveVersion(saveVersionRef.current)

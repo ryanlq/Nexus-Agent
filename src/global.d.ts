@@ -6,7 +6,7 @@ declare global {
       // Resolve a backend connection. Omit `profile` (or pass the primary) for
       // the window's backend; pass a named profile to lazily spawn/reuse that
       // profile's backend from the pool.
-      getConnection: (profile?: string | null) => Promise<HermesConnection>
+      getConnection: (profile?: string | null) => Promise<GatewayConnection>
       // Keepalive: mark a pool profile backend as recently used so the idle
       // reaper spares it while its chat is active.
       touchBackend: (profile?: string | null) => Promise<{ ok: boolean }>
@@ -62,7 +62,6 @@ declare global {
         write: (id: string, data: string) => Promise<boolean>
       }
       onClosePreviewRequested?: (callback: () => void) => () => void
-      onOpenUpdatesRequested?: (callback: () => void) => () => void
       onWindowStateChanged?: (callback: (payload: HermesWindowState) => void) => () => void
       onPreviewFileChanged: (callback: (payload: HermesPreviewFileChanged) => void) => () => void
       onBackendExit: (callback: (payload: BackendExit) => void) => () => void
@@ -75,13 +74,6 @@ declare global {
         update: () => Promise<SidecarUpdateResult>
         getVersion: () => Promise<SidecarVersion | null>
         onUpdateAvailable: (callback: (info: SidecarUpdateCheck) => void) => () => void
-      }
-      updates: {
-        check: () => Promise<DesktopUpdateStatus>
-        apply: (opts?: DesktopUpdateApplyOptions) => Promise<DesktopUpdateApplyResult>
-        getBranch: () => Promise<{ branch: string }>
-        setBranch: (name: string) => Promise<{ branch: string }>
-        onProgress: (callback: (payload: DesktopUpdateProgress) => void) => () => void
       }
     }
   }
@@ -103,60 +95,9 @@ export interface DesktopVersionInfo {
   electronVersion: string
   nodeVersion: string
   platform: string
-  hermesRoot: string
 }
 
-export interface DesktopUpdateCommit {
-  sha: string
-  summary: string
-  author: string
-  at: number
-}
-
-export interface DesktopUpdateStatus {
-  supported: boolean
-  branch?: string
-  currentBranch?: string
-  reason?: string
-  message?: string
-  error?: string
-  behind?: number
-  currentSha?: string
-  targetSha?: string
-  commits?: DesktopUpdateCommit[]
-  dirty?: boolean
-  fetchedAt?: number
-}
-
-export type DesktopUpdateDirtyStrategy = 'abort' | 'stash' | 'force'
-
-export interface DesktopUpdateApplyOptions {
-  dirtyStrategy?: DesktopUpdateDirtyStrategy
-}
-
-export interface DesktopUpdateApplyResult {
-  ok: boolean
-  branch?: string
-  error?: string
-  message?: string
-  /** True when no staged updater exists (CLI install) and the user should run
-   *  `hermes update` themselves. `command` is the exact line to run. */
-  manual?: boolean
-  command?: string
-  hermesRoot?: string
-}
-
-export type DesktopUpdateStage = 'idle' | 'prepare' | 'fetch' | 'pull' | 'pydeps' | 'restart' | 'manual' | 'error'
-
-export interface DesktopUpdateProgress {
-  stage: DesktopUpdateStage
-  message: string
-  percent: number | null
-  error: string | null
-  at: number
-}
-
-export interface HermesConnection {
+export interface GatewayConnection {
   baseUrl: string
   isFullscreen: boolean
   mode?: 'local' | 'remote'

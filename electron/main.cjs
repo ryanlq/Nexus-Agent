@@ -160,27 +160,13 @@ const DESKTOP_CONNECTION_CONFIG_PATH = path.join(
   app.getPath("userData"),
   "connection.json",
 );
-const DESKTOP_UPDATE_CONFIG_PATH = path.join(
-  app.getPath("userData"),
-  "updates.json",
-);
-// active-profile.json records which Hermes profile the desktop launches its
-// local backend as. When set, startHermes() passes `hermes --profile <name>
-// dashboard …`, which deterministically pins NEXUS_AGENT_HOME (see
-// _apply_profile_override in hermes_cli/main.py) and bypasses the sticky
-// ~/.hermes/active_profile file. Unset (null) preserves the legacy behavior:
-// no --profile flag, so the backend honors active_profile / default.
+// active-profile.json records which profile the desktop launches its
+// local backend as.
 const DESKTOP_PROFILE_CONFIG_PATH = path.join(
   app.getPath("userData"),
   "active-profile.json",
 );
-// Mirrors hermes_cli.profiles._PROFILE_ID_RE so we never hand the backend a
-// value its profile resolver would reject and exit on.
 const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
-// Branch we track for self-update. The GUI work has merged to main, so this
-// tracks main. User can also override at runtime via
-// hermesDesktop.updates.setBranch().
-const DEFAULT_UPDATE_BRANCH = "main";
 // desktop.log lives under NEXUS_AGENT_HOME/logs/ so it sits next to agent.log,
 // errors.log, gateway.log produced by hermes_logging.setup_logging — one log
 // directory per user, regardless of which UI surface produced the line.
@@ -425,11 +411,11 @@ function registerMediaProtocol() {
 }
 
 let mainWindow = null;
-let hermesProcess = null;
+let gatewayProcess = null;
 let connectionPromise = null;
 // System tray + lightweight mode: when enabled the renderer (BrowserWindow) is
 // destroyed to free ~60-70% of the desktop's memory footprint. The backend
-// process (hermesProcess) stays alive so the gateway keeps serving REST/WS and
+// process (gatewayProcess) stays alive so the gateway keeps serving REST/WS and
 // external messaging platforms (email, Telegram, …) continue uninterrupted.
 // Clicking the tray icon or unchecking lightweight mode recreates the window,
 // reconnects the WebSocket, and pulls a fresh session list from the backend.
@@ -443,8 +429,8 @@ let restoringFromLightweight = false;
 // instead of letting the app actually exit.
 let quitting = false;
 // Additional per-profile backends, keyed by profile name. The PRIMARY backend
-// (the desktop's launch profile) stays managed by hermesProcess +
-// connectionPromise + startHermes(); this pool only holds EXTRA profile
+// (the desktop's launch profile) stays managed by gatewayProcess +
+// connectionPromise + startGateway(); this pool only holds EXTRA profile
 // backends spawned lazily when a session belongs to a different profile. A user
 // with no named profiles never populates this map, so their experience is
 // byte-for-byte the single-backend behavior.
@@ -476,7 +462,7 @@ let rendererReloadTimes = [];
 // NOTE: bootstrapFailure / bootstrapAbortController removed — legacy bootstrap path retired.
 let connectionConfigCache = null;
 let connectionConfigCacheMtime = null;
-const hermesLog = [];
+const gatewayLog = [];
 const previewWatchers = new Map();
 let previewShortcutActive = false;
 let desktopLogBuffer = "";
@@ -537,9 +523,9 @@ function rememberLog(chunk) {
   const text = String(chunk || "").trim();
   if (!text) return;
   const lines = text.split(/\r?\n/).map((line) => `[nexus] ${line}`);
-  hermesLog.push(...lines);
-  if (hermesLog.length > 300) {
-    hermesLog.splice(0, hermesLog.length - 300);
+  gatewayLog.push(...lines);
+  if (gatewayLog.length > 300) {
+    gatewayLog.splice(0, gatewayLog.length - 300);
   }
 
   desktopLogBuffer += `${lines.join("\n")}\n`;
@@ -1126,74 +1112,6 @@ function findGitBash() {
 
 // NOTE: getVenvPython removed — legacy hermes_cli venv path retired.
 
-// resolveGitBinary — locate git.exe on Windows. A fresh installer-driven
-// install only has PortableGit under %LOCALAPPDATA%\hermes\git (never on
-// PATH), so a bare spawn('git') ENOENTs and self-update checks fail with
-// "Couldn't check for updates". Mirror findGitBash: PortableGit first, then
-// standard Git-for-Windows locations, then PATH. Cached after first probe.
-let _gitBinaryCache = null;
-function resolveGitBinary() {
-  if (_gitBinaryCache) return _gitBinaryCache;
-  if (!IS_WINDOWS) {
-    _gitBinaryCache = findOnPath("git") || "git";
-    return _gitBinaryCache;
-  }
-
-  const localAppData = process.env.LOCALAPPDATA || "";
-  const candidates = [];
-  if (localAppData) {
-    candidates.push(
-      path.join(localAppData, "nexus-agent", "git", "cmd", "git.exe"),
-    );
-    candidates.push(
-      path.join(localAppData, "nexus-agent", "git", "bin", "git.exe"),
-    );
-  }
-  candidates.push(
-    path.join(
-      process.env["ProgramFiles"] || "C:\\Program Files",
-      "Git",
-      "cmd",
-      "git.exe",
-    ),
-  );
-  candidates.push(
-    path.join(
-      process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)",
-      "Git",
-      "cmd",
-      "git.exe",
-    ),
-  );
-  if (localAppData) {
-    candidates.push(
-      path.join(localAppData, "Programs", "Git", "cmd", "git.exe"),
-    );
-  }
-
-  _gitBinaryCache = candidates.find(fileExists) || findOnPath("git") || "git";
-  return _gitBinaryCache;
-}
-
-function recentHermesLog() {
-  return hermesLog.slice(-20).join("\n");
-}
-
-// ─── Self-update (git-pull against the running backend's hermes root) ──────
-
-function readDesktopUpdateConfig() {
-  try {
-    const parsed = JSON.parse(
-      fs.readFileSync(DESKTOP_UPDATE_CONFIG_PATH, "utf8"),
-    );
-    const branch =
-      typeof parsed?.branch === "string" ? parsed.branch.trim() : "";
-    return { branch: branch || DEFAULT_UPDATE_BRANCH };
-  } catch {
-    return { branch: DEFAULT_UPDATE_BRANCH };
-  }
-}
-
 // Atomic file write: temp + rename (atomic on all platforms). Prevents
 // partial writes on crash/power loss that corrupt JSON config files.
 function writeFileAtomic(targetPath, data, encoding) {
@@ -1202,747 +1120,6 @@ function writeFileAtomic(targetPath, data, encoding) {
   fs.renameSync(tmp, targetPath);
 }
 
-function writeDesktopUpdateConfig(config) {
-  fs.mkdirSync(path.dirname(DESKTOP_UPDATE_CONFIG_PATH), { recursive: true });
-  writeFileAtomic(DESKTOP_UPDATE_CONFIG_PATH, JSON.stringify(config, null, 2));
-}
-
-// resolveUpdateRoot — resolves the directory for git-based self-update.
-// Simplified after hermes_cli retirement: the update root is the git checkout
-// if available, otherwise NEXUS_AGENT_HOME.
-function resolveUpdateRoot() {
-  const candidates = [
-    process.env.NEXUS_AGENT_ROOT && path.resolve(process.env.NEXUS_AGENT_ROOT),
-    SOURCE_REPO_ROOT,
-    NEXUS_AGENT_HOME,
-  ].filter(Boolean);
-
-  return (
-    candidates.find((c) => directoryExists(path.join(c, ".git"))) ||
-    candidates[0] ||
-    NEXUS_AGENT_HOME
-  );
-}
-
-function runGit(args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(
-      resolveGitBinary(),
-      IS_WINDOWS ? ["-c", "windows.appendAtomically=false", ...args] : args,
-      {
-        cwd: options.cwd,
-        env: {
-          ...process.env,
-          ...(options.env || {}),
-          GIT_TERMINAL_PROMPT: "0",
-        },
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => {
-      const text = chunk.toString();
-      stdout += text;
-      options.onLine?.("stdout", text);
-    });
-    child.stderr.on("data", (chunk) => {
-      const text = chunk.toString();
-      stderr += text;
-      options.onLine?.("stderr", text);
-    });
-    child.once("error", reject);
-    child.once("exit", (code) => resolve({ code, stdout, stderr }));
-  });
-}
-
-const firstLine = (text) => (text || "").split("\n").find(Boolean) || "";
-
-function emitUpdateProgress(payload) {
-  const merged = {
-    stage: "idle",
-    message: "",
-    percent: null,
-    error: null,
-    ...payload,
-    at: Date.now(),
-  };
-  rememberLog(
-    `[updates] ${merged.stage}: ${merged.message || merged.error || ""}`,
-  );
-  for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send("nexus:updates:progress", merged);
-  }
-}
-
-// Self-heal the tracked update branch: if origin no longer publishes it (e.g.
-// bb/gui was merged into main and deleted), fall back to main and persist so
-// every later check/apply follows main — no manual flip, even for already-
-// installed clients. Read-only ls-remote probe; only flips on a definitive
-// "ref absent" (exit 2), never on a transient network error, so a flaky
-// connection can't strand a user on the wrong branch.
-async function resolveHealedBranch(updateRoot, branch) {
-  if (!branch || branch === "main") {
-    return branch || "main";
-  }
-
-  const probe = await runGit(
-    ["ls-remote", "--exit-code", "--heads", "origin", branch],
-    { cwd: updateRoot },
-  );
-  if (probe.code !== 2) {
-    return branch;
-  }
-
-  rememberLog(
-    `[updates] origin/${branch} is gone (merged?); falling back to main`,
-  );
-  const config = readDesktopUpdateConfig();
-  if (config.branch !== "main") {
-    writeDesktopUpdateConfig({ ...config, branch: "main" });
-  }
-  return "main";
-}
-
-async function checkUpdates() {
-  const updateRoot = resolveUpdateRoot();
-  let { branch } = readDesktopUpdateConfig();
-  const gitDir = path.join(updateRoot, ".git");
-  if (!directoryExists(gitDir)) {
-    return {
-      supported: false,
-      reason: "not-a-git-checkout",
-      message: `${updateRoot} isn't a git checkout — desktop self-update only runs against a source install.`,
-      hermesRoot: updateRoot,
-      branch,
-    };
-  }
-
-  branch = await resolveHealedBranch(updateRoot, branch);
-  const fetched = await runGit(["fetch", "--quiet", "origin", branch], {
-    cwd: updateRoot,
-  });
-  if (fetched.code !== 0) {
-    return {
-      supported: true,
-      branch,
-      error: "fetch-failed",
-      message: firstLine(fetched.stderr) || "git fetch failed.",
-      hermesRoot: updateRoot,
-      fetchedAt: Date.now(),
-    };
-  }
-
-  const git = (args) =>
-    runGit(args, { cwd: updateRoot }).then((r) => r.stdout.trim());
-  const [currentSha, targetSha, countStr, dirtyStr, currentBranch] =
-    await Promise.all([
-      git(["rev-parse", "HEAD"]),
-      git(["rev-parse", `origin/${branch}`]),
-      git(["rev-list", `HEAD..origin/${branch}`, "--count"]),
-      git(["status", "--porcelain"]),
-      git(["rev-parse", "--abbrev-ref", "HEAD"]),
-    ]);
-
-  const behind = Number.parseInt(countStr, 10) || 0;
-  const commits = behind > 0 ? await readCommitLog(updateRoot, branch) : [];
-
-  return {
-    supported: true,
-    branch,
-    currentBranch,
-    behind,
-    currentSha,
-    targetSha,
-    commits,
-    dirty: dirtyStr.length > 0,
-    hermesRoot: updateRoot,
-    fetchedAt: Date.now(),
-  };
-}
-
-async function readCommitLog(cwd, branch) {
-  const SEP = "\x1f";
-  const REC = "\x1e";
-  const { stdout } = await runGit(
-    [
-      "log",
-      `HEAD..origin/${branch}`,
-      `--pretty=format:%H${SEP}%s${SEP}%an${SEP}%at${REC}`,
-      "-n",
-      "40",
-    ],
-    { cwd },
-  );
-
-  return stdout
-    .split(REC)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [sha, summary, author, at] = line.split(SEP);
-      return { sha, summary, author, at: Number.parseInt(at, 10) * 1000 };
-    });
-}
-
-let updateInFlight = false;
-
-// Resolve the staged updater binary. The Tauri installer copies itself to
-// NEXUS_AGENT_HOME/hermes-setup.exe on a successful install (see
-// apps/bootstrap-installer paths::copy_self_to_hermes_home). That binary owns
-// ALL repo mutation — running `hermes update` + rebuilding the desktop — so
-// the desktop never touches its own bits while running. Returns null when the
-// updater isn't staged (e.g. a dev/source run that never went through the
-// installer); callers degrade gracefully.
-function resolveUpdaterBinary() {
-  const name = IS_WINDOWS ? "hermes-setup.exe" : "hermes-setup";
-  const candidate = path.join(NEXUS_AGENT_HOME, name);
-  return fileExists(candidate) ? candidate : null;
-}
-
-function repairMacUpdaterHelper(updater) {
-  if (!IS_MAC || !updater) return;
-
-  try {
-    execFileSync("/usr/bin/xattr", ["-cr", updater], { stdio: "ignore" });
-  } catch (err) {
-    rememberLog(
-      `[updates] macOS updater helper quarantine repair skipped: ${err.message}`,
-    );
-  }
-
-  try {
-    execFileSync("/usr/bin/codesign", ["--verify", updater], {
-      stdio: "ignore",
-    });
-    return;
-  } catch {
-    // Unsigned or invalid helper. Apply a local ad-hoc signature so Gatekeeper
-    // does not block the staged updater before it can run.
-  }
-
-  try {
-    execFileSync("/usr/bin/codesign", ["--force", "--sign", "-", updater], {
-      stdio: "ignore",
-    });
-    rememberLog("[updates] repaired macOS updater helper signature");
-  } catch (err) {
-    rememberLog(
-      `[updates] macOS updater helper signature repair skipped: ${err.message}`,
-    );
-  }
-}
-
-// Path to the venv shim whose lock decides whether `hermes update` can write
-// fresh entry points. On Windows this is the file the running backend
-// `hermes.exe` holds open; on POSIX it's never mandatory-locked.
-function venvHermesShimPath(updateRoot) {
-  return IS_WINDOWS
-    ? path.join(updateRoot, "venv", "Scripts", "hermes.exe")
-    : path.join(updateRoot, "venv", "bin", "hermes");
-}
-
-// Best-effort lock probe mirroring the Rust updater's is_locked(): a running
-// .exe on Windows refuses an O_RDWR open with a sharing violation. On POSIX
-// this practically always succeeds (no mandatory locking), so it returns false
-// — correct, since the shim-contention brick is Windows-only.
-function isShimLocked(shimPath) {
-  if (!IS_WINDOWS) return false;
-  let fd;
-  try {
-    fd = fs.openSync(shimPath, "r+");
-    return false;
-  } catch (err) {
-    // ENOENT ⇒ not there ⇒ nothing locking it. Anything else (EBUSY/EPERM/
-    // EACCES) on Windows means a live handle holds it.
-    return err && err.code !== "ENOENT";
-  } finally {
-    if (fd !== undefined) {
-      try {
-        fs.closeSync(fd);
-      } catch {
-        void 0;
-      }
-    }
-  }
-}
-
-// Force-kill the entire process TREE rooted at each PID. Node's child.kill()
-// only signals the direct child, so on Windows a backend `hermes.exe` that
-// spawned its own grandchildren (a `hermes` REPL, a pty terminal session, the
-// gateway) would survive and keep the venv shim locked. taskkill /T /F reaps
-// the whole tree synchronously. Windows-only: this is called solely from the
-// Windows shim-unlock path, and the backend is NOT spawned detached (so it's
-// not a process-group leader — a POSIX negative-pgid kill would be meaningless
-// here anyway). POSIX teardown stays with the existing before-quit SIGTERM.
-function forceKillProcessTree(pid) {
-  if (!IS_WINDOWS) return;
-  if (!Number.isInteger(pid) || pid <= 0) return;
-  try {
-    execFileSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
-      stdio: "ignore",
-    });
-  } catch {
-    // Already gone, or no permission — best effort; the unlock wait below is
-    // the real gate.
-  }
-}
-
-// Before handing off the update on Windows, the desktop MUST stop every backend
-// it spawned and WAIT for the venv shim to actually unlock. The old code did
-// `hermesProcess.kill('SIGTERM')` + `app.quit()` fire-and-forget: SIGTERM on
-// Windows doesn't reap the backend's grandchildren, and quit didn't wait for
-// teardown, so the updater raced a still-locked `hermes.exe`, the quarantine
-// rename failed, uv's `pip install` hit "Access is denied", and the git path
-// bailed into a full ZIP re-download that ALSO couldn't write the locked shim —
-// a half-applied install (ryanc's update.log). Here we tree-kill the primary +
-// pool backends and poll the shim until it's writable (or a bounded timeout),
-// so by the time we spawn the updater the lock is genuinely gone.
-//
-// Windows-only: the venv-shim mandatory lock is a Windows phenomenon. On
-// macOS/Linux there's no REPLACE-on-running-exe block, the existing before-quit
-// SIGTERM + app.quit() teardown already works (the macOS path is flawless), and
-// aggressively SIGKILL-ing the backend here would be an untested behavior change
-// for no benefit. So we no-op off Windows and leave that path exactly as it was.
-async function releaseBackendLockForUpdate(updateRoot) {
-  if (!IS_WINDOWS) return { unlocked: true };
-
-  // Collect every backend PID the desktop owns: primary window backend + pool.
-  const pids = [];
-  if (hermesProcess && Number.isInteger(hermesProcess.pid))
-    pids.push(hermesProcess.pid);
-  for (const entry of backendPool.values()) {
-    if (entry.process && Number.isInteger(entry.process.pid))
-      pids.push(entry.process.pid);
-  }
-
-  // Graceful first (lets Python flush), then tree-kill to catch grandchildren.
-  if (hermesProcess && !hermesProcess.killed) {
-    try {
-      hermesProcess.kill("SIGTERM");
-    } catch {
-      void 0;
-    }
-  }
-  stopAllPoolBackends();
-  for (const pid of pids) forceKillProcessTree(pid);
-
-  const shim = venvHermesShimPath(updateRoot);
-  const deadlineMs = Date.now() + 15000;
-  while (Date.now() < deadlineMs) {
-    if (!isShimLocked(shim)) {
-      rememberLog("[updates] venv shim unlocked; safe to hand off the update");
-      return { unlocked: true };
-    }
-    await new Promise((r) => setTimeout(r, 300));
-  }
-  // Timed out: the updater's own wait_for_venv_free + force-kill is the second
-  // line of defense, and we pass --force so the guard won't dead-end. Log it.
-  rememberLog(
-    "[updates] venv shim still locked after 15s; handing off anyway (updater will force)",
-  );
-  return { unlocked: false };
-}
-
-// applyUpdates — hand off to the installer's --update flow, then exit.
-//
-// The desktop is a pure consumer: it does NOT git pull / pip install / rebuild
-// itself (the old open-coded git dance lived here and drifted from
-// `hermes update`). Instead we spawn the staged Hermes-Setup binary with
-// --update and quit, so it can run `hermes update` (which refuses while we
-// hold the venv shim) and rebuild the desktop with our exe already gone.
-//
-// Detection (checkUpdates / commit changelog / "N behind") stays in the UI;
-// only this apply action changed.
-async function applyUpdates(opts = {}) {
-  if (updateInFlight) {
-    throw new Error("An update is already in progress.");
-  }
-  updateInFlight = true;
-
-  try {
-    const updater = resolveUpdaterBinary();
-    if (!updater && !IS_WINDOWS) {
-      // macOS/Linux drag-install: no staged Tauri hermes-setup. Unlike Windows
-      // (where a venv-shim file lock forces the quit→hand-off→rebuild dance),
-      // there's no mandatory file locking here, so the desktop can drive the
-      // whole update itself: `hermes update` (backend) + `hermes desktop
-      // --build-only` (OS-aware GUI rebuild), then swap the running .app bundle
-      // with the freshly built one and relaunch.
-      return await applyUpdatesPosixInApp(opts);
-    }
-    if (!updater) {
-      // No staged updater binary — this is a CLI-installed user (they ran
-      // `hermes desktop`, never the Tauri installer that self-copies
-      // hermes-setup.exe into NEXUS_AGENT_HOME). They DO have a working `hermes`
-      // on PATH / in the venv, so the correct path is the one-liner in their
-      // native medium. We show the EXACT command, branch-pinned to the
-      // checkout they're on — bare `hermes update` defaults to main and would
-      // silently switch a bb/gui (or any non-main) install off-branch. Mirror
-      // the GUI button's contract: append --branch <current> for non-main
-      // checkouts, keep it bare for main so the card stays clean.
-      const updateRoot = resolveUpdateRoot();
-      let command = "hermes update";
-      try {
-        const head = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], {
-          cwd: updateRoot,
-        });
-        const current = (head.stdout || "").trim();
-        if (head.code === 0 && current && current !== "HEAD") {
-          const branch = await resolveHealedBranch(updateRoot, current);
-          if (branch !== "main") command = `hermes update --branch ${branch}`;
-        }
-      } catch {
-        // Best-effort: fall back to bare `hermes update` if branch detection fails.
-      }
-      rememberLog(
-        `[updates] no staged updater; surfacing manual \`${command}\` for CLI install at ${updateRoot}`,
-      );
-      emitUpdateProgress({ stage: "manual", message: command, percent: null });
-      return { ok: true, manual: true, command, hermesRoot: updateRoot };
-    }
-
-    emitUpdateProgress({
-      stage: "restart",
-      message: "Handing off to the Nexus Agent updater…",
-      percent: 100,
-    });
-    repairMacUpdaterHelper(updater);
-
-    const updateRoot = resolveUpdateRoot();
-    const { branch: configuredBranch } = readDesktopUpdateConfig();
-    const branch = await resolveHealedBranch(
-      updateRoot,
-      configuredBranch || DEFAULT_UPDATE_BRANCH,
-    );
-    const updaterArgs = ["--update", "--branch", branch];
-    const targetApp = IS_MAC ? runningAppBundle() : null;
-    if (targetApp) {
-      updaterArgs.push("--target-app", targetApp);
-    }
-    const venvBin = path.join(
-      updateRoot,
-      "venv",
-      IS_WINDOWS ? "Scripts" : "bin",
-    );
-
-    // Stop our own backend(s) and wait for the venv shim to unlock BEFORE we
-    // spawn the updater. Without this the updater races a still-locked
-    // hermes.exe (held by the backend child / its grandchildren) and the update
-    // bricks. See releaseBackendLockForUpdate for the full failure analysis.
-    await releaseBackendLockForUpdate(updateRoot);
-
-    // Detached so the updater outlives this process — it needs us GONE before
-    // `hermes update` will run (the venv shim is locked while we live).
-    const child = spawn(updater, updaterArgs, {
-      cwd: NEXUS_AGENT_HOME,
-      env: {
-        ...process.env,
-        NEXUS_AGENT_HOME,
-        PATH: [
-          path.join(NEXUS_AGENT_HOME, "node", "bin"),
-          venvBin,
-          process.env.PATH,
-        ]
-          .filter(Boolean)
-          .join(path.delimiter),
-      },
-      detached: true,
-      stdio: "ignore",
-      windowsHide: false,
-    });
-    child.unref();
-
-    rememberLog(
-      `[updates] launched updater: ${updater} ${updaterArgs.join(" ")}; exiting desktop to release venv shim`,
-    );
-
-    // Give the OS a beat to register the new process, then quit. The updater
-    // rebuilds and relaunches us when it's done.
-    setTimeout(() => {
-      app.quit();
-    }, 600);
-
-    return { ok: true, handedOff: true, updater };
-  } finally {
-    updateInFlight = false;
-  }
-}
-
-// Resolve the hermes CLI to drive an in-app update: prefer the venv shim in
-// the install we're updating, fall back to `hermes` on PATH.
-function resolveHermesCliBinary(updateRoot) {
-  const venvHermes = path.join(updateRoot, "venv", "bin", "hermes");
-  if (fileExists(venvHermes)) return venvHermes;
-  return findOnPath("hermes") || null;
-}
-
-// Spawn a command and stream each output line to the update progress channel.
-function runStreamedUpdate(command, args, { cwd, env, stage } = {}) {
-  return new Promise((resolve) => {
-    let child;
-    try {
-      child = spawn(command, args, {
-        cwd,
-        env: { ...process.env, ...(env || {}) },
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-    } catch (err) {
-      resolve({ code: 1, error: err.message });
-      return;
-    }
-    const emitLines = (chunk) => {
-      for (const line of chunk.toString().split("\n")) {
-        const trimmed = line.trim();
-        if (trimmed)
-          emitUpdateProgress({ stage, message: trimmed, percent: null });
-      }
-    };
-    child.stdout.on("data", emitLines);
-    child.stderr.on("data", emitLines);
-    child.once("error", (err) => resolve({ code: 1, error: err.message }));
-    child.once("exit", (code) => resolve({ code }));
-  });
-}
-
-// The running app's .app bundle (packaged macOS): execPath is
-// <App>.app/Contents/MacOS/<exe>; climb three levels to the bundle root.
-function runningAppBundle() {
-  if (!IS_MAC) return null;
-  let dir = path.dirname(app.getPath("exe")); // .../Contents/MacOS
-  for (let i = 0; i < 2; i++) dir = path.dirname(dir); // -> .../X.app
-  return dir.endsWith(".app") ? dir : null;
-}
-
-function shellQuote(value) {
-  return `'${String(value).replace(/'/g, `'\\''`)}'`;
-}
-
-// macOS/Linux in-app update: backend (`hermes update`) + OS-aware GUI rebuild
-// (`hermes desktop --build-only`), then atomically swap the running .app bundle
-// with the freshly built one and relaunch. Degrades to "backend updated,
-// restart to load the new GUI" if the swap can't be performed.
-async function applyUpdatesPosixInApp() {
-  const updateRoot = resolveUpdateRoot();
-  const hermes = resolveHermesCliBinary(updateRoot);
-  if (!hermes) {
-    emitUpdateProgress({
-      stage: "manual",
-      message: "hermes update",
-      percent: null,
-    });
-    return {
-      ok: true,
-      manual: true,
-      command: "hermes update",
-      hermesRoot: updateRoot,
-    };
-  }
-
-  // Put the Hermes-managed Node and the venv on PATH so `hermes desktop`'s
-  // npm build can find them on a machine with no system Node.
-  const extraPath = [
-    path.join(NEXUS_AGENT_HOME, "node", "bin"),
-    path.join(updateRoot, "venv", "bin"),
-  ]
-    .filter(Boolean)
-    .join(path.delimiter);
-  const env = {
-    NEXUS_AGENT_HOME,
-    PATH: [extraPath, process.env.PATH].filter(Boolean).join(path.delimiter),
-  };
-
-  // `hermes update` reaps stale `hermes dashboard` backends (a code update
-  // leaves the running process serving old Python against the freshly-updated
-  // JS bundle). But OUR backend is one of those processes, and killing it
-  // mid-update produces the boot→kill→crash loop in #37532 — the desktop
-  // already restarts its own backend via the rebuild+relaunch below, so the
-  // reap must spare it. Hand the live backend's PID to the update process;
-  // _kill_stale_dashboard_processes reads NEXUS_AGENT_CHILD_PID and excludes
-  // it while still reaping any genuinely-orphaned dashboards. (#37532)
-  // Exclude every desktop-managed backend (primary + all pool profiles) from
-  // the update reaper. _kill_stale_dashboard_processes accepts a comma-separated
-  // list (a single int still parses for back-compat).
-  const desktopChildPids = [];
-  if (hermesProcess && Number.isInteger(hermesProcess.pid)) {
-    desktopChildPids.push(hermesProcess.pid);
-  }
-  for (const entry of backendPool.values()) {
-    if (entry.process && Number.isInteger(entry.process.pid)) {
-      desktopChildPids.push(entry.process.pid);
-    }
-  }
-  if (desktopChildPids.length) {
-    env.NEXUS_AGENT_CHILD_PID = desktopChildPids.join(",");
-  }
-
-  // Branch-pin so a non-main checkout doesn't get switched to main (and self-heal
-  // to main when the pinned branch no longer exists on origin).
-  let branchArgs = [];
-  try {
-    const head = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], {
-      cwd: updateRoot,
-    });
-    const current = (head.stdout || "").trim();
-    if (head.code === 0 && current && current !== "HEAD") {
-      branchArgs = ["--branch", await resolveHealedBranch(updateRoot, current)];
-    }
-  } catch {
-    // best effort
-  }
-
-  emitUpdateProgress({
-    stage: "update",
-    message: "Updating Nexus Agent (git + dependencies)…",
-    percent: 10,
-  });
-  const updated = await runStreamedUpdate(
-    hermes,
-    ["update", "--yes", ...branchArgs],
-    {
-      cwd: updateRoot,
-      env,
-      stage: "update",
-    },
-  );
-  if (updated.code !== 0) {
-    emitUpdateProgress({
-      stage: "error",
-      message: "hermes update failed.",
-      error: updated.error || "update-failed",
-    });
-    return { ok: false, error: "hermes update failed" };
-  }
-
-  emitUpdateProgress({
-    stage: "rebuild",
-    message: "Rebuilding the desktop app…",
-    percent: 60,
-  });
-  const rebuilt = await runStreamedUpdate(hermes, ["desktop", "--build-only"], {
-    cwd: updateRoot,
-    env,
-    stage: "rebuild",
-  });
-  if (rebuilt.code !== 0) {
-    emitUpdateProgress({
-      stage: "error",
-      message:
-        "Backend updated, but the desktop rebuild failed. Restart Nexus Agent to retry.",
-      error: rebuilt.error || "rebuild-failed",
-    });
-    return { ok: false, backendUpdated: true, error: "desktop rebuild failed" };
-  }
-
-  const rebuiltApp = [
-    path.join(
-      updateRoot,
-      "apps",
-      "desktop",
-      "release",
-      "mac-arm64",
-      "Nexus Agent.app",
-    ),
-    path.join(
-      updateRoot,
-      "apps",
-      "desktop",
-      "release",
-      "mac",
-      "Nexus Agent.app",
-    ),
-  ].find(directoryExists);
-  const targetApp = runningAppBundle();
-
-  // No bundle to swap (dev run, Linux AppImage, or unresolved paths): the
-  // backend is updated; the next launch picks up the rebuilt GUI.
-  if (!rebuiltApp || !targetApp) {
-    emitUpdateProgress({
-      stage: "done",
-      message: "Backend updated. Restart Nexus Agent to load the new version.",
-      percent: 100,
-    });
-    return { ok: true, backendUpdated: true, rebuiltApp: rebuiltApp || null };
-  }
-
-  emitUpdateProgress({
-    stage: "restart",
-    message: "Installing the updated app and restarting…",
-    percent: 95,
-  });
-
-  // Detached swapper: wait for THIS process to exit (so the bundle is free),
-  // ditto the rebuilt app over the running one, clear quarantine, relaunch.
-  const swapScript = `#!/bin/bash
-set -u
-APP_PID=${process.pid}
-SRC=${shellQuote(rebuiltApp)}
-DST=${shellQuote(targetApp)}
-for _ in $(seq 1 240); do
-  kill -0 "$APP_PID" 2>/dev/null || break
-  sleep 0.5
-done
-if [ "$SRC" != "$DST" ]; then
-  if /usr/bin/ditto "$SRC" "$DST.hermes-update-new"; then
-    rm -rf "$DST.hermes-update-old" 2>/dev/null || true
-    mv "$DST" "$DST.hermes-update-old" 2>/dev/null || rm -rf "$DST"
-    mv "$DST.hermes-update-new" "$DST"
-    rm -rf "$DST.hermes-update-old" 2>/dev/null || true
-  fi
-fi
-/usr/bin/xattr -dr com.apple.quarantine "$DST" 2>/dev/null || true
-/usr/bin/open "$DST"
-`;
-  const scriptPath = path.join(
-    app.getPath("temp"),
-    `nexus-desktop-update-${Date.now()}.sh`,
-  );
-  try {
-    fs.writeFileSync(scriptPath, swapScript, { mode: 0o755 });
-  } catch (err) {
-    emitUpdateProgress({
-      stage: "done",
-      message:
-        "Backend + app updated. Restart Nexus Agent to load the new version.",
-      percent: 100,
-    });
-    rememberLog(
-      `[updates] could not write swap script: ${err.message}; rebuilt app at ${rebuiltApp}`,
-    );
-    return { ok: true, backendUpdated: true, rebuiltApp };
-  }
-
-  const child = spawn("/bin/bash", [scriptPath], {
-    detached: true,
-    stdio: "ignore",
-  });
-  child.unref();
-  rememberLog(
-    `[updates] launched mac swap+relaunch: ${scriptPath} (${rebuiltApp} -> ${targetApp})`,
-  );
-
-  setTimeout(() => app.quit(), 600);
-  return { ok: true, handedOff: true, rebuiltApp, targetApp };
-}
-
-// NOTE: readJson removed — was only used by legacy bootstrap marker logic.
-
-// Bootstrap-complete marker helpers. The marker is written ONCE by the
-// first-launch bootstrap runner (Phase 1D) after install.ps1 stages succeed
-// AND the user has finished initial configuration. On every subsequent boot
-// we check `isBootstrapComplete()` and skip the bootstrap flow entirely if
-// the marker is present and current-schema.
-//
-// Marker schema (version 1):
-//   {
-//     schemaVersion: 1,
-//     pinnedCommit: "<40-char SHA>",       // what install.ps1 was driven against
-//     pinnedBranch: "<branch name>" | null,
-//     completedAt:  "<ISO 8601>",
-//     desktopVersion: "<app.getVersion()>"  // for forensics
-//   }
-// NOTE: readBootstrapMarker, isBootstrapComplete, writeBootstrapMarker removed — legacy bootstrap retired.
 
 function resolveWebDist() {
   const override = process.env.NEXUS_AGENT_WEB_DIST;
@@ -1963,7 +1140,7 @@ function resolveRendererIndex() {
   return candidates.find(fileExists) || candidates[0];
 }
 
-function resolveHermesCwd() {
+function resolveGatewayCwd() {
   // In a packaged build, `process.cwd()` resolves to the install root (e.g.
   // `…/win-unpacked` on Windows or `/Applications/Nexus Agent.app/Contents/...`
   // on macOS). Sessions spawned there leave files inside the app bundle
@@ -2082,7 +1259,7 @@ function resolveSidecarBinary() {
   return null;
 }
 
-function resolveHermesBackend(port) {
+function resolveGatewayBackend(port) {
   // 0. External agent-gateway server — NEXUS_AGENT_AGENT_GATEWAY_ROOT points
   //    at the standalone agent-gateway checkout. Spawns `python -m agent_gateway`
   //    which starts a FastAPI + WebSocket JSON-RPC server compatible with this
@@ -2757,7 +1934,7 @@ function previewFileTarget(rawTarget, baseDir) {
   const raw = String(rawTarget || "").trim();
   const base = baseDir
     ? path.resolve(expandUserPath(baseDir))
-    : resolveHermesCwd();
+    : resolveGatewayCwd();
   const filePath = raw.startsWith("file:")
     ? fileURLToPath(raw)
     : path.resolve(base, expandUserPath(raw));
@@ -2912,7 +2089,7 @@ function closePreviewWatchers() {
   }
 }
 
-async function waitForHermes(baseUrl, token) {
+async function waitForGateway(baseUrl, token) {
   const deadline = Date.now() + 45_000;
   let lastError = null;
 
@@ -3082,15 +2259,6 @@ function restoreWindowFromLightweight() {
   createWindow();
 }
 
-function sendOpenUpdatesRequested() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  const { webContents } = mainWindow;
-  if (!webContents || webContents.isDestroyed()) return;
-  webContents.send("nexus:open-updates");
-  if (!mainWindow.isVisible()) mainWindow.show();
-  mainWindow.focus();
-}
-
 function sendWindowStateChanged(nextIsFullscreen) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const { webContents } = mainWindow;
@@ -3106,16 +2274,11 @@ function sendWindowStateChanged(nextIsFullscreen) {
 
 function buildApplicationMenu() {
   const template = [];
-  const checkForUpdatesItem = {
-    label: "Check for Updates…",
-    click: () => sendOpenUpdatesRequested(),
-  };
   if (IS_MAC) {
     template.push({
       label: APP_NAME,
       submenu: [
         { role: "about", label: `About ${APP_NAME}` },
-        checkForUpdatesItem,
         { type: "separator" },
         { role: "services" },
         { type: "separator" },
@@ -3213,7 +2376,7 @@ function buildApplicationMenu() {
   template.push({
     label: "Help",
     role: "help",
-    submenu: [checkForUpdatesItem],
+    submenu: [],
   });
 
   return Menu.buildFromTemplate(template);
@@ -4300,7 +3463,7 @@ async function testDesktopConnectionConfig(input = {}) {
       token = decryptDesktopSecret(block.token);
     }
   } else {
-    const remote = (await resolveRemoteBackend(key)) || (await startHermes());
+    const remote = (await resolveRemoteBackend(key)) || (await startGateway());
     baseUrl = remote.baseUrl;
     token = remote.token;
     authMode = normAuthMode(remote.authMode);
@@ -4354,25 +3517,25 @@ function resetBootProgressForReconnect() {
   );
 }
 
-function resetHermesConnection() {
+function resetGatewayConnection() {
   connectionPromise = null;
 
-  if (hermesProcess && !hermesProcess.killed) {
-    hermesProcess.kill("SIGTERM");
+  if (gatewayProcess && !gatewayProcess.killed) {
+    gatewayProcess.kill("SIGTERM");
   }
 
-  hermesProcess = null;
+  gatewayProcess = null;
   resetBootProgressForReconnect();
 }
 
 // Re-home the primary backend: reset connection state, then wait for the live
 // dashboard process to actually exit (SIGKILL after 5s) so the next
-// startHermes() spawns fresh instead of racing the dying one. Shared by the
+// startGateway() spawns fresh instead of racing the dying one. Shared by the
 // connection-config and profile switch flows.
 async function teardownPrimaryBackendAndWait() {
-  // Capture the reference before resetHermesConnection() nulls hermesProcess.
-  const dying = hermesProcess && !hermesProcess.killed ? hermesProcess : null;
-  resetHermesConnection();
+  // Capture the reference before resetGatewayConnection() nulls gatewayProcess.
+  const dying = gatewayProcess && !gatewayProcess.killed ? gatewayProcess : null;
+  resetGatewayConnection();
 
   if (!dying) {
     return;
@@ -4402,7 +3565,7 @@ function primaryProfileKey() {
 }
 
 // Resolve a backend connection for the given profile. Routes the primary
-// profile to startHermes() (the window backend: boot UI, bootstrap, remote
+// profile to startGateway() (the window backend: boot UI, bootstrap, remote
 // mode), and any OTHER profile to a lazily-spawned pool backend. An empty /
 // unknown profile resolves to the primary, so all legacy callers are unchanged.
 async function ensureBackend(profile) {
@@ -4412,7 +3575,7 @@ async function ensureBackend(profile) {
       : primaryProfileKey();
 
   if (key === primaryProfileKey()) {
-    return startHermes();
+    return startGateway();
   }
 
   const existing = backendPool.get(key);
@@ -4493,12 +3656,12 @@ function startPoolIdleReaper() {
 }
 
 // Spawn an additional dashboard backend pinned to a named profile. Mirrors the
-// local-spawn portion of startHermes() but without the boot-progress UI,
+// local-spawn portion of startGateway() but without the boot-progress UI,
 // bootstrap, or remote handling (those belong to the primary backend only).
 async function spawnPoolBackend(profile, entry) {
   // Ensure PATH is enriched before we resolve a remote probe or spawn a
   // local pool backend. Cached + idempotent — the primary backend's
-  // startHermes() already did the first shell probe, so this call is
+  // startGateway() already did the first shell probe, so this call is
   // effectively free for any subsequent profile.
   await expandProcessPath();
 
@@ -4510,25 +3673,25 @@ async function spawnPoolBackend(profile, entry) {
   // tolerate.
   const remote = await resolveRemoteBackend(profile);
   if (remote) {
-    await waitForHermes(remote.baseUrl, remote.token);
+    await waitForGateway(remote.baseUrl, remote.token);
     return {
       ...remote,
       profile,
-      logs: hermesLog.slice(-80),
+      logs: gatewayLog.slice(-80),
       ...getWindowState(),
     };
   }
 
   const port = await pickPort();
   const token = crypto.randomBytes(32).toString("base64url");
-  const backend = await ensureRuntime(resolveHermesBackend(port));
+  const backend = await ensureRuntime(resolveGatewayBackend(port));
   if (!backend) {
     throw new Error(
       "No agent-gateway backend available for profile '" + profile + "'. " +
         "Set NEXUS_AGENT_AGENT_GATEWAY_ROOT or ensure a sidecar binary is present."
     );
   }
-  const hermesCwd = resolveHermesCwd();
+  const gatewayCwd = resolveGatewayCwd();
   const webDist = resolveWebDist();
 
   // Belt-and-braces: the before-pack hook sets +x at stage time, but some
@@ -4550,7 +3713,7 @@ async function spawnPoolBackend(profile, entry) {
   );
 
   const child = spawn(backend.command, backend.args, {
-    cwd: backend.cwd || hermesCwd,
+    cwd: backend.cwd || gatewayCwd,
     env: {
       ...process.env,
       NEXUS_AGENT_HOME,
@@ -4595,7 +3758,7 @@ async function spawnPoolBackend(profile, entry) {
   });
 
   const baseUrl = `http://127.0.0.1:${port}`;
-  await Promise.race([waitForHermes(baseUrl, token), startFailed]);
+  await Promise.race([waitForGateway(baseUrl, token), startFailed]);
   ready = true;
 
   return {
@@ -4606,7 +3769,7 @@ async function spawnPoolBackend(profile, entry) {
     token,
     profile,
     wsUrl: `ws://127.0.0.1:${port}/api/ws?token=${encodeURIComponent(token)}`,
-    logs: hermesLog.slice(-80),
+    logs: gatewayLog.slice(-80),
     ...getWindowState(),
   };
 }
@@ -4630,15 +3793,15 @@ function stopAllPoolBackends() {
   }
 }
 
-async function startHermes() {
+async function startGateway() {
   // Latched-failure short-circuit: once bootstrap has failed in this
-  // process, every subsequent startHermes() call re-throws the same error
+  // process, every subsequent startGateway() call re-throws the same error
   // Latched-failure short-circuit removed — legacy bootstrap path retired.
   if (connectionPromise) return connectionPromise;
 
   connectionPromise = (async () => {
     // Ensure the login-shell PATH is merged into process.env.PATH before
-    // we resolve the backend or spawn any child. On the first startHermes()
+    // we resolve the backend or spawn any child. On the first startGateway()
     // this may wait ~200ms for the shell probe; on subsequent calls the
     // cached result is returned synchronously. Without this, a desktop-
     // launched Electron wouldn't see CLI agents installed under user dirs
@@ -4660,7 +3823,7 @@ async function startHermes() {
         `Connecting to remote Nexus Agent backend at ${remote.baseUrl}`,
         24,
       );
-      await waitForHermes(remote.baseUrl, remote.token);
+      await waitForGateway(remote.baseUrl, remote.token);
       updateBootProgress({
         phase: "backend.ready",
         message: "Remote Nexus Agent backend is ready",
@@ -4675,7 +3838,7 @@ async function startHermes() {
         authMode: remote.authMode || "token",
         token: remote.token,
         wsUrl: remote.wsUrl,
-        logs: hermesLog.slice(-80),
+        logs: gatewayLog.slice(-80),
         ...getWindowState(),
       };
     }
@@ -4688,7 +3851,7 @@ async function startHermes() {
       "Resolving gateway runtime",
       28,
     );
-    let backend = await ensureRuntime(resolveHermesBackend(port));
+    let backend = await ensureRuntime(resolveGatewayBackend(port));
     if (!backend) {
       // No sidecar found locally — attempt to download from GitHub.
       rememberLog("[sidecar] no local binary found; attempting download from GitHub");
@@ -4696,7 +3859,7 @@ async function startHermes() {
         const { downloadAndUpdate } = require("./sidecar-manager.cjs");
         const result = await downloadAndUpdate(NEXUS_AGENT_HOME);
         if (result.ok) {
-          backend = await ensureRuntime(resolveHermesBackend(port));
+          backend = await ensureRuntime(resolveGatewayBackend(port));
         }
       } catch (dlErr) {
         rememberLog(`[sidecar] download failed: ${dlErr.message}`);
@@ -4709,7 +3872,7 @@ async function startHermes() {
           "or check your internet connection for auto-download."
       );
     }
-    const hermesCwd = resolveHermesCwd();
+    const gatewayCwd = resolveGatewayCwd();
     const webDist = resolveWebDist();
 
     // Belt-and-braces: the before-pack hook sets +x at stage time, but some
@@ -4733,8 +3896,8 @@ async function startHermes() {
     );
     rememberLog(`Starting Nexus Agent backend via ${backend.label}`);
 
-    hermesProcess = spawn(backend.command, backend.args, {
-      cwd: backend.cwd || hermesCwd,
+    gatewayProcess = spawn(backend.command, backend.args, {
+      cwd: backend.cwd || gatewayCwd,
       env: {
         ...process.env,
         // Explicitly pin NEXUS_AGENT_HOME for the child so Python's get_hermes_home()
@@ -4755,14 +3918,14 @@ async function startHermes() {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
-    hermesProcess.stdout.on("data", rememberLog);
-    hermesProcess.stderr.on("data", rememberLog);
+    gatewayProcess.stdout.on("data", rememberLog);
+    gatewayProcess.stderr.on("data", rememberLog);
     let backendReady = false;
     let rejectBackendStart = null;
     const backendStartFailed = new Promise((_resolve, reject) => {
       rejectBackendStart = reject;
     });
-    hermesProcess.once("error", (error) => {
+    gatewayProcess.once("error", (error) => {
       rememberLog(`Nexus Agent backend failed to start: ${error.message}`);
       updateBootProgress(
         {
@@ -4773,14 +3936,14 @@ async function startHermes() {
         },
         { allowDecrease: true },
       );
-      hermesProcess = null;
+      gatewayProcess = null;
       connectionPromise = null;
       sendBackendExit({ code: null, signal: null, error: error.message });
       rejectBackendStart?.(error);
     });
-    hermesProcess.once("exit", (code, signal) => {
+    gatewayProcess.once("exit", (code, signal) => {
       rememberLog(`Nexus Agent backend exited (${signal || code})`);
-      hermesProcess = null;
+      gatewayProcess = null;
       connectionPromise = null;
       sendBackendExit({ code, signal });
       if (!backendReady) {
@@ -4808,7 +3971,7 @@ async function startHermes() {
       "Waiting for Nexus Agent backend to become ready",
       90,
     );
-    await Promise.race([waitForHermes(baseUrl, token), backendStartFailed]);
+    await Promise.race([waitForGateway(baseUrl, token), backendStartFailed]);
     backendReady = true;
     updateBootProgress({
       phase: "backend.ready",
@@ -4828,7 +3991,7 @@ async function startHermes() {
       authMode: "token",
       token,
       wsUrl: `ws://127.0.0.1:${port}/api/ws?token=${encodeURIComponent(token)}`,
-      logs: hermesLog.slice(-80),
+      logs: gatewayLog.slice(-80),
       ...getWindowState(),
     };
   })().catch((error) => {
@@ -5014,7 +4177,7 @@ function createWindow() {
       broadcastBootProgress();
     }
     sendWindowStateChanged();
-    startHermes().catch((error) => rememberLog(error.stack || error.message));
+    startGateway().catch((error) => rememberLog(error.stack || error.message));
   });
 }
 
@@ -5453,7 +4616,7 @@ ipcMain.handle("nexus:openExternal", (_event, url) => {
 
 // User-configurable default project directory. The renderer reads this on
 // settings mount and seeds the value into the picker; writing back persists
-// it via writeDefaultProjectDir so resolveHermesCwd picks it up on the next
+// it via writeDefaultProjectDir so resolveGatewayCwd picks it up on the next
 // session spawn (no app restart needed).
 ipcMain.handle("nexus:setting:defaultProjectDir:get", async () => ({
   dir: readDefaultProjectDir(),
@@ -5509,7 +4672,7 @@ ipcMain.handle("nexus:logs:reveal", async () => {
 
 ipcMain.handle("nexus:logs:recent", async () => ({
   path: DESKTOP_LOG_PATH,
-  lines: hermesLog.slice(-200),
+  lines: gatewayLog.slice(-200),
 }));
 
 // Always-hidden noise (covers non-git projects too — gitignore would catch
@@ -5620,7 +4783,7 @@ function terminalShellEnv() {
 }
 
 function terminalChannel(id, suffix) {
-  return `hermes:terminal:${id}:${suffix}`;
+  return `nexus:terminal:${id}:${suffix}`;
 }
 
 function disposeTerminalSession(id) {
@@ -5770,43 +4933,7 @@ ipcMain.handle("nexus:terminal:dispose", (_event, id) =>
   disposeTerminalSession(String(id || "")),
 );
 
-ipcMain.handle("nexus:updates:check", async () =>
-  checkUpdates().catch((error) => ({
-    supported: true,
-    branch: readDesktopUpdateConfig().branch,
-    error: "check-failed",
-    message: error?.message || String(error),
-    fetchedAt: Date.now(),
-  })),
-);
 
-ipcMain.handle("nexus:updates:apply", async (_event, payload) =>
-  applyUpdates(payload || {}).catch((error) => ({
-    ok: false,
-    error: "apply-failed",
-    message: error?.message || String(error),
-  })),
-);
-
-ipcMain.handle("nexus:updates:branch:get", async () =>
-  readDesktopUpdateConfig(),
-);
-
-ipcMain.handle("nexus:updates:branch:set", async (_event, name) => {
-  const branch =
-    typeof name === "string" && name.trim()
-      ? name.trim()
-      : DEFAULT_UPDATE_BRANCH;
-  writeDesktopUpdateConfig({ branch });
-  return { branch };
-});
-
-// Resolve the canonical Hermes version (the one `release.py` bumps in
-// hermes_cli/__init__.py + pyproject.toml) so the desktop About panel shows the
-// real Hermes version instead of the Electron app's own package.json version,
-// which historically drifted (stuck at 0.0.2). Falls back to app.getVersion()
-// when the source tree can't be read (e.g. a packaged build without the repo).
-// NOTE: resolveHermesVersion removed — legacy hermes_cli version detection retired.
 
 ipcMain.handle("nexus:version", async () => ({
   appVersion: app.getVersion(),
@@ -5929,8 +5056,8 @@ app.on("before-quit", () => {
   flushDesktopLogBufferSync();
   closePreviewWatchers();
 
-  if (hermesProcess && !hermesProcess.killed) {
-    hermesProcess.kill("SIGTERM");
+  if (gatewayProcess && !gatewayProcess.killed) {
+    gatewayProcess.kill("SIGTERM");
   }
   stopAllPoolBackends();
   if (tray) {

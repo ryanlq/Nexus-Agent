@@ -42,7 +42,6 @@ import {
   setTurnStartedAt,
   setYoloActive
 } from '@/store/session'
-import { reportBackendContract } from '@/store/updates'
 import type { SessionCreateResponse, SessionInfo, SessionResumeResponse, UsageStats } from '@/types/nexus'
 
 import { NEW_CHAT_ROUTE, sessionRoute, SETTINGS_ROUTE } from '../../routes'
@@ -217,8 +216,6 @@ function applyRuntimeInfo(
   }
 
   const sessionState: Partial<Pick<ClientSessionState, 'branch' | 'cwd'>> = {}
-
-  reportBackendContract(info.desktop_contract)
 
   if (info.credential_warning) {
     requestDesktopOnboarding(info.credential_warning)

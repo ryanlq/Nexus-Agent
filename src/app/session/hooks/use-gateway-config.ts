@@ -1,6 +1,6 @@
 import { type MutableRefObject, useCallback, useState } from 'react'
 
-import { getHermesConfig, getHermesConfigDefaults } from '@/nexus'
+import { getGatewayConfig, getGatewayConfigDefaults } from '@/nexus'
 import { BUILTIN_PERSONALITIES, normalizePersonalityValue, personalityNamesFromConfig } from '@/lib/chat-runtime'
 import {
   $currentCwd,
@@ -32,18 +32,18 @@ async function getElectronDefaultProjectDir(): Promise<string> {
   }
 }
 
-interface HermesConfigOptions {
+interface GatewayConfigOptions {
   activeSessionIdRef: MutableRefObject<string | null>
   refreshProjectBranch: (cwd: string) => Promise<void>
 }
 
-export function useHermesConfig({ activeSessionIdRef, refreshProjectBranch }: HermesConfigOptions) {
+export function useGatewayConfig({ activeSessionIdRef, refreshProjectBranch }: GatewayConfigOptions) {
   const [voiceMaxRecordingSeconds, setVoiceMaxRecordingSeconds] = useState(DEFAULT_VOICE_SECONDS)
   const [sttEnabled, setSttEnabled] = useState(true)
 
-  const refreshHermesConfig = useCallback(async () => {
+  const refreshGatewayConfig = useCallback(async () => {
     try {
-      const [config, defaults] = await Promise.all([getHermesConfig(), getHermesConfigDefaults().catch(() => ({}))])
+      const [config, defaults] = await Promise.all([getGatewayConfig(), getGatewayConfigDefaults().catch(() => ({}))])
 
       const personality = normalizePersonalityValue(
         typeof config.display?.personality === 'string' ? config.display.personality : ''
@@ -86,5 +86,5 @@ export function useHermesConfig({ activeSessionIdRef, refreshProjectBranch }: He
     }
   }, [activeSessionIdRef, refreshProjectBranch])
 
-  return { refreshHermesConfig, sttEnabled, voiceMaxRecordingSeconds }
+  return { refreshGatewayConfig, sttEnabled, voiceMaxRecordingSeconds }
 }

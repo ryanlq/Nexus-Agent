@@ -6,7 +6,7 @@ import { ExternalLink, Sparkles } from '@/lib/icons'
 import {
   $desktopVersion,
   refreshDesktopVersion
-} from '@/store/updates'
+} from '@/store/version'
 
 import { ListRow, SettingsContent } from './primitives'
 

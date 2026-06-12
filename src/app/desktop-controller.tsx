@@ -52,8 +52,8 @@ import {
   setSessionsLoading,
   setSessionsTotal
 } from '../store/session'
-import { openUpdatesWindow, startUpdatePoller, stopUpdatePoller } from '../store/updates'
 import { startSidecarListener } from '../store/sidecar'
+import { refreshDesktopVersion } from '../store/version'
 
 import { ChatView } from './chat'
 import { useComposerActions } from './chat/hooks/use-composer-actions'
@@ -75,7 +75,7 @@ import { PersistentTerminal, TerminalSlot } from './right-sidebar/terminal/persi
 import { NEW_CHAT_ROUTE, routeSessionId, sessionRoute, SETTINGS_ROUTE } from './routes'
 import { useContextSuggestions } from './session/hooks/use-context-suggestions'
 import { useCwdActions } from './session/hooks/use-cwd-actions'
-import { useHermesConfig } from './session/hooks/use-hermes-config'
+import { useGatewayConfig } from './session/hooks/use-gateway-config'
 import { useMessageStream } from './session/hooks/use-message-stream'
 import { useModelControls } from './session/hooks/use-model-controls'
 import { useAgentAvailability } from './session/hooks/use-agent-availability'
@@ -92,7 +92,6 @@ import { ModelMenuPanel } from './shell/model-menu-panel'
 import type { StatusbarItem } from './shell/statusbar-controls'
 import type { TitlebarTool } from './shell/titlebar-controls'
 import { useGroupRegistry } from './shell/use-group-registry'
-import { UpdatesOverlay } from './updates-overlay'
 
 const AgentsView = lazy(async () => ({ default: (await import('./agents')).AgentsView }))
 const ArtifactsView = lazy(async () => ({ default: (await import('./artifacts')).ArtifactsView }))
@@ -194,14 +193,8 @@ export function DesktopController() {
   }, [chatOpen, filePreviewTarget, previewTarget])
 
   useEffect(() => {
-    startUpdatePoller()
     startSidecarListener()
-    const unsubscribe = window.nexusAgent?.onOpenUpdatesRequested?.(() => openUpdatesWindow())
-
-    return () => {
-      unsubscribe?.()
-      stopUpdatePoller()
-    }
+    void refreshDesktopVersion()
   }, [])
 
   useEffect(() => {
@@ -343,7 +336,7 @@ export function DesktopController() {
     requestGateway
   })
 
-  const { refreshHermesConfig, sttEnabled, voiceMaxRecordingSeconds } = useHermesConfig({
+  const { refreshGatewayConfig, sttEnabled, voiceMaxRecordingSeconds } = useGatewayConfig({
     activeSessionIdRef,
     refreshProjectBranch
   })
@@ -421,7 +414,7 @@ export function DesktopController() {
     activeSessionIdRef,
     hydrateFromStoredSession,
     queryClient,
-    refreshHermesConfig,
+    refreshGatewayConfig,
     refreshSessions,
     updateSessionState
   })
@@ -605,7 +598,7 @@ export function DesktopController() {
     onGatewayReady: g => {
       gatewayRef.current = g
     },
-    refreshHermesConfig,
+    refreshGatewayConfig,
     refreshSessions
   })
 
@@ -673,7 +666,7 @@ export function DesktopController() {
       <DesktopOnboardingOverlay
         enabled={gatewayState === 'open'}
         onCompleted={() => {
-          void refreshHermesConfig()
+          void refreshGatewayConfig()
           void refreshCurrentModel()
           void queryClient.invalidateQueries({ queryKey: ['model-options'] })
         }}
@@ -681,7 +674,6 @@ export function DesktopController() {
       />
       <ModelPickerOverlay gateway={gatewayRef.current || undefined} onSelect={selectModel} />
       <ModelVisibilityOverlay gateway={gatewayRef.current || undefined} onOpenProviders={openProviderSettings} />
-      <UpdatesOverlay />
       <GatewayConnectingOverlay />
       <BootFailureOverlay />
       <CommandPalette />
@@ -692,7 +684,7 @@ export function DesktopController() {
             gateway={gatewayRef.current}
             onClose={closeOverlayToPreviousRoute}
             onConfigSaved={() => {
-              void refreshHermesConfig()
+              void refreshGatewayConfig()
               void refreshCurrentModel()
               void queryClient.invalidateQueries({ queryKey: ['model-options'] })
             }}

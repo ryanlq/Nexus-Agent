@@ -66,25 +66,32 @@ const {
 // avoid workspace dependency issues.  This means NO node_modules end up in
 // the asar.  Runtime deps (node-pty, electron-updater, etc.) are staged into
 // resources/native-deps/ by scripts/stage-native-deps.cjs and shipped via
-// extraResources.  We add that directory to Node's global module paths so
-// `require()` can resolve them transparently.  In dev mode the hoisted
-// node_modules resolve normally and this block is a no-op.
+// extraResources.
+//
+// We inject native-deps/ into NODE_PATH and call Module._initPaths() so that
+// every require("pkg") in the process — including transitive requires inside
+// electron-updater — resolves from that directory.  This must run BEFORE any
+// staged modules are loaded.  In dev mode, native-deps/ doesn't exist and
+// this block is a no-op.
 // ---------------------------------------------------------------------------
 const _nativeDepsDir = process.resourcesPath
   ? path.join(process.resourcesPath, "native-deps")
   : null;
 if (_nativeDepsDir && fs.existsSync(_nativeDepsDir)) {
   const Module = require("node:module");
-  if (!Module.globalPaths.includes(_nativeDepsDir)) {
-    Module.globalPaths.push(_nativeDepsDir);
-  }
+  // Inject into NODE_PATH so Module._initPaths() picks it up.  This is more
+  // reliable than Module.globalPaths.push() because Electron's patched
+  // require may not re-read globalPaths for nested/transitive resolves.
+  const delimiter = process.platform === "win32" ? ";" : ":";
+  process.env.NODE_PATH = [process.env.NODE_PATH, _nativeDepsDir].filter(Boolean).join(delimiter);
+  Module._initPaths();
 }
 
 let autoUpdater = null;
 try {
   ({ autoUpdater } = require("electron-updater"));
-} catch {
-  // electron-updater not available (dev without install, or staging failed).
+} catch (err) {
+  console.error("[main] failed to load electron-updater:", err.message);
   autoUpdater = null;
 }
 

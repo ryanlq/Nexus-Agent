@@ -214,6 +214,33 @@ export interface Translations {
     failedToUpdate: (name: string) => string
   }
 
+  prompts: {
+    search: string
+    loading: string
+    create: string
+    createFirst: string
+    edit: string
+    delete: string
+    confirmDelete: string
+    cancel: string
+    save: string
+    name: string
+    content: string
+    namePlaceholder: string
+    contentPlaceholder: string
+    noBody: string
+    hint: string
+    emptyTitle: string
+    emptyDesc: string
+    created: string
+    updated: string
+    deleted: string
+    loadFailed: string
+    nameRequired: string
+    failedToSave: string
+    failedToDelete: string
+  }
+
   agents: {
     close: string
     title: string
@@ -250,7 +277,7 @@ export interface Translations {
     searchPlaceholder: string
     sections: Record<'logs' | 'sessions' | 'usage', string>
     sectionDescriptions: Record<'logs' | 'sessions' | 'usage', string>
-    nav: Record<'newChat' | 'settings' | 'skills' | 'messaging' | 'artifacts', { title: string; detail: string }>
+    nav: Record<'newChat' | 'settings' | 'skills' | 'prompts' | 'messaging' | 'artifacts', { title: string; detail: string }>
     sectionEntries: Record<'logs' | 'sessions' | 'usage', { title: string; detail: string }>
     providerNavigate: string
     providerSessions: string

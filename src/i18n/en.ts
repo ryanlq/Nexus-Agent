@@ -230,6 +230,33 @@ export const en: Translations = {
     failedToUpdate: name => `Failed to update ${name}`
   },
 
+  prompts: {
+    search: 'Search prompts...',
+    loading: 'Loading prompts...',
+    create: 'New prompt',
+    createFirst: 'Create prompt',
+    edit: 'Edit',
+    delete: 'Delete',
+    confirmDelete: 'Delete',
+    cancel: 'Cancel',
+    save: 'Save',
+    name: 'Name',
+    content: 'Prompt body',
+    namePlaceholder: 'e.g. code-review',
+    contentPlaceholder: 'Prompt text appended to the agent system prompt via --append-system-prompt...',
+    noBody: 'No prompt body.',
+    hint: 'Inject this prompt into the agent by typing @prompt:<name> in the composer.',
+    emptyTitle: 'No custom prompts yet',
+    emptyDesc: 'Create a prompt, then inject it into the agent via @prompt: in the composer.',
+    created: 'Prompt created',
+    updated: 'Prompt updated',
+    deleted: 'Prompt deleted',
+    loadFailed: 'Prompts failed to load',
+    nameRequired: 'Name is required',
+    failedToSave: 'Failed to save prompt',
+    failedToDelete: 'Failed to delete prompt'
+  },
+
   agents: {
     close: 'Close agents',
     title: 'Spawn tree',
@@ -274,6 +301,7 @@ export const en: Translations = {
       newChat: { title: 'New session', detail: 'Start a fresh session' },
       settings: { title: 'Settings', detail: 'Configure Nexus Agent' },
       skills: { title: 'Skills & Tools', detail: 'Enable skills, toolsets, and providers' },
+      prompts: { title: 'Custom Prompts', detail: 'Manage reusable prompt snippets' },
       messaging: { title: 'Messaging', detail: 'Set up Telegram, Slack, Discord, and more' },
       artifacts: { title: 'Artifacts', detail: 'Browse generated outputs' }
     },
@@ -591,6 +619,7 @@ export const en: Translations = {
     nav: {
       'new-session': 'New session',
       skills: 'Skills & Tools',
+      prompts: 'Custom Prompts',
       messaging: 'Messaging',
       artifacts: 'Artifacts'
     },

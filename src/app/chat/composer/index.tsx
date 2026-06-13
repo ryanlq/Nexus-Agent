@@ -59,6 +59,7 @@ import {
 } from './focus'
 import { HelpHint } from './help-hint'
 import { useAtCompletions } from './hooks/use-at-completions'
+import { usePromptCompletions } from './hooks/use-prompt-completions'
 import { useSlashCompletions } from './hooks/use-slash-completions'
 import { useVoiceConversation } from './hooks/use-voice-conversation'
 import { useVoiceRecorder } from './hooks/use-voice-recorder'
@@ -165,6 +166,7 @@ export function ChatBar({
 
   const at = useAtCompletions({ gateway: gateway ?? null, sessionId: sessionId ?? null, cwd: cwd ?? null })
   const slash = useSlashCompletions({ gateway: gateway ?? null })
+  const prompt = usePromptCompletions()
 
   const stacked = expanded || narrow || tight
   const trimmedDraft = draft.trim()
@@ -597,8 +599,18 @@ export function ChatBar({
     flushEditorToDraft(event.currentTarget)
   }
 
-  const triggerAdapter: Unstable_TriggerAdapter | null =
-    trigger?.kind === '@' ? at.adapter : trigger?.kind === '/' ? slash.adapter : null
+  // `@prompt:` (and the bare `@prompt` starter) routes to the custom-prompts
+  // picker; other `@` queries fall through to the gateway's complete.path.
+  const isPromptQuery =
+    trigger?.kind === '@' && (trigger.query === 'prompt' || trigger.query.startsWith('prompt:'))
+
+  const triggerAdapter: Unstable_TriggerAdapter | null = isPromptQuery
+    ? prompt.adapter
+    : trigger?.kind === '@'
+      ? at.adapter
+      : trigger?.kind === '/'
+        ? slash.adapter
+        : null
 
   useEffect(() => {
     if (!trigger || !triggerAdapter?.search) {
@@ -610,7 +622,13 @@ export function ChatBar({
     setTriggerItems(triggerAdapter.search(trigger.query))
   }, [trigger, triggerAdapter])
 
-  const triggerLoading = trigger?.kind === '@' ? at.loading : trigger?.kind === '/' ? slash.loading : false
+  const triggerLoading = isPromptQuery
+    ? prompt.loading
+    : trigger?.kind === '@'
+      ? at.loading
+      : trigger?.kind === '/'
+        ? slash.loading
+        : false
 
   const closeTrigger = () => {
     setTrigger(null)

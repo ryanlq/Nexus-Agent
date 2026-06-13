@@ -26,6 +26,7 @@ const DESKTOP_COMMAND_META = [
   ['/agents', 'Show active desktop sessions and running tasks'],
   ['/background', 'Run a prompt in the background'],
   ['/branch', 'Branch the latest message into a new chat'],
+  ['/cron', 'Manage cron jobs: list, create, delete, pause, resume, trigger'],
   ['/compress', 'Compress this conversation context'],
   ['/debug', 'Create a debug report'],
   ['/goal', 'Manage the standing goal for this session'],
@@ -53,10 +54,12 @@ const DESKTOP_ALIASES = new Map([
   ['/bg', '/background'],
   ['/btw', '/background'],
   ['/fork', '/branch'],
+  ['/jobs', '/cron'],
   ['/q', '/queue'],
   ['/reload_mcp', '/reload-mcp'],
   ['/reload_skills', '/reload-skills'],
   ['/reset', '/new'],
+  ['/schedule', '/cron'],
   ['/tasks', '/agents']
 ])
 
@@ -72,7 +75,6 @@ const TERMINAL_ONLY_COMMANDS = new Set([
   '/compact',
   '/config',
   '/copy',
-  '/cron',
   '/details',
   '/exit',
   '/footer',

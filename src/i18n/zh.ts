@@ -313,6 +313,33 @@ export const zh: Translations = {
     failedToUpdate: name => `更新 ${name} 失败`
   },
 
+  prompts: {
+    search: '搜索指令…',
+    loading: '正在加载指令…',
+    create: '新建指令',
+    createFirst: '创建指令',
+    edit: '编辑',
+    delete: '删除',
+    confirmDelete: '删除',
+    cancel: '取消',
+    save: '保存',
+    name: '名称',
+    content: '指令内容',
+    namePlaceholder: '例如 code-review',
+    contentPlaceholder: '将通过 --append-system-prompt 追加到 agent 系统提示的指令文本…',
+    noBody: '暂无指令内容。',
+    hint: '在输入框输入 @prompt:<名称> 即可将该指令注入 agent。',
+    emptyTitle: '暂无自定义指令',
+    emptyDesc: '创建一个指令，然后在输入框用 @prompt: 注入 agent 执行。',
+    created: '指令已创建',
+    updated: '指令已更新',
+    deleted: '指令已删除',
+    loadFailed: '指令加载失败',
+    nameRequired: '请填写名称',
+    failedToSave: '保存指令失败',
+    failedToDelete: '删除指令失败'
+  },
+
   agents: {
     close: '关闭代理',
     title: '派生树',
@@ -357,6 +384,7 @@ export const zh: Translations = {
       newChat: { title: '新建会话', detail: '开始一个新会话' },
       settings: { title: '设置', detail: '配置 Nexus Agent' },
       skills: { title: '技能与工具', detail: '启用技能、工具集与提供方' },
+      prompts: { title: '自定义指令', detail: '管理可复用的指令片段' },
       messaging: { title: '消息平台', detail: '配置 Telegram、Slack、Discord 等' },
       artifacts: { title: '产物', detail: '浏览生成的输出' }
     },
@@ -720,6 +748,7 @@ export const zh: Translations = {
     nav: {
       'new-session': '新建会话',
       skills: '技能与工具',
+      prompts: '自定义指令',
       messaging: '消息平台',
       artifacts: '产物'
     },

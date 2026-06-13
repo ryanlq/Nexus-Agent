@@ -421,6 +421,58 @@ export function toggleSkill(name: string, enabled: boolean): Promise<{ ok: boole
   })
 }
 
+// -- Custom prompts ---------------------------------------------------------
+// User-defined prompt snippets managed via the "自定义指令" page and injected
+// into the agent's system prompt at submit time (the composer turns an
+// @prompt:<name> chip into a `system_prompt` field on prompt.submit, which the
+// gateway resolves and passes through --append-system-prompt).
+export interface CustomPrompt {
+  name: string
+  content: string
+  updated_at?: number
+}
+
+export async function listPrompts(): Promise<CustomPrompt[]> {
+  const result = await window.nexusAgent.api<{ prompts: CustomPrompt[] }>({
+    ...profileScoped(),
+    path: '/api/prompts'
+  })
+
+  return result.prompts ?? []
+}
+
+export function createPrompt(
+  name: string,
+  content: string
+): Promise<{ ok: boolean; name?: string; error?: string }> {
+  return window.nexusAgent.api<{ ok: boolean; name?: string; error?: string }>({
+    ...profileScoped(),
+    path: '/api/prompts',
+    method: 'POST',
+    body: { name, content }
+  })
+}
+
+export function updatePrompt(
+  name: string,
+  content: string
+): Promise<{ ok: boolean; name?: string }> {
+  return window.nexusAgent.api<{ ok: boolean; name?: string }>({
+    ...profileScoped(),
+    path: `/api/prompts/${encodeURIComponent(name)}`,
+    method: 'PUT',
+    body: { content }
+  })
+}
+
+export function deletePrompt(name: string): Promise<{ ok: boolean; name?: string; error?: string }> {
+  return window.nexusAgent.api<{ ok: boolean; name?: string; error?: string }>({
+    ...profileScoped(),
+    path: `/api/prompts/${encodeURIComponent(name)}`,
+    method: 'DELETE'
+  })
+}
+
 export function getToolsets(): Promise<ToolsetInfo[]> {
   return window.nexusAgent.api<ToolsetInfo[]>({
     ...profileScoped(),

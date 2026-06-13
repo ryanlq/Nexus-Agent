@@ -32,7 +32,7 @@ import { OverlayActionButton, OverlayCard, overlayCardClass, OverlayIconButton }
 import { OverlaySearchInput } from '../overlays/overlay-search-input'
 import { OverlayMain, OverlayNavItem, OverlaySidebar, OverlaySplitLayout } from '../overlays/overlay-split-layout'
 import { OverlayView } from '../overlays/overlay-view'
-import { ARTIFACTS_ROUTE, MESSAGING_ROUTE, NEW_CHAT_ROUTE, SETTINGS_ROUTE, SKILLS_ROUTE } from '../routes'
+import { ARTIFACTS_ROUTE, MESSAGING_ROUTE, NEW_CHAT_ROUTE, PROMPTS_ROUTE, SETTINGS_ROUTE, SKILLS_ROUTE } from '../routes'
 
 export type CommandCenterSection = 'logs' | 'sessions' | 'usage'
 
@@ -49,12 +49,13 @@ interface CommandCenterViewProps {
   onOpenSession: (sessionId: string) => void
 }
 
-type NavKey = 'newChat' | 'settings' | 'skills' | 'messaging' | 'artifacts'
+type NavKey = 'newChat' | 'settings' | 'skills' | 'prompts' | 'messaging' | 'artifacts'
 
 const NAV_ROUTES: readonly { key: NavKey; route: string }[] = [
   { key: 'newChat', route: NEW_CHAT_ROUTE },
   { key: 'settings', route: SETTINGS_ROUTE },
   { key: 'skills', route: SKILLS_ROUTE },
+  { key: 'prompts', route: PROMPTS_ROUTE },
   { key: 'messaging', route: MESSAGING_ROUTE },
   { key: 'artifacts', route: ARTIFACTS_ROUTE }
 ]

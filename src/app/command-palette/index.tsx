@@ -21,6 +21,7 @@ import {
   Info,
   KeyRound,
   MessageCircle,
+  MessageSquareText,
   Monitor,
   Moon,
   Package,
@@ -45,6 +46,7 @@ import {
   MESSAGING_ROUTE,
   NEW_CHAT_ROUTE,
   PROFILES_ROUTE,
+  PROMPTS_ROUTE,
   sessionRoute,
   SETTINGS_ROUTE,
   SKILLS_ROUTE
@@ -196,6 +198,13 @@ export function CommandPalette() {
             keywords: ['tools', 'toolsets'],
             label: 'Skills & Tools',
             run: go(SKILLS_ROUTE)
+          },
+          {
+            icon: MessageSquareText,
+            id: 'nav-prompts',
+            keywords: ['instructions', 'snippet'],
+            label: 'Custom Prompts',
+            run: go(PROMPTS_ROUTE)
           },
           { icon: MessageCircle, id: 'nav-messaging', label: 'Messaging', run: go(MESSAGING_ROUTE) },
           { icon: Package, id: 'nav-artifacts', label: 'Artifacts', run: go(ARTIFACTS_ROUTE) },

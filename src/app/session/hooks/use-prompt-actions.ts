@@ -346,7 +346,18 @@ export function usePromptActions({
         await syncImageAttachmentsForSubmit(sessionId, attachments, {
           updateComposerAttachments: usingComposerAttachments
         })
-        await requestGateway('prompt.submit', { session_id: sessionId, text })
+
+        // Resolve an @prompt:<name> chip (if present) into a system_prompt
+        // field. The gateway looks up the prompt body and injects it via
+        // --append-system-prompt; the chip text stays visible in the message.
+        const promptMatch = text.match(/@prompt:([^\s@`"']+)/)
+        const systemPrompt = promptMatch?.[1]
+
+        await requestGateway('prompt.submit', {
+          session_id: sessionId,
+          text,
+          ...(systemPrompt ? { system_prompt: systemPrompt } : {})
+        })
 
         if (usingComposerAttachments) {
           clearComposerAttachments()

@@ -99,7 +99,7 @@ const API_KEY_OPTIONS: ApiKeyOption[] = [
     short: 'self-hosted',
     envKey: 'OPENAI_BASE_URL',
     description: 'Point Nexus Agent at a local or self-hosted OpenAI-compatible endpoint (vLLM, llama.cpp, Ollama, etc).',
-    docsUrl: 'https://github.com/NousResearch/hermes-agent#bring-your-own-endpoint',
+    docsUrl: 'https://github.com/ryanlq/Nexus-Agent#bring-your-own-endpoint',
     placeholder: 'http://127.0.0.1:8000/v1'
   }
 ]

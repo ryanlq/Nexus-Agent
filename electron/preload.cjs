@@ -109,4 +109,15 @@ contextBridge.exposeInMainWorld('nexusAgent', {
       return () => ipcRenderer.removeListener('nexus:sidecar:update-available', listener)
     },
   },
+  desktopUpdates: {
+    check: () => ipcRenderer.invoke('nexus:desktop-update:check'),
+    status: () => ipcRenderer.invoke('nexus:desktop-update:status'),
+    download: () => ipcRenderer.invoke('nexus:desktop-update:download'),
+    apply: () => ipcRenderer.invoke('nexus:desktop-update:apply'),
+    onProgress: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('nexus:desktop-update:progress', listener)
+      return () => ipcRenderer.removeListener('nexus:desktop-update:progress', listener)
+    },
+  },
 })

@@ -87,6 +87,10 @@ export interface Translations {
     gatewayUpdateTitle: string
     gatewayUpdateMessage: (version: string) => string
     updateGateway: string
+    desktopUpdateTitle: string
+    desktopUpdateMessage: (version: string) => string
+    downloadUpdate: string
+    restartToUpdate: string
     errors: {
       elevenLabsNeedsKey: string
       elevenLabsRejectedKey: string

@@ -53,6 +53,7 @@ import {
   setSessionsTotal
 } from '../store/session'
 import { startSidecarListener } from '../store/sidecar'
+import { startDesktopUpdateListener } from '../store/desktop-updates'
 import { refreshDesktopVersion } from '../store/version'
 
 import { ChatView } from './chat'
@@ -194,6 +195,7 @@ export function DesktopController() {
 
   useEffect(() => {
     startSidecarListener()
+    startDesktopUpdateListener()
     void refreshDesktopVersion()
   }, [])
 

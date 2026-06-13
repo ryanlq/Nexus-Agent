@@ -75,6 +75,10 @@ export const zh: Translations = {
     gatewayUpdateTitle: '网关有可用更新',
     gatewayUpdateMessage: (version: string) => `网关 ${version} 已发布，更新以获取最新功能和修复。`,
     updateGateway: '更新网关',
+    desktopUpdateTitle: '桌面端有可用更新',
+    desktopUpdateMessage: (version: string) => `Nexus Agent ${version} 已发布，下载以获取最新功能和修复。`,
+    downloadUpdate: '下载更新',
+    restartToUpdate: '重启以更新',
     errors: {
       elevenLabsNeedsKey: 'ElevenLabs STT 需要 ELEVENLABS_API_KEY。',
       elevenLabsRejectedKey: 'ElevenLabs 拒绝了该 API key (401)。',

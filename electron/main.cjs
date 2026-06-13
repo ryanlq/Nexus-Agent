@@ -59,6 +59,8 @@ const {
   resolveTimeoutMs,
 } = require("./hardening.cjs");
 
+const { autoUpdater } = require("electron-updater");
+
 let nodePty = null;
 
 try {
@@ -3983,6 +3985,8 @@ async function startGateway() {
 
     // Fire-and-forget: check for sidecar updates in the background.
     checkSidecarUpdateOnStartup();
+    // Fire-and-forget: check for desktop app updates in the background.
+    checkDesktopUpdateOnStartup();
 
     return {
       baseUrl,
@@ -4983,6 +4987,136 @@ function checkSidecarUpdateOnStartup() {
     }
   }).catch(() => {
     // Silent — don't disturb the user if the check fails.
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Desktop auto-update (electron-updater + GitHub Releases)
+// ---------------------------------------------------------------------------
+
+/** @type {'idle'|'checking'|'available'|'downloading'|'downloaded'|'error'} */
+let desktopUpdateStage = "idle";
+/** @type {string|null} */
+let desktopUpdateError = null;
+/** @type {{version: string, releaseNotes?: string}|null} */
+let desktopUpdateInfo = null;
+let desktopUpdatePercent = 0;
+
+function emitDesktopUpdateProgress() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("nexus:desktop-update:progress", {
+      stage: desktopUpdateStage,
+      error: desktopUpdateError,
+      percent: desktopUpdatePercent,
+      info: desktopUpdateInfo,
+      at: Date.now(),
+    });
+  }
+}
+
+// Only wire autoUpdater events in packaged builds; dev mode has no release
+// channel and would just log noisy errors.
+if (IS_PACKAGED) {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("checking-for-update", () => {
+    desktopUpdateStage = "checking";
+    desktopUpdateError = null;
+    emitDesktopUpdateProgress();
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    desktopUpdateStage = "available";
+    desktopUpdateInfo = { version: info.version, releaseNotes: typeof info.releaseNotes === "string" ? info.releaseNotes : undefined };
+    emitDesktopUpdateProgress();
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    desktopUpdateStage = "idle";
+    desktopUpdateInfo = null;
+    emitDesktopUpdateProgress();
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    desktopUpdateStage = "downloading";
+    desktopUpdatePercent = progress.percent ?? 0;
+    emitDesktopUpdateProgress();
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    desktopUpdateStage = "downloaded";
+    desktopUpdateInfo = { version: info.version, releaseNotes: typeof info.releaseNotes === "string" ? info.releaseNotes : undefined };
+    emitDesktopUpdateProgress();
+  });
+
+  autoUpdater.on("error", (err) => {
+    desktopUpdateStage = "error";
+    desktopUpdateError = err?.message || String(err);
+    emitDesktopUpdateProgress();
+  });
+}
+
+ipcMain.handle("nexus:desktop-update:check", async () => {
+  if (!IS_PACKAGED) {
+    return { stage: "idle", error: "dev-mode", percent: 0, info: null };
+  }
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (err) {
+    desktopUpdateStage = "error";
+    desktopUpdateError = err?.message || String(err);
+  }
+  return { stage: desktopUpdateStage, error: desktopUpdateError, percent: desktopUpdatePercent, info: desktopUpdateInfo };
+});
+
+ipcMain.handle("nexus:desktop-update:status", () => {
+  return { stage: desktopUpdateStage, error: desktopUpdateError, percent: desktopUpdatePercent, info: desktopUpdateInfo };
+});
+
+ipcMain.handle("nexus:desktop-update:download", async () => {
+  if (!IS_PACKAGED) return { ok: false, error: "dev-mode" };
+  try {
+    await autoUpdater.downloadUpdate();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+});
+
+ipcMain.handle("nexus:desktop-update:apply", async () => {
+  if (!IS_PACKAGED) return { ok: false, error: "dev-mode" };
+  // quitAndInstall triggers the OS-level installer then restarts the app.
+  autoUpdater.quitAndInstall();
+  return { ok: true };
+});
+
+function checkDesktopUpdateOnStartup() {
+  if (!IS_PACKAGED) return;
+  autoUpdater.checkForUpdates().catch(() => {
+    // Silent — don't disturb the user if the check fails.
+  });
+}
+
+// Single instance lock: prevent multiple desktop windows from running
+// simultaneously. If a second instance is launched, focus the existing window
+// and exit the new process.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (mainWindow.isVisible()) {
+        mainWindow.focus();
+      } else {
+        mainWindow.show();
+      }
+    } else {
+      createWindow();
+    }
   });
 }
 

@@ -10,7 +10,7 @@ import {
 
 import { ListRow, SettingsContent } from './primitives'
 
-const PROJECT_URL = 'https://github.com/NousResearch/hermes-agent'
+const PROJECT_URL = 'https://github.com/ryanlq/Nexus-Agent'
 
 function relativeTime(ms: number | undefined, a: Translations['settings']['about']) {
   if (!ms) {

@@ -75,6 +75,13 @@ declare global {
         getVersion: () => Promise<SidecarVersion | null>
         onUpdateAvailable: (callback: (info: SidecarUpdateCheck) => void) => () => void
       }
+      desktopUpdates: {
+        check: () => Promise<DesktopUpdateStatus>
+        status: () => Promise<DesktopUpdateStatus>
+        download: () => Promise<{ ok: boolean; error?: string }>
+        apply: () => Promise<{ ok: boolean; error?: string }>
+        onProgress: (callback: (payload: DesktopUpdateProgress) => void) => () => void
+      }
     }
   }
 }
@@ -301,4 +308,26 @@ export interface SidecarUpdateResult {
   version?: string
   error?: string
   message?: string
+}
+
+export type DesktopUpdateStage = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error'
+
+export interface DesktopUpdateInfo {
+  version: string
+  releaseNotes?: string
+}
+
+export interface DesktopUpdateStatus {
+  stage: DesktopUpdateStage
+  error: string | null
+  percent: number
+  info: DesktopUpdateInfo | null
+}
+
+export interface DesktopUpdateProgress {
+  stage: DesktopUpdateStage
+  error: string | null
+  percent: number
+  info: DesktopUpdateInfo | null
+  at: number
 }

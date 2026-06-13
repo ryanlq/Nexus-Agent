@@ -80,6 +80,10 @@ export const en: Translations = {
     gatewayUpdateTitle: 'Gateway update available',
     gatewayUpdateMessage: (version: string) => `Gateway ${version} is available. Update for the latest features and fixes.`,
     updateGateway: 'Update gateway',
+    desktopUpdateTitle: 'Desktop update available',
+    desktopUpdateMessage: (version: string) => `Nexus Agent ${version} is available. Download for the latest features and fixes.`,
+    downloadUpdate: 'Download update',
+    restartToUpdate: 'Restart to update',
     errors: {
       elevenLabsNeedsKey: 'ElevenLabs STT needs ELEVENLABS_API_KEY.',
       elevenLabsRejectedKey: 'ElevenLabs rejected the API key (401).',

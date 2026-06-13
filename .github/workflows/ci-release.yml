@@ -38,20 +38,22 @@ jobs:
           #     release/*.zip
           - platform: windows
             runner: windows-latest
-            build-cmd: npm run dist:win
+            build-cmd: npm run build && npm run builder -- --win
             artifact-name: nexus-agent-windows
             artifact-path: |
               release/*.exe
               release/*.msi
               release/*.blockmap
+              release/*.yml
           - platform: linux
             runner: ubuntu-latest
-            build-cmd: npm run dist:linux
+            build-cmd: npm run build && npm run builder -- --linux AppImage deb
             artifact-name: nexus-agent-linux
             artifact-path: |
               release/*.AppImage
               release/*.deb
-              release/*.rpm
+              release/*.yml
+              release/*.blockmap
 
     steps:
       - name: Checkout

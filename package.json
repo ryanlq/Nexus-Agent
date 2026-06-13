@@ -1,7 +1,7 @@
 {
   "name": "nexus-agent",
   "private": true,
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Native desktop shell for Nexus Agent.",
   "author": "Nous Research",
   "homepage": "https://github.com/ryanlq/agent-gateway",
@@ -153,8 +153,7 @@
       "electron/**",
       "public/**",
       "package.json",
-      "shared/**",
-      "node_modules/**"
+      "shared/**"
     ],
     "beforeBuild": "scripts/before-build.cjs",
     "beforePack": "scripts/before-pack.cjs",

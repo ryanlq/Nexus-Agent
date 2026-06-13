@@ -59,25 +59,43 @@ const {
   resolveTimeoutMs,
 } = require("./hardening.cjs");
 
-const { autoUpdater } = require("electron-updater");
+// ---------------------------------------------------------------------------
+// Runtime dependency resolution for packaged builds.
+//
+// The build config uses `beforeBuild: false` + an explicit `files:` list to
+// avoid workspace dependency issues.  This means NO node_modules end up in
+// the asar.  Runtime deps (node-pty, electron-updater, etc.) are staged into
+// resources/native-deps/ by scripts/stage-native-deps.cjs and shipped via
+// extraResources.  We add that directory to Node's global module paths so
+// `require()` can resolve them transparently.  In dev mode the hoisted
+// node_modules resolve normally and this block is a no-op.
+// ---------------------------------------------------------------------------
+const _nativeDepsDir = process.resourcesPath
+  ? path.join(process.resourcesPath, "native-deps")
+  : null;
+if (_nativeDepsDir && fs.existsSync(_nativeDepsDir)) {
+  const Module = require("node:module");
+  if (!Module.globalPaths.includes(_nativeDepsDir)) {
+    Module.globalPaths.push(_nativeDepsDir);
+  }
+}
+
+let autoUpdater = null;
+try {
+  ({ autoUpdater } = require("electron-updater"));
+} catch {
+  // electron-updater not available (dev without install, or staging failed).
+  autoUpdater = null;
+}
 
 let nodePty = null;
 
 try {
   nodePty = require("node-pty");
 } catch {
-  // Packaged builds set `files:` in package.json, which excludes node_modules
-  // from the asar.  Workspace dedup also hoists this native dep to the repo
-  // root's node_modules, out of reach of electron-builder's collector.  We
-  // ship a minimal copy under resources/native-deps/ via extraResources +
-  // scripts/stage-native-deps.cjs; resolve from there when the normal
-  // require() fails.  Dev mode never reaches this branch -- the hoisted
-  // resolve succeeds via Node's normal module lookup.
   try {
-    const path = require("node:path");
-    const resourcesPath = process.resourcesPath;
-    if (resourcesPath) {
-      nodePty = require(path.join(resourcesPath, "native-deps", "node-pty"));
+    if (_nativeDepsDir) {
+      nodePty = require(path.join(_nativeDepsDir, "node-pty"));
     }
   } catch {
     nodePty = null;
@@ -5015,8 +5033,9 @@ function emitDesktopUpdateProgress() {
 }
 
 // Only wire autoUpdater events in packaged builds; dev mode has no release
-// channel and would just log noisy errors.
-if (IS_PACKAGED) {
+// channel and would just log noisy errors.  Guard against null in case
+// electron-updater was not staged or failed to load.
+if (IS_PACKAGED && autoUpdater) {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
@@ -5058,8 +5077,8 @@ if (IS_PACKAGED) {
 }
 
 ipcMain.handle("nexus:desktop-update:check", async () => {
-  if (!IS_PACKAGED) {
-    return { stage: "idle", error: "dev-mode", percent: 0, info: null };
+  if (!IS_PACKAGED || !autoUpdater) {
+    return { stage: "idle", error: IS_PACKAGED ? "updater-unavailable" : "dev-mode", percent: 0, info: null };
   }
   try {
     await autoUpdater.checkForUpdates();
@@ -5075,7 +5094,7 @@ ipcMain.handle("nexus:desktop-update:status", () => {
 });
 
 ipcMain.handle("nexus:desktop-update:download", async () => {
-  if (!IS_PACKAGED) return { ok: false, error: "dev-mode" };
+  if (!IS_PACKAGED || !autoUpdater) return { ok: false, error: IS_PACKAGED ? "updater-unavailable" : "dev-mode" };
   try {
     await autoUpdater.downloadUpdate();
     return { ok: true };
@@ -5085,14 +5104,14 @@ ipcMain.handle("nexus:desktop-update:download", async () => {
 });
 
 ipcMain.handle("nexus:desktop-update:apply", async () => {
-  if (!IS_PACKAGED) return { ok: false, error: "dev-mode" };
+  if (!IS_PACKAGED || !autoUpdater) return { ok: false, error: IS_PACKAGED ? "updater-unavailable" : "dev-mode" };
   // quitAndInstall triggers the OS-level installer then restarts the app.
   autoUpdater.quitAndInstall();
   return { ok: true };
 });
 
 function checkDesktopUpdateOnStartup() {
-  if (!IS_PACKAGED) return;
+  if (!IS_PACKAGED || !autoUpdater) return;
   autoUpdater.checkForUpdates().catch(() => {
     // Silent — don't disturb the user if the check fails.
   });

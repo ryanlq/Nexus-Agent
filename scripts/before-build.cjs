@@ -2,9 +2,12 @@
  * Desktop bundles ship precompiled renderer assets. Returning false here tells
  * electron-builder to skip the node_modules collector/install step, which
  * avoids workspace dependency graph explosions and keeps packaging
- * deterministic across environments. The Hermes Agent Python payload is no
- * longer bundled; the Electron app fetches it at first launch via
- * `install.ps1`'s stage protocol (Windows). See `electron/main.cjs`.
+ * deterministic across environments.
+ *
+ * Runtime dependencies that the main process needs (node-pty, electron-updater,
+ * etc.) are staged into build/native-deps/ by stage-native-deps.cjs and shipped
+ * via the extraResources config.  main.cjs resolves them from
+ * process.resourcesPath/native-deps at runtime.
  */
 module.exports = async function beforeBuild() {
   return false

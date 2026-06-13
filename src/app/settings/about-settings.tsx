@@ -1,12 +1,19 @@
 import { useStore } from '@nanostores/react'
 import { useEffect } from 'react'
 
+import { Button } from '@/components/ui/button'
 import { type Translations, useI18n } from '@/i18n'
-import { ExternalLink, Sparkles } from '@/lib/icons'
+import { Download, ExternalLink, RefreshCw, Sparkles } from '@/lib/icons'
 import {
   $desktopVersion,
   refreshDesktopVersion
 } from '@/store/version'
+import {
+  $desktopUpdateStatus,
+  applyDesktopUpdate,
+  checkDesktopUpdate,
+  downloadDesktopUpdate
+} from '@/store/desktop-updates'
 
 import { ListRow, SettingsContent } from './primitives'
 
@@ -38,10 +45,37 @@ export function AboutSettings() {
   const { t } = useI18n()
   const a = t.settings.about
   const version = useStore($desktopVersion)
+  const updateStatus = useStore($desktopUpdateStatus)
 
   useEffect(() => {
     void refreshDesktopVersion()
   }, [])
+
+  const { stage, error, percent, info } = updateStatus
+
+  function statusText(): string {
+    switch (stage) {
+      case 'checking':
+        return a.checking
+      case 'available':
+        return info?.version
+          ? `v${info.version} ${a.seeWhatsNew}`
+          : a.tapCheck
+      case 'downloading':
+        return `${a.checking} ${Math.round(percent)}%`
+      case 'downloaded':
+        return info?.version
+          ? `v${info.version} — ${a.onLatest.replace('You\'re on the latest version.', '').trim() || a.seeWhatsNew}`
+          : a.seeWhatsNew
+      case 'error':
+        if (error === 'dev-mode' || error === 'updater-unavailable') {
+          return a.cantUpdate
+        }
+        return a.cantReach
+      default:
+        return a.tapCheck
+    }
+  }
 
   return (
     <SettingsContent>
@@ -63,9 +97,63 @@ export function AboutSettings() {
       </div>
 
       <div className="mx-auto mt-4 w-full max-w-2xl">
+        {/* ── Updates section ── */}
+        <div className="rounded-xl border border-(--ui-stroke-tertiary) bg-(--ui-chat-bubble-background) p-3 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-medium">{a.updates}</div>
+            {(stage === 'idle' || stage === 'error') && error !== 'updater-unavailable' && error !== 'dev-mode' && (
+              <Button
+                className="gap-1.5"
+                onClick={() => void checkDesktopUpdate()}
+                size="xs"
+                variant="ghost"
+              >
+                <RefreshCw className="size-3.5" />
+                {a.checkNow}
+              </Button>
+            )}
+          </div>
+
+          <p className="mt-1.5 text-xs text-muted-foreground">{statusText()}</p>
+
+          {/* Progress bar */}
+          {stage === 'downloading' && (
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-(--ui-bg-quinary)">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-300"
+                style={{ width: `${Math.max(2, Math.min(100, percent))}%` }}
+              />
+            </div>
+          )}
+
+          {/* Action buttons */}
+          {stage === 'available' && (
+            <Button
+              className="mt-3 gap-1.5"
+              onClick={() => void downloadDesktopUpdate()}
+              size="sm"
+              variant="default"
+            >
+              <Download className="size-3.5" />
+              {t.notifications.downloadUpdate}
+            </Button>
+          )}
+          {stage === 'downloaded' && (
+            <Button
+              className="mt-3 gap-1.5"
+              onClick={() => void applyDesktopUpdate()}
+              size="sm"
+              variant="default"
+            >
+              <RefreshCw className="size-3.5" />
+              {t.notifications.restartToUpdate}
+            </Button>
+          )}
+        </div>
+
         <ListRow
-          description='This desktop app connects to a local agent-gateway server, which wraps installed CLI agents (Claude Code, Pi, Codex) into a unified chat interface.'
-          title='Agent Gateway Integration'
+          description="This desktop app connects to a local agent-gateway server, which wraps installed CLI agents (Claude Code, Pi, Codex) into a unified chat interface."
+          title="Agent Gateway Integration"
         />
 
         <ListRow
@@ -82,8 +170,8 @@ export function AboutSettings() {
               <ExternalLink className="size-3.5 text-muted-foreground hover:text-foreground" />
             </a>
           }
-          description='Powered by agent-gateway with Claude Code, Pi, and Codex bridges.'
-          title='Open Source'
+          description="Powered by agent-gateway with Claude Code, Pi, and Codex bridges."
+          title="Open Source"
         />
       </div>
     </SettingsContent>

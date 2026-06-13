@@ -53,7 +53,13 @@ export function AboutSettings() {
 
   const { stage, error, percent, info } = updateStatus
 
+  const canUpdate = error !== 'dev-mode' && error !== 'updater-unavailable'
+
   function statusText(): string {
+    if (!canUpdate) {
+      return a.cantUpdate
+    }
+
     switch (stage) {
       case 'checking':
         return a.checking
@@ -65,12 +71,9 @@ export function AboutSettings() {
         return `${a.checking} ${Math.round(percent)}%`
       case 'downloaded':
         return info?.version
-          ? `v${info.version} — ${a.onLatest.replace('You\'re on the latest version.', '').trim() || a.seeWhatsNew}`
+          ? `v${info.version} — ${a.seeWhatsNew}`
           : a.seeWhatsNew
       case 'error':
-        if (error === 'dev-mode' || error === 'updater-unavailable') {
-          return a.cantUpdate
-        }
         return a.cantReach
       default:
         return a.tapCheck
@@ -101,7 +104,7 @@ export function AboutSettings() {
         <div className="rounded-xl border border-(--ui-stroke-tertiary) bg-(--ui-chat-bubble-background) p-3 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-medium">{a.updates}</div>
-            {(stage === 'idle' || stage === 'error') && error !== 'updater-unavailable' && error !== 'dev-mode' && (
+            {(stage === 'idle' || stage === 'error') && canUpdate && (
               <Button
                 className="gap-1.5"
                 onClick={() => void checkDesktopUpdate()}

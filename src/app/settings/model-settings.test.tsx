@@ -43,7 +43,9 @@ describe('ModelSettings', () => {
     await waitFor(() => expect(getGlobalModelInfo).toHaveBeenCalled())
     // The loaded provider + model populate the Provider and Model selects;
     // once both resolve the Apply button flips from disabled to enabled.
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply' }).disabled).toBe(false))
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Apply' }) as HTMLButtonElement).disabled).toBe(false)
+    )
   })
 
   it('renders the auxiliary task rows', async () => {

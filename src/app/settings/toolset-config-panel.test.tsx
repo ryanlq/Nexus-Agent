@@ -93,8 +93,13 @@ describe('ToolsetConfigPanel', () => {
     const elevenlabs = await screen.findByRole('button', { name: /ElevenLabs/ })
     fireEvent.click(elevenlabs)
 
-    // Click "Set" to reveal the input for the unset key.
-    fireEvent.click(await screen.findByRole('button', { name: 'Set' }))
+    // The env-var actions live behind a Radix DropdownMenu now: it opens on
+    // pointerdown (not click), so we dispatch pointer events on the trigger,
+    // then pick "Set" to reveal the input for the unset key.
+    const actionsTrigger = await screen.findByRole('button', { name: 'Actions for ELEVENLABS_API_KEY' })
+    fireEvent.pointerDown(actionsTrigger, { button: 0 })
+    fireEvent.pointerUp(actionsTrigger, { button: 0 })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Set' }))
 
     const input = await screen.findByPlaceholderText('ElevenLabs API key')
     fireEvent.change(input, { target: { value: 'sk-test-123' } })

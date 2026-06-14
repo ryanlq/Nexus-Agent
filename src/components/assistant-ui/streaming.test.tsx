@@ -383,7 +383,7 @@ describe('assistant-ui streaming renderer', () => {
   it('renders assistant text incrementally before completion', async () => {
     const { container } = render(<StreamingHarness />)
 
-    expect(screen.getByRole('status', { name: 'Hermes is loading a response' })).toBeTruthy()
+    expect(screen.getByRole('status', { name: 'Nexus Agent is loading a response' })).toBeTruthy()
 
     await wait(80)
 
@@ -391,7 +391,7 @@ describe('assistant-ui streaming renderer', () => {
       expect(container.textContent).toContain('first chunk')
     })
     expect(container.textContent).not.toContain('second chunk')
-    expect(screen.queryByRole('status', { name: 'Hermes is loading a response' })).toBeNull()
+    expect(screen.queryByRole('status', { name: 'Nexus Agent is loading a response' })).toBeNull()
 
     await wait(500)
 
@@ -641,10 +641,10 @@ describe('assistant-ui streaming renderer', () => {
 
   it('renders an incomplete streaming reasoning fenced code block as a code card', async () => {
     const { container } = render(<RunningReasoningHarness />)
-    const ui = within(container)
 
-    fireEvent.click(ui.getByRole('button', { name: /thinking/i }))
-
+    // While streaming, the Thinking disclosure auto-opens as a live preview
+    // (pending === true), so no manual toggle is needed — clicking would
+    // instead *close* it. We just wait for the code-card to render inside.
     await waitFor(() => {
       expect(container.querySelector('[data-slot="code-card"]')).toBeTruthy()
     })

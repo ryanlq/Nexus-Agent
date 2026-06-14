@@ -17,7 +17,6 @@ import { SessionActionsMenu, SessionContextMenu } from './session-actions-menu'
 const AGENT_SHORT_NAMES: Record<string, string> = {
   'claude-code': 'Claude',
   'pi': 'Pi',
-  'codex': 'Codex',
 }
 
 interface SidebarSessionRowProps extends React.ComponentProps<'div'> {

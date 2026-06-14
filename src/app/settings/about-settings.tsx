@@ -155,7 +155,7 @@ export function AboutSettings() {
         </div>
 
         <ListRow
-          description="This desktop app connects to a local agent-gateway server, which wraps installed CLI agents (Claude Code, Pi, Codex) into a unified chat interface."
+          description="This desktop app connects to a local agent-gateway server, which wraps installed CLI agents (Claude Code, Pi) into a unified chat interface."
           title="Agent Gateway Integration"
         />
 
@@ -173,7 +173,7 @@ export function AboutSettings() {
               <ExternalLink className="size-3.5 text-muted-foreground hover:text-foreground" />
             </a>
           }
-          description="Powered by agent-gateway with Claude Code, Pi, and Codex bridges."
+          description="Powered by agent-gateway with Claude Code and Pi bridges."
           title="Open Source"
         />
       </div>

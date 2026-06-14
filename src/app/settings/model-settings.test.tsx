@@ -41,7 +41,9 @@ describe('ModelSettings', () => {
     await renderModelSettings()
 
     await waitFor(() => expect(getGlobalModelInfo).toHaveBeenCalled())
-    expect(screen.getByText('nous / hermes-4')).toBeTruthy()
+    // The loaded provider + model populate the Provider and Model selects;
+    // once both resolve the Apply button flips from disabled to enabled.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply' }).disabled).toBe(false))
   })
 
   it('renders the auxiliary task rows', async () => {

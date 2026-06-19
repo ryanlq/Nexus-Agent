@@ -52,7 +52,17 @@ export const zh: Translations = {
       signInFailed: '登录失败',
       signInToRemoteGateway: '登录远程网关',
       signInWithProvider: provider => `使用 ${provider} 登录`,
-      identityProvider: '你的身份提供方'
+      identityProvider: '你的身份提供方',
+      gatewayHint: '网关版本过旧可能导致启动失败。检查更新是安全的,有可能解决此问题。',
+      gatewayCheck: '检查网关更新',
+      gatewayChecking: '正在检查更新…',
+      gatewayUpdateTo: (version: string) => `更新网关到 ${version}`,
+      gatewayUpdating: '正在更新网关…',
+      gatewayRestarting: '正在重启网关…',
+      gatewayUpToDate: '网关已是最新',
+      gatewayCheckFailed: '无法检查更新',
+      gatewayUpdateFailed: '更新失败 —— 请尝试修复安装或打开日志。',
+      gatewayUpdated: '网关已更新,正在重启…'
     }
   },
 

@@ -260,6 +260,16 @@ export function useMessageStream({
   const lastFlushAtRef = useRef<number>(0)
   const nativeSubagentSessionsRef = useRef<Set<string>>(new Set())
 
+  // -- Stream watchdog timer refs (callbacks defined after failAssistantMessage) --
+  // When message.start fires but the gateway never sends deltas or
+  // message.complete (e.g. the agent subprocess hangs, the SDK query() blocks
+  // forever, or the WebSocket silently drops events), the desktop would spin
+  // the response timer indefinitely with no way to recover. This watchdog
+  // timer resets on every inbound event and fires a synthetic error after
+  // STALL_TIMEOUT_MS of silence, freeing the UI.
+  const STALL_TIMEOUT_MS = 120_000
+  const stallTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
   const flushQueuedDeltas = useCallback(
     (sessionId?: string) => {
       const queue = queuedDeltasRef.current
@@ -602,6 +612,48 @@ export function useMessageStream({
     [updateSessionState]
   )
 
+  const resetStallTimer = useCallback(
+    (sessionId: string) => {
+      const timers = stallTimersRef.current
+      const existing = timers.get(sessionId)
+      if (existing) {
+        clearTimeout(existing)
+      }
+
+      const timer = setTimeout(() => {
+        timers.delete(sessionId)
+        failAssistantMessage(
+          sessionId,
+          'Gateway stopped responding. The agent may have hung or the connection was lost. Please try again.'
+        )
+      }, STALL_TIMEOUT_MS)
+
+      timers.set(sessionId, timer)
+    },
+    [failAssistantMessage]
+  )
+
+  const clearStallTimer = useCallback((sessionId: string) => {
+    const timers = stallTimersRef.current
+    const existing = timers.get(sessionId)
+    if (existing) {
+      clearTimeout(existing)
+      timers.delete(sessionId)
+    }
+  }, [])
+
+  // Cleanup all stall timers on unmount
+  useEffect(
+    () => () => {
+      for (const timer of stallTimersRef.current.values()) {
+        clearTimeout(timer)
+      }
+
+      stallTimersRef.current.clear()
+    },
+    []
+  )
+
   const handleGatewayEvent = useCallback(
     (event: RpcEvent) => {
       const payload = event.payload as GatewayEventPayload | undefined
@@ -737,8 +789,11 @@ export function useMessageStream({
         if (isActiveEvent) {
           setTurnStartedAt(Date.now())
         }
+
+        resetStallTimer(sessionId)
       } else if (event.type === 'message.delta') {
         if (sessionId) {
+          resetStallTimer(sessionId)
           appendAssistantDelta(sessionId, coerceGatewayText(payload?.text))
         }
       } else if (event.type === 'thinking.delta') {
@@ -748,16 +803,20 @@ export function useMessageStream({
         // avoid a duplicative "Thinking" disclosure showing spinner text.
       } else if (event.type === 'reasoning.delta') {
         if (sessionId) {
+          resetStallTimer(sessionId)
           appendReasoningDelta(sessionId, coerceThinkingText(payload?.text))
         }
       } else if (event.type === 'reasoning.available') {
         if (sessionId) {
+          resetStallTimer(sessionId)
           appendReasoningDelta(sessionId, coerceThinkingText(payload?.text), true)
         }
       } else if (event.type === 'message.complete') {
         if (!sessionId) {
           return
         }
+
+        clearStallTimer(sessionId)
 
         // Turn ended — drop any blocking prompt still open for THIS session
         // (e.g. interrupted, or the approval already resolved). Scoped to the
@@ -787,9 +846,13 @@ export function useMessageStream({
         }
 
         flushQueuedDeltas(sessionId)
+        if (event.type === 'tool.start') {
+          resetStallTimer(sessionId)
+        }
         upsertToolCall(sessionId, toTodoPayload(payload) ?? payload, 'running', event.type)
       } else if (event.type === 'tool.complete') {
         if (sessionId) {
+          resetStallTimer(sessionId)
           flushQueuedDeltas(sessionId)
           upsertToolCall(sessionId, toTodoPayload(payload) ?? payload, 'complete', event.type)
           // A pending clarify blocks the turn, so the first tool.complete after
@@ -893,6 +956,10 @@ export function useMessageStream({
           }
         }
       } else if (event.type === 'error') {
+        if (sessionId) {
+          clearStallTimer(sessionId)
+        }
+
         const errorMessage = payload?.message || 'Nexus Agent reported an error'
         const looksLikeProviderSetup = isProviderSetupErrorMessage(errorMessage)
 
@@ -927,11 +994,13 @@ export function useMessageStream({
       appendAssistantDelta,
       appendReasoningDelta,
       activeSessionIdRef,
+      clearStallTimer,
       completeAssistantMessage,
       failAssistantMessage,
       flushQueuedDeltas,
       queryClient,
       refreshGatewayConfig,
+      resetStallTimer,
       updateSessionState,
       upsertToolCall
     ]

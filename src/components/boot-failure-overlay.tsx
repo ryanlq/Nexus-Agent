@@ -4,15 +4,16 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { DesktopConnectionConfig } from '@/global'
 import { useI18n } from '@/i18n'
-import { AlertTriangle, FileText, Loader2, LogIn, RefreshCw, Wrench } from '@/lib/icons'
+import { AlertTriangle, Download, FileText, Loader2, LogIn, RefreshCw, Wrench } from '@/lib/icons'
 import { $desktopBoot } from '@/store/boot'
 import { notify, notifyError } from '@/store/notifications'
 import { $desktopOnboarding } from '@/store/onboarding'
+import { applySidecarUpdate, checkSidecarUpdate, $sidecarChecking, $sidecarUpdateCheck, $sidecarUpdating } from '@/store/sidecar'
 
 import type { RemoteReauth } from './boot-failure-reauth'
 import { deriveProviderShape, isRemoteReauthFailure, signInLabel } from './boot-failure-reauth'
 
-type BusyAction = 'local' | 'repair' | 'retry' | 'signin' | null
+type BusyAction = 'local' | 'repair' | 'retry' | 'signin' | 'update' | null
 
 // A remote gateway whose access cookie has lapsed (e.g. the dashboard
 // restarted on the remote box) boots into this overlay with a reauth-shaped
@@ -29,6 +30,9 @@ export function BootFailureOverlay() {
   const boot = useStore($desktopBoot)
   const onboarding = useStore($desktopOnboarding)
   const { t } = useI18n()
+  const updateCheck = useStore($sidecarUpdateCheck)
+  const sidecarChecking = useStore($sidecarChecking)
+  const sidecarUpdating = useStore($sidecarUpdating)
   const [busy, setBusy] = useState<BusyAction>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [showLogs, setShowLogs] = useState(false)
@@ -104,6 +108,19 @@ export function BootFailureOverlay() {
     }
   }, [visible])
 
+  // A version-skewed (outdated) gateway is a common root cause of a hard boot
+  // failure, and the only fix — updating the sidecar — is unreachable while this
+  // mask is up (the update button lives in Settings, behind the mask). Probe
+  // once when the overlay surfaces for a local failure so the user immediately
+  // sees whether an update is available. Idempotent (guarded by $sidecarChecking).
+  useEffect(() => {
+    if (!visible || remoteReauth) {
+      return
+    }
+
+    void checkSidecarUpdate()
+  }, [visible, remoteReauth])
+
   if (!visible || suppressed) {
     return null
   }
@@ -125,6 +142,47 @@ export function BootFailureOverlay() {
     // applyConnectionConfig reloads the window from the main process.
     await window.nexusAgent?.applyConnectionConfig({ mode: 'local' }).catch(() => undefined)
     setBusy(null)
+  }
+
+  // Download the latest sidecar, then force a respawn so the new binary
+  // actually runs. The download (applySidecarUpdate) only swaps the file on
+  // disk — the 500ing process keeps running and startGateway()'s latched
+  // connectionPromise would just reconnect to it on a plain reload. Re-applying
+  // the CURRENT connection config drives the main process to tear the process
+  // down (clearing the latch) and reload, so boot respawns against the new
+  // binary. Works even with the gateway HTTP dead — the update IPC goes through
+  // the Electron main process directly.
+  const updateAndRestartGateway = async () => {
+    setBusy('update')
+
+    try {
+      const result = await applySidecarUpdate()
+
+      if (!result.ok) {
+        notify({
+          kind: 'error',
+          title: t.boot.failure.gatewayUpdateFailed,
+          message: result.error || t.boot.failure.gatewayUpdateFailed
+        })
+        setBusy(null)
+
+        return
+      }
+
+      const desktop = window.nexusAgent
+      const current = await desktop?.getConnectionConfig().catch(() => null)
+
+      if (current) {
+        await desktop?.applyConnectionConfig(current).catch(() => undefined)
+      } else {
+        await desktop?.applyConnectionConfig({ mode: 'local' }).catch(() => undefined)
+      }
+
+      window.location.reload()
+    } catch (err) {
+      notifyError(err, t.boot.failure.gatewayUpdateFailed)
+      setBusy(null)
+    }
   }
 
   // Open the gateway's login window (renders the username/password form for a
@@ -169,6 +227,20 @@ export function BootFailureOverlay() {
     remoteGateway: copy.signInToRemoteGateway,
     withProvider: copy.signInWithProvider
   })
+
+  // Gateway-update affordance. latestVersion is nullable, so narrow it before
+  // handing to the (version: string) => string copy. Label mirrors the
+  // Settings gateway panel's derivation (gateway-menu-panel.tsx).
+  const gatewayLatestVersion = updateCheck?.latestVersion ?? null
+  const gatewayUpdateAvailable = updateCheck?.updateAvailable === true && gatewayLatestVersion !== null
+  let gatewayCheckLabel = copy.gatewayCheck
+  if (sidecarChecking) {
+    gatewayCheckLabel = copy.gatewayChecking
+  } else if (updateCheck?.error) {
+    gatewayCheckLabel = copy.gatewayCheckFailed
+  } else if (updateCheck && !updateCheck.updateAvailable) {
+    gatewayCheckLabel = copy.gatewayUpToDate
+  }
 
   return (
     <div className="fixed inset-0 z-[1400] flex items-center justify-center bg-(--ui-chat-surface-background) p-6">
@@ -224,6 +296,28 @@ export function BootFailureOverlay() {
               {remoteReauth ? copy.remoteSignInHint : copy.repairHint}
             </p>
           </div>
+
+          {!remoteReauth ? (
+            <div className="grid gap-2 border-t border-(--ui-stroke-tertiary) pt-4">
+              <p className="text-xs text-(--ui-text-tertiary)">{copy.gatewayHint}</p>
+              <div className="flex flex-wrap gap-2">
+                {gatewayUpdateAvailable && gatewayLatestVersion !== null && !sidecarUpdating ? (
+                  <Button disabled={Boolean(busy)} onClick={() => void updateAndRestartGateway()}>
+                    {busy === 'update' ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                    {busy === 'update' ? copy.gatewayUpdating : copy.gatewayUpdateTo(gatewayLatestVersion)}
+                  </Button>
+                ) : null}
+                <Button
+                  disabled={Boolean(busy) || sidecarChecking || sidecarUpdating}
+                  onClick={() => void checkSidecarUpdate()}
+                  variant="outline"
+                >
+                  {sidecarChecking || sidecarUpdating ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                  {gatewayCheckLabel}
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           {logs.length > 0 ? (
             <div className="grid gap-2">

@@ -65,6 +65,16 @@ export interface Translations {
       signInToRemoteGateway: string
       signInWithProvider: (provider: string) => string
       identityProvider: string
+      gatewayHint: string
+      gatewayCheck: string
+      gatewayChecking: string
+      gatewayUpdateTo: (version: string) => string
+      gatewayUpdating: string
+      gatewayRestarting: string
+      gatewayUpToDate: string
+      gatewayCheckFailed: string
+      gatewayUpdateFailed: string
+      gatewayUpdated: string
     }
   }
 

@@ -35,6 +35,17 @@ interface AgentInfo {
 
 const DEFAULT_AGENTS: AgentInfo[] = [
   {
+    slug: 'claude-code-sdk', name: 'Claude Code (SDK)', description: "Anthropic's coding agent via the official Python SDK. Structured events, native session resume.", installed: false,
+    install_hint: 'pip install claude-code-sdk && npm install -g @anthropic-ai/claude-code', docs_url: 'https://docs.anthropic.com/en/docs/claude-code',
+    params: [
+      { key: 'model', label: 'Model', type: 'select', options: ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'], default: 'claude-sonnet-4-6', description: 'Claude model to use.' },
+      { key: 'bare', label: 'Bare Mode', type: 'toggle', default: 'false', description: '极简模式：跳过工具、技能、上下文加载，节省 token。适合简单问答。' },
+      { key: 'max_turns', label: 'Max Turns', type: 'number', default: '20', min: 1, max: 50, description: '最大 agentic 轮数。1=纯对话无工具，5-10=允许读文件/搜索等，50=复杂任务。' },
+      { key: 'permission_mode', label: 'Permission Mode', type: 'select', options: ['acceptEdits', 'default', 'auto', 'bypassPermissions'], default: 'acceptEdits', description: '工具授权模式。acceptEdits=自动批准编辑，default=每次询问，auto=自动批准大部分操作，bypassPermissions=跳过所有检查（仅限沙箱环境）。' },
+      { key: 'allowed_tools', label: 'Allowed Tools', type: 'text', default: '', description: '允许免授权执行的工具白名单，逗号分隔。如: Bash(git *), Edit, Read。需配合 permission_mode 使用。' },
+    ],
+  },
+  {
     slug: 'claude-code', name: 'Claude Code', description: "Anthropic's coding agent. Uses Claude Sonnet / Opus.", installed: false,
     install_hint: 'npm install -g @anthropic-ai/claude-code', docs_url: 'https://docs.anthropic.com/en/docs/claude-code',
     params: [
@@ -55,13 +66,17 @@ const DEFAULT_AGENTS: AgentInfo[] = [
   },
 ]
 
+// Agent slugs hidden from the settings UI. Still kept in DEFAULT_AGENTS for
+// merge logic so the backend can surface them if needed.
+const HIDDEN_AGENT_SLUGS = new Set(['claude-code'])
+
 interface AgentSettingsProps {
   onAgentChanged?: (agent: string) => void
 }
 
 export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
   const [loading, setLoading] = useState(true)
-  const [agents, setAgents] = useState<AgentInfo[]>(DEFAULT_AGENTS)
+  const [agents, setAgents] = useState<AgentInfo[]>(DEFAULT_AGENTS.filter(a => !HIDDEN_AGENT_SLUGS.has(a.slug)))
   const currentProvider = useStore($currentProvider)
   const [switching, setSwitching] = useState(false)
   const [error, setError] = useState('')
@@ -90,7 +105,9 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
         if (extraParams.length === 0) return apiAgent
         return { ...apiAgent, params: [...(apiAgent.params || []), ...extraParams] }
       })
-      setAgents(merged.length > 0 ? merged : DEFAULT_AGENTS)
+      const visible = (merged.length > 0 ? merged : DEFAULT_AGENTS)
+        .filter(a => !HIDDEN_AGENT_SLUGS.has(a.slug))
+      setAgents(visible)
       // Sync shared atom with server truth
       if (result.current) {
         setCurrentProvider(result.current)
@@ -112,12 +129,12 @@ export function AgentSettings({ onAgentChanged }: AgentSettingsProps) {
           model: string
           provider: string
         }>({ path: '/api/model/info', timeoutMs: 5000 })
-        setCurrentProvider(info.provider || 'claude-code')
-        setAgents(DEFAULT_AGENTS)
+        setCurrentProvider(info.provider || 'claude-code-sdk')
+        setAgents(DEFAULT_AGENTS.filter(a => !HIDDEN_AGENT_SLUGS.has(a.slug)))
       } catch (err) {
         setError('Could not reach agent-gateway backend. Make sure it is running.')
-        setAgents(DEFAULT_AGENTS)
-        setCurrentProvider('claude-code')
+        setAgents(DEFAULT_AGENTS.filter(a => !HIDDEN_AGENT_SLUGS.has(a.slug)))
+        setCurrentProvider('claude-code-sdk')
       }
     } finally {
       setLoading(false)

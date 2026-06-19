@@ -3940,6 +3940,10 @@ async function startGateway() {
         HERMES_DASHBOARD_SESSION_TOKEN: token,
         AGENT_GATEWAY_SESSION_TOKEN: token,
         HERMES_WEB_DIST: webDist,
+        // Force line-buffered output from Python — without this, the gateway's
+        // logger writes sit in a 4KB block buffer and never reach rememberLog
+        // while the child is alive (so devtools shows nothing even on errors).
+        PYTHONUNBUFFERED: "1",
       },
       shell: backend.shell,
       stdio: ["ignore", "pipe", "pipe"],

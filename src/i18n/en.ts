@@ -56,7 +56,18 @@ export const en: Translations = {
       signInFailed: 'Sign-in failed',
       signInToRemoteGateway: 'Sign in to remote gateway',
       signInWithProvider: provider => `Sign in with ${provider}`,
-      identityProvider: 'your identity provider'
+      identityProvider: 'your identity provider',
+      gatewayHint:
+        'An outdated gateway can cause startup failures. Checking for an update is safe and may resolve this.',
+      gatewayCheck: 'Check for gateway update',
+      gatewayChecking: 'Checking for update…',
+      gatewayUpdateTo: (version: string) => `Update gateway to ${version}`,
+      gatewayUpdating: 'Updating gateway…',
+      gatewayRestarting: 'Restarting gateway…',
+      gatewayUpToDate: 'Gateway is up to date',
+      gatewayCheckFailed: "Couldn't check for updates",
+      gatewayUpdateFailed: 'Update failed — try Repair install or Open logs.',
+      gatewayUpdated: 'Gateway updated. Restarting…'
     }
   },
 

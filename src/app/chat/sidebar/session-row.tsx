@@ -16,6 +16,7 @@ import { SessionActionsMenu, SessionContextMenu } from './session-actions-menu'
 /** Short display names for agent slugs, used in sidebar badges. */
 const AGENT_SHORT_NAMES: Record<string, string> = {
   'claude-code': 'Claude',
+  'claude-code-sdk': 'Claude',
   'pi': 'Pi',
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "nexus-agent",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Native desktop shell for Nexus Agent.",
   "author": "Nous Research",
   "homepage": "https://github.com/ryanlq/agent-gateway",

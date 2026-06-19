@@ -24,8 +24,7 @@ import {
   $composerAttachments,
   addComposerAttachment,
   clearComposerAttachments,
-  type ComposerAttachment,
-  terminalContextBlocksFromDraft
+  type ComposerAttachment
 } from '@/store/composer'
 import { clearNotifications, notify, notifyError } from '@/store/notifications'
 import { requestDesktopOnboarding } from '@/store/onboarding'
@@ -234,12 +233,11 @@ export function usePromptActions({
         .filter(Boolean)
         .join('\n')
 
-      const terminalContextBlocks = terminalContextBlocksFromDraft(rawText).join('\n\n')
       const hasImage = attachments.some(a => a.kind === 'image')
       const attachmentRefs = attachments.map(attachmentDisplayText).filter((r): r is string => Boolean(r))
 
       const text =
-        [contextRefs, terminalContextBlocks, visibleText].filter(Boolean).join('\n\n') ||
+        [contextRefs, visibleText].filter(Boolean).join('\n\n') ||
         (hasImage ? 'What do you see in this image?' : '')
 
       // Queue drains fire on the busy→false settle edge, where busyRef (synced

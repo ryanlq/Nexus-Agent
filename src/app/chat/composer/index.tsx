@@ -301,9 +301,7 @@ export function ChatBar({
   // to `$composerDraft` per keystroke any more — nobody outside the composer
   // subscribes to it (verified by grep), and the round-trip
   // `setText` ⇄ `subscribe` ⇄ `setText` was adding two useEffects to the per-
-  // keystroke critical path. `reconcileComposerTerminalSelections` only
-  // matters when the draft is submitted; we now call it from the submit
-  // path instead.
+  // keystroke critical path.
   useEffect(() => {
     draftRef.current = draft
 

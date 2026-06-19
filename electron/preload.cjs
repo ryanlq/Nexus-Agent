@@ -49,24 +49,6 @@ contextBridge.exposeInMainWorld('nexusAgent', {
   getRecentLogs: () => ipcRenderer.invoke('nexus:logs:recent'),
   readDir: dirPath => ipcRenderer.invoke('nexus:fs:readDir', dirPath),
   gitRoot: startPath => ipcRenderer.invoke('nexus:fs:gitRoot', startPath),
-  terminal: {
-    dispose: id => ipcRenderer.invoke('nexus:terminal:dispose', id),
-    resize: (id, size) => ipcRenderer.invoke('nexus:terminal:resize', id, size),
-    start: options => ipcRenderer.invoke('nexus:terminal:start', options),
-    write: (id, data) => ipcRenderer.invoke('nexus:terminal:write', id, data),
-    onData: (id, callback) => {
-      const channel = `nexus:terminal:${id}:data`
-      const listener = (_event, payload) => callback(payload)
-      ipcRenderer.on(channel, listener)
-      return () => ipcRenderer.removeListener(channel, listener)
-    },
-    onExit: (id, callback) => {
-      const channel = `nexus:terminal:${id}:exit`
-      const listener = (_event, payload) => callback(payload)
-      ipcRenderer.on(channel, listener)
-      return () => ipcRenderer.removeListener(channel, listener)
-    }
-  },
   onClosePreviewRequested: callback => {
     const listener = () => callback()
     ipcRenderer.on('nexus:close-preview-requested', listener)

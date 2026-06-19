@@ -71,8 +71,6 @@ import { useGatewayRequest } from './gateway/hooks/use-gateway-request'
 import { ModelPickerOverlay } from './model-picker-overlay'
 import { ModelVisibilityOverlay } from './model-visibility-overlay'
 import { RightSidebarPane } from './right-sidebar'
-import { $terminalTakeover } from './right-sidebar/store'
-import { PersistentTerminal, TerminalSlot } from './right-sidebar/terminal/persistent'
 import { NEW_CHAT_ROUTE, routeSessionId, sessionRoute, SETTINGS_ROUTE } from './routes'
 import { useContextSuggestions } from './session/hooks/use-context-suggestions'
 import { useCwdActions } from './session/hooks/use-cwd-actions'
@@ -140,7 +138,6 @@ export function DesktopController() {
   const filePreviewTarget = useStore($filePreviewTarget)
   const previewTarget = useStore($previewTarget)
   const selectedStoredSessionId = useStore($selectedStoredSessionId)
-  const terminalTakeover = useStore($terminalTakeover)
   const panesFlipped = useStore($panesFlipped)
 
   const routedSessionId = routeSessionId(location.pathname)
@@ -163,8 +160,6 @@ export function DesktopController() {
     settingsOpen,
     toggleCommandCenter
   } = useOverlayRouting()
-
-  const terminalTakeoverActive = chatOpen && terminalTakeover
 
   const titlebarToolGroups = useGroupRegistry<TitlebarTool>()
   const statusbarItemGroups = useGroupRegistry<StatusbarItem>()
@@ -663,9 +658,6 @@ export function DesktopController() {
   const overlays = (
     <>
       {/* NOTE: DesktopInstallOverlay removed — legacy bootstrap retired. */}
-      {/* One PTY-backed terminal mounted forever; <TerminalSlot /> placeholders
-          decide where it shows. Toggling fullscreen never rebuilds the shell. */}
-      <PersistentTerminal cwd={currentCwd} onAddSelectionToChat={composer.addTerminalSelectionAttachment} />
       <DesktopOnboardingOverlay
         enabled={gatewayState === 'open'}
         onCompleted={() => {
@@ -764,12 +756,6 @@ export function DesktopController() {
     />
   )
 
-  const takeoverTerminalView = (
-    <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-chat-surface-background) pt-(--titlebar-height)">
-      <TerminalSlot />
-    </div>
-  )
-
   // Flipped layout mirrors the default: sessions sidebar → right, file
   // browser + preview rail → left. Same panes, swapped sides.
   const sidebarSide = panesFlipped ? 'right' : 'left'
@@ -822,7 +808,6 @@ export function DesktopController() {
       titlebarTools={titlebarToolGroups.flat.right}
     >
       <Pane
-        disabled={terminalTakeoverActive}
         id="chat-sidebar"
         maxWidth={SIDEBAR_MAX_WIDTH}
         minWidth={SIDEBAR_DEFAULT_WIDTH}
@@ -834,8 +819,8 @@ export function DesktopController() {
       </Pane>
       <PaneMain>
         <Routes>
-          <Route element={terminalTakeoverActive ? takeoverTerminalView : chatView} index />
-          <Route element={terminalTakeoverActive ? takeoverTerminalView : chatView} path=":sessionId" />
+          <Route element={chatView} index />
+          <Route element={chatView} path=":sessionId" />
           <Route
             element={
               <Suspense fallback={null}>

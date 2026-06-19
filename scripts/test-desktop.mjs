@@ -83,21 +83,6 @@ function exists(target) {
   return fs.existsSync(target)
 }
 
-// Match nodepty native binding location to what main.cjs's resolver fallback
-// expects (apps/desktop/electron/main.cjs, packaged-build branch).  Upstream
-// node-pty 1.x is N-API based and ships per-arch prebuilts under
-// prebuilds/<platform>-<arch>/ instead of build/Release/.  We check the
-// per-arch dir since that's what stage-native-deps actually copies.
-function expectedNativeDepPaths() {
-  const root = path.join(APP.resourcesPath, 'native-deps', 'node-pty')
-  const prebuildsDir = path.join(root, 'prebuilds', `${PLATFORM}-${ARCH}`)
-  return {
-    packageJson: path.join(root, 'package.json'),
-    prebuildsDir,
-    libIndex: path.join(root, 'lib', 'index.js')
-  }
-}
-
 function ensurePlatformBuilds() {
   if (PLATFORM === 'darwin') return
   if (PLATFORM === 'win32') return
@@ -279,9 +264,6 @@ function launchFresh() {
 //   - The Hermes Agent Python payload is NOT shipped (it's fetched at first
 //     launch via install.ps1's stage protocol).
 //   - install-stamp.json IS shipped in resources/ with a valid commit + branch.
-//   - native-deps/@homebridge/node-pty-prebuilt-multiarch/ IS shipped with
-//     the package.json + lib/ + at least one .node binary (the renderer's
-//     integrated terminal needs this; see Phase 1F.6).
 //   - The renderer's dist/index.html is reachable (either unpacked or
 //     inside app.asar).
 function validateBundle() {
@@ -317,33 +299,9 @@ function validateBundle() {
     die(`install-stamp.json is missing the branch field: ${JSON.stringify(stamp)}`)
   }
 
-  // Positive assertion: node-pty native deps shipped
-  const native = expectedNativeDepPaths()
-  if (!exists(native.packageJson)) {
-    die(`Missing node-pty package.json in resources/native-deps: ${native.packageJson}`)
-  }
-  if (!exists(native.libIndex)) {
-    die(`Missing node-pty lib/index.js in resources/native-deps: ${native.libIndex}`)
-  }
-  if (!exists(native.prebuildsDir)) {
-    die(`Missing node-pty prebuilds dir for ${PLATFORM}-${ARCH}: ${native.prebuildsDir}`)
-  }
-  const nodeBinaries = fs.readdirSync(native.prebuildsDir).filter(name => name.endsWith('.node'))
-  if (nodeBinaries.length === 0) {
-    die(`No .node native binaries found in: ${native.prebuildsDir}`)
-  }
-  // Darwin requires a runtime-execed spawn-helper alongside pty.node; missing
-  // it manifests as "ENOENT: spawn-helper" on first pty.spawn() call.
-  if (PLATFORM === 'darwin') {
-    const spawnHelper = path.join(native.prebuildsDir, 'spawn-helper')
-    if (!exists(spawnHelper)) {
-      die(`Missing node-pty spawn-helper (required on darwin): ${spawnHelper}`)
-    }
-  }
-
   // Renderer payload check (either unpacked or in the asar)
   if (exists(APP.unpackedDistIndex)) {
-    return { stamp, nodeBinaries }
+    return { stamp }
   }
   if (!exists(APP.asarPath)) {
     die(`Missing renderer payload: neither ${APP.unpackedDistIndex} nor ${APP.asarPath} exists`)
@@ -356,7 +314,7 @@ function validateBundle() {
   if (!normalized.includes('dist/index.html')) {
     die(`Missing renderer payload file in app.asar: ${APP.asarPath} (expected dist/index.html)`)
   }
-  return { stamp, nodeBinaries }
+  return { stamp }
 }
 
 function printArtifacts(options = {}) {
@@ -374,9 +332,6 @@ function printArtifacts(options = {}) {
   console.log(`  runtime: ${runtimeRoot}`)
   if (stamp) {
     console.log(`  install-stamp: ${stamp.commit.slice(0, 12)} on ${stamp.branch}`)
-  }
-  if (options.nodeBinaries && options.nodeBinaries.length > 0) {
-    console.log(`  node-pty binaries: ${options.nodeBinaries.join(', ')}`)
   }
 }
 

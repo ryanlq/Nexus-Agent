@@ -64,7 +64,7 @@ const {
 //
 // The build config uses `beforeBuild: false` + an explicit `files:` list to
 // avoid workspace dependency issues.  This means NO node_modules end up in
-// the asar.  Runtime deps (node-pty, electron-updater, etc.) are staged into
+// the asar.  Runtime deps (electron-updater, etc.) are staged into
 // resources/native-deps/ by scripts/stage-native-deps.cjs and shipped via
 // extraResources.
 //
@@ -93,20 +93,6 @@ try {
 } catch (err) {
   console.error("[main] failed to load electron-updater:", err.message);
   autoUpdater = null;
-}
-
-let nodePty = null;
-
-try {
-  nodePty = require("node-pty");
-} catch {
-  try {
-    if (_nativeDepsDir) {
-      nodePty = require(path.join(_nativeDepsDir, "node-pty"));
-    }
-  } catch {
-    nodePty = null;
-  }
 }
 
 const USER_DATA_OVERRIDE = process.env.NEXUS_AGENT_USER_DATA_DIR;
@@ -231,7 +217,6 @@ const APP_ICON_PATHS = [
 ];
 
 let rendererTitleBarTheme = null;
-const terminalSessions = new Map();
 
 function isHexColor(value) {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
@@ -1075,66 +1060,6 @@ function findSystemPython() {
   // failure. Better to return null and let the NSIS prereq page
   // offer to install a known-good 3.11 via winget.
   return null;
-}
-
-// findGitBash — locate bash.exe on Windows. Hermes' terminal tool requires
-// bash (POSIX shell), and on Windows that's almost always Git for Windows'
-// bundled Git Bash. We check the same set of locations tools/environments/
-// local.py:_find_bash() checks at runtime, so a positive result here means
-// the agent will be able to start a terminal too.
-//
-// On non-Windows hosts bash is part of the OS and this just returns the
-// first bash on PATH.
-function findGitBash() {
-  if (!IS_WINDOWS) {
-    return findOnPath("bash");
-  }
-
-  // install.ps1 drops PortableGit at %LOCALAPPDATA%\hermes\git\... — checked
-  // first so users who installed via install.ps1 are detected before we
-  // start probing system-wide locations.
-  const localAppData = process.env.LOCALAPPDATA || "";
-  const candidates = [];
-  if (localAppData) {
-    candidates.push(
-      path.join(localAppData, "nexus-agent", "git", "bin", "bash.exe"),
-    );
-    candidates.push(
-      path.join(localAppData, "nexus-agent", "git", "usr", "bin", "bash.exe"),
-    );
-  }
-
-  // Standard Git for Windows install locations.
-  candidates.push(
-    path.join(
-      process.env["ProgramFiles"] || "C:\\Program Files",
-      "Git",
-      "bin",
-      "bash.exe",
-    ),
-  );
-  candidates.push(
-    path.join(
-      process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)",
-      "Git",
-      "bin",
-      "bash.exe",
-    ),
-  );
-  if (localAppData) {
-    candidates.push(
-      path.join(localAppData, "Programs", "Git", "bin", "bash.exe"),
-    );
-  }
-
-  for (const candidate of candidates) {
-    if (fileExists(candidate)) return candidate;
-  }
-
-  // Last resort — bash on PATH (covers WSL bash, MSYS2, custom installs).
-  // On WSL hosts findOnPath itself filters out Windows-binary paths via
-  // isWindowsBinaryPathInWsl, so we won't hand back a wsl.exe shim either.
-  return findOnPath("bash");
 }
 
 // NOTE: getVenvPython removed — legacy hermes_cli venv path retired.
@@ -4750,93 +4675,6 @@ function findGitRoot(start) {
   return null;
 }
 
-function terminalShellCommand() {
-  if (IS_WINDOWS) {
-    return { args: [], command: process.env.COMSPEC || "cmd.exe" };
-  }
-
-  const configuredShell = process.env.SHELL || "";
-  const shellPath =
-    (path.isAbsolute(configuredShell) &&
-      fs.existsSync(configuredShell) &&
-      configuredShell) ||
-    ["/bin/zsh", "/bin/bash", "/bin/sh"].find((candidate) =>
-      fs.existsSync(candidate),
-    ) ||
-    "/bin/sh";
-  const shellName = path.basename(shellPath);
-  const interactiveArgs =
-    shellName.includes("zsh") || shellName.includes("bash") ? ["-il"] : ["-i"];
-
-  return { args: interactiveArgs, command: shellPath, name: shellName };
-}
-
-function safeTerminalCwd(cwd) {
-  const candidate = path.resolve(String(cwd || app.getPath("home")));
-
-  try {
-    const stat = fs.statSync(candidate);
-
-    return stat.isDirectory() ? candidate : path.dirname(candidate);
-  } catch {
-    return app.getPath("home");
-  }
-}
-
-function terminalShellEnv() {
-  const env = { ...process.env };
-
-  // Electron is commonly launched through `npm run dev`; do not leak npm's
-  // managed prefix into a user's interactive shell (nvm/proto warn loudly).
-  for (const key of Object.keys(env)) {
-    if (
-      key === "npm_config_prefix" ||
-      key.startsWith("npm_config_") ||
-      key.startsWith("npm_package_")
-    ) {
-      delete env[key];
-    }
-  }
-
-  // Strip color/theme-detection vars that ride along when Electron is launched
-  // from a non-tty agent shell (Cursor's runner sets NO_COLOR/FORCE_COLOR=0
-  // /TERM=dumb; some terminals set COLORFGBG which would flip Hermes' TUI into
-  // light-mode). Our PTY is a real xterm-compat terminal — force truecolor.
-  delete env.NO_COLOR;
-  delete env.FORCE_COLOR;
-  delete env.COLORFGBG;
-
-  env.COLORTERM = "truecolor";
-  env.LC_CTYPE = env.LC_CTYPE || "UTF-8";
-  env.TERM = "xterm-256color";
-  env.TERM_PROGRAM = "Hermes";
-  env.TERM_PROGRAM_VERSION = app.getVersion();
-
-  return env;
-}
-
-function terminalChannel(id, suffix) {
-  return `nexus:terminal:${id}:${suffix}`;
-}
-
-function disposeTerminalSession(id) {
-  const sessionInfo = terminalSessions.get(id);
-
-  if (!sessionInfo) {
-    return false;
-  }
-
-  terminalSessions.delete(id);
-
-  try {
-    sessionInfo.pty.kill();
-  } catch {
-    // Process may already be gone.
-  }
-
-  return true;
-}
-
 ipcMain.handle("nexus:fs:readDir", async (_event, dirPath) => {
   const resolved = path.resolve(String(dirPath || ""));
 
@@ -4889,84 +4727,6 @@ ipcMain.handle("nexus:fs:gitRoot", async (_event, startPath) => {
     return findGitRoot(resolved);
   }
 });
-
-ipcMain.handle("nexus:terminal:start", async (event, payload = {}) => {
-  if (!nodePty) {
-    throw new Error(
-      "PTY support is unavailable. Reinstall desktop dependencies and restart Nexus Agent.",
-    );
-  }
-
-  const id = crypto.randomUUID();
-  const { args, command, name } = terminalShellCommand();
-  const cwd = safeTerminalCwd(payload?.cwd);
-  const cols = Math.max(
-    2,
-    Number.parseInt(String(payload?.cols || 80), 10) || 80,
-  );
-  const rows = Math.max(
-    2,
-    Number.parseInt(String(payload?.rows || 24), 10) || 24,
-  );
-  const ptyProcess = nodePty.spawn(command, args, {
-    cols,
-    cwd,
-    env: terminalShellEnv(),
-    name: "xterm-256color",
-    rows,
-  });
-
-  terminalSessions.set(id, { pty: ptyProcess, webContentsId: event.sender.id });
-
-  const send = (suffix, payload) => {
-    if (event.sender.isDestroyed()) {
-      return;
-    }
-
-    event.sender.send(terminalChannel(id, suffix), payload);
-  };
-
-  ptyProcess.onData((data) => send("data", data));
-  ptyProcess.onExit(({ exitCode, signal }) => {
-    terminalSessions.delete(id);
-    send("exit", { code: exitCode, signal: signal || null });
-  });
-  event.sender.once("destroyed", () => disposeTerminalSession(id));
-
-  return { cwd, id, shell: name };
-});
-
-ipcMain.handle("nexus:terminal:write", (_event, id, data) => {
-  const sessionInfo = terminalSessions.get(String(id || ""));
-
-  if (!sessionInfo) {
-    return false;
-  }
-
-  sessionInfo.pty.write(String(data || ""));
-
-  return true;
-});
-
-ipcMain.handle("nexus:terminal:resize", (_event, id, size = {}) => {
-  const sessionInfo = terminalSessions.get(String(id || ""));
-
-  if (!sessionInfo) {
-    return false;
-  }
-
-  const cols = Math.max(2, Number.parseInt(String(size?.cols || 80), 10) || 80);
-  const rows = Math.max(2, Number.parseInt(String(size?.rows || 24), 10) || 24);
-
-  sessionInfo.pty.resize(cols, rows);
-
-  return true;
-});
-ipcMain.handle("nexus:terminal:dispose", (_event, id) =>
-  disposeTerminalSession(String(id || "")),
-);
-
-
 
 ipcMain.handle("nexus:version", async () => ({
   appVersion: app.getVersion(),

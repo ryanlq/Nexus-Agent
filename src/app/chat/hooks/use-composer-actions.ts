@@ -6,8 +6,7 @@ import { attachmentId, contextPath, pathLabel } from '@/lib/chat-runtime'
 import {
   addComposerAttachment,
   type ComposerAttachment,
-  removeComposerAttachment,
-  setComposerTerminalSelection
+  removeComposerAttachment
 } from '@/store/composer'
 import { notify, notifyError } from '@/store/notifications'
 
@@ -195,19 +194,6 @@ const attachToMain = (attachment: ComposerAttachment) => {
 export function useComposerActions({ activeSessionId, currentCwd, requestGateway }: ComposerActionsOptions) {
   const addTextToDraft = useCallback((text: string) => {
     requestComposerInsert(text, { mode: 'block' })
-  }, [])
-
-  const addTerminalSelectionAttachment = useCallback((text: string, label = 'selection') => {
-    const trimmed = text.trim()
-    const normalizedLabel = label.trim() || 'selection'
-    const refText = `@terminal:${formatRefValue(normalizedLabel)}`
-
-    if (!trimmed) {
-      return
-    }
-
-    setComposerTerminalSelection(normalizedLabel, trimmed)
-    requestComposerInsert(refText, { mode: 'inline' })
   }, [])
 
   const addContextRefAttachment = useCallback((refText: string, label?: string, detail?: string) => {
@@ -507,7 +493,6 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
 
   return {
     addContextRefAttachment,
-    addTerminalSelectionAttachment,
     addTextToDraft,
     attachContextFilePath,
     attachContextFolderPath,

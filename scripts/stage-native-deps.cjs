@@ -1,8 +1,7 @@
 'use strict'
 
 /**
- * Stage native and runtime node-modules dependencies for electron-builder
- * packaging.
+ * Stage runtime node-modules dependencies for electron-builder packaging.
  *
  * The build config uses an explicit `files:` list combined with
  * `beforeBuild` returning false.  This skips electron-builder's
@@ -12,15 +11,10 @@
  * staged here into build/native-deps/ and shipped via extraResources.
  * main.cjs resolves them from process.resourcesPath/native-deps.
  *
- * Two categories are staged:
- *
- *  1. Native deps (node-pty) — platform-specific prebuilt binaries.
- *     Only the target arch's prebuilt is staged to keep the bundle lean.
- *
- *  2. Runtime-only JS deps (electron-updater + transitive) — pure JS
-     packages needed by the main process at runtime.  Only production
-     files (*.js, package.json) are staged; tests, source maps, and
-     TypeScript sources are excluded to minimize installer size.
+ * Runtime-only JS deps (electron-updater + transitive) — pure JS packages
+ * needed by the main process at runtime.  Only production files (*.js,
+ * package.json, *.yml) are staged; tests, source maps, and TypeScript
+ * sources are excluded to minimize installer size.
  *
  * Runs as part of `npm run build`. Idempotent — always re-stages on each
  * build to pick up dependency updates.
@@ -35,37 +29,6 @@ const APP_ROOT = path.resolve(__dirname, '..')
 // path.join(REPO_ROOT, 'node_modules', <pkg>) resolves correctly.
 const REPO_ROOT = APP_ROOT
 const STAGE_ROOT = path.join(APP_ROOT, 'build', 'native-deps')
-
-// The target arch may be overridden by electron-builder via npm_config_arch
-// (e.g. `npm run dist -- --arm64`); fall back to the build host's arch.
-const TARGET_ARCH = process.env.npm_config_arch || process.arch
-const TARGET_PLATFORM = process.platform
-
-// Modules to stage. The "from" path is the hoisted location in the workspace
-// root; "to" is the layout we want inside build/native-deps/.  The "include"
-// globs (relative to "from") select the runtime-essential files.  Anything
-// outside the include list is left behind (source, deps/, scripts/, etc.).
-const NATIVE_DEPS = [
-  {
-    from: path.join(REPO_ROOT, 'node_modules', 'node-pty'),
-    to: path.join(STAGE_ROOT, 'node-pty'),
-    include: [
-      'package.json',
-      'lib/*.js',
-      'lib/**/*.js',
-      'build/Release/*.node',
-      // Per-arch runtime payload. Explicit file types so we don't ship the
-      // ~25 MB of .pdb debug symbols that prebuild-install bundles for
-      // Windows crash analysis -- not used at runtime, would just bloat
-      // the installer.
-      `prebuilds/${TARGET_PLATFORM}-${TARGET_ARCH}/*.node`,
-      `prebuilds/${TARGET_PLATFORM}-${TARGET_ARCH}/*.dll`,
-      `prebuilds/${TARGET_PLATFORM}-${TARGET_ARCH}/*.exe`,
-      `prebuilds/${TARGET_PLATFORM}-${TARGET_ARCH}/spawn-helper`,
-      `prebuilds/${TARGET_PLATFORM}-${TARGET_ARCH}/conpty/*`
-    ]
-  }
-]
 
 // Pure-JS runtime deps needed by the Electron main process.  These are NOT
 // native modules but they still need staging because `beforeBuild: false`
@@ -149,43 +112,9 @@ function matchGlob(rel, pattern) {
         .replace(/\*\*/g, '__DOUBLE_STAR__')
         .replace(/\*/g, '[^/]*')
         .replace(/__DOUBLE_STAR__/g, '.*') +
-      '$'
+      '$',
   )
   return re.test(r)
-}
-
-function stageOne(spec) {
-  if (!fs.existsSync(spec.from)) {
-    console.warn(
-      `[stage-native-deps] Source not found at ${spec.from}, skipping. ` +
-        `Run \`npm install\` first.`
-    )
-    return
-  }
-  rmrf(spec.to)
-  ensureDir(spec.to)
-
-  const files = walk(spec.from)
-  let copied = 0
-  for (const abs of files) {
-    const rel = path.relative(spec.from, abs)
-    const included = spec.include.some(g => matchGlob(rel, g))
-    if (!included) continue
-    const dest = path.join(spec.to, rel)
-    ensureDir(path.dirname(dest))
-    fs.copyFileSync(abs, dest)
-    // node-pty's darwin spawn-helper and the Windows helper binaries
-    // (OpenConsole.exe, winpty-agent.exe) are invoked via posix_spawn /
-    // CreateProcess at runtime, so they must remain executable in the
-    // staged tree.  fs.copyFileSync preserves source mode on POSIX, but we
-    // re-assert +x defensively for the darwin spawn-helper (no extension
-    // means a stripped mode would be silently broken at runtime).
-    if (path.basename(rel) === 'spawn-helper' && process.platform !== 'win32') {
-      try { fs.chmodSync(dest, 0o755) } catch { /* best-effort */ }
-    }
-    copied += 1
-  }
-  console.log(`[stage-native-deps] ${path.relative(APP_ROOT, spec.to)}: ${copied} files`)
 }
 
 // Stage a pure-JS runtime dep by copying only production files (*.js, *.json,
@@ -197,7 +126,7 @@ function stageJsDep(pkgName) {
 
   if (!fs.existsSync(from)) {
     console.warn(
-      `[stage-native-deps] JS dep "${pkgName}" not found at ${from}, skipping.`
+      `[stage-native-deps] JS dep "${pkgName}" not found at ${from}, skipping.`,
     )
     return
   }
@@ -222,9 +151,6 @@ function stageJsDep(pkgName) {
 function main() {
   rmrf(STAGE_ROOT)
   ensureDir(STAGE_ROOT)
-  for (const spec of NATIVE_DEPS) {
-    stageOne(spec)
-  }
   for (const pkgName of RUNTIME_JS_DEPS) {
     stageJsDep(pkgName)
   }

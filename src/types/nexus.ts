@@ -118,6 +118,8 @@ export interface MessagingEnvVarInfo {
   redacted_value: null | string
   required: boolean
   url: null | string
+  /** Clear value, only populated for non-secret fields (e.g. FEISHU_DOMAIN). */
+  value: null | string
 }
 
 export interface MessagingHomeChannel {

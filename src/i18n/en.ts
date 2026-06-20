@@ -396,6 +396,11 @@ export const en: Translations = {
     restartToApply: 'Restart the gateway for this change to take effect.',
     setupSaved: name => `${name} setup saved`,
     restartToReconnect: 'Restart the gateway to reconnect with the new credentials.',
+    regionLabel: 'Region',
+    regionFeishu: 'Feishu',
+    regionLark: 'Lark',
+    regionHint:
+      'Feishu = China (open.feishu.cn). Lark = international (open.larksuite.com). Sets the API domain automatically.',
     keyCleared: key => `${key} cleared`,
     setupUpdated: name => `${name} setup was updated.`,
     failedUpdate: name => `Failed to update ${name}`,

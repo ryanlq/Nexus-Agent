@@ -1,11 +1,12 @@
 import type * as React from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PageLoader } from '@/components/page-loader'
 import { StatusDot, type StatusTone } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { DisclosureCaret } from '@/components/ui/disclosure-caret'
 import { Input } from '@/components/ui/input'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Switch } from '@/components/ui/switch'
 import {
   getMessagingPlatforms,
@@ -224,6 +225,9 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
   const [query, setQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState<string | null>(null)
+  // Optimistic toggle overrides: survive the 6s status poll so a just-toggled
+  // switch can't be yanked back before the backend reflects the persisted intent.
+  const pendingToggles = useRef<Map<string, boolean>>(new Map())
   const platformIds = useMemo(() => platforms?.map(p => p.id) ?? [], [platforms])
   const [selectedId, setSelectedId] = useRouteEnumParam('platform', platformIds, platformIds[0] ?? '')
 
@@ -234,7 +238,16 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
 
     try {
       const result = await getMessagingPlatforms()
-      setPlatforms(result.platforms)
+      const pending = pendingToggles.current
+      setPlatforms(
+        pending.size
+          ? result.platforms.map(p => {
+              const intended = pending.get(p.id)
+
+              return intended !== undefined && p.enabled !== intended ? { ...p, enabled: intended } : p
+            })
+          : result.platforms
+      )
     } catch (err) {
       if (!silent) {
         notifyError(err, m.loadFailed)
@@ -300,6 +313,9 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
   }, [platforms, query])
 
   async function handleToggle(platform: MessagingPlatformInfo, enabled: boolean) {
+    // Hold the intended value through a couple of poll cycles so the 6s status
+    // poll can't revert the switch before the backend's persisted intent shows up.
+    pendingToggles.current.set(platform.id, enabled)
     setSaving(`enabled:${platform.id}`)
 
     try {
@@ -321,6 +337,26 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
         title: enabled ? m.platformEnabled(platform.name) : m.platformDisabled(platform.name),
         message: m.restartToApply
       })
+    } catch (err) {
+      pendingToggles.current.delete(platform.id)
+      notifyError(err, m.failedUpdate(platform.name))
+    } finally {
+      setSaving(null)
+      // Clear the override shortly after; by then the backend's persisted
+      // intent is reflected in GET and polls will agree with the toggle.
+      window.setTimeout(() => pendingToggles.current.delete(platform.id), 13000)
+    }
+  }
+
+  async function handleRegionChange(platform: MessagingPlatformInfo, region: 'feishu' | 'lark') {
+    const domain = region === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn'
+
+    setSaving(`region:${platform.id}`)
+
+    try {
+      await updateMessagingPlatform(platform.id, { env: { FEISHU_DOMAIN: domain } })
+      await refreshPlatforms()
+      notify({ kind: 'success', title: m.setupUpdated(platform.name), message: m.restartToReconnect })
     } catch (err) {
       notifyError(err, m.failedUpdate(platform.name))
     } finally {
@@ -432,6 +468,7 @@ export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
                     }
                   }))
                 }
+                onRegionChange={region => void handleRegionChange(selected, region)}
                 onSave={() => void handleSave(selected)}
                 onTest={() => void handleTest(selected)}
                 onToggle={enabled => void handleToggle(selected, enabled)}
@@ -479,6 +516,7 @@ function PlatformDetail({
   edits,
   onClear,
   onEdit,
+  onRegionChange,
   onSave,
   onTest,
   onToggle,
@@ -488,6 +526,7 @@ function PlatformDetail({
   edits: Record<string, string>
   onClear: (key: string) => void
   onEdit: (key: string, value: string) => void
+  onRegionChange: (region: 'feishu' | 'lark') => void
   onSave: () => void
   onTest: () => void
   onToggle: (enabled: boolean) => void
@@ -500,9 +539,15 @@ function PlatformDetail({
 
   const envVars = platform.env_vars ?? []
   const hasEdits = Object.keys(trimEdits(edits)).length > 0
-  const requiredFields = envVars.filter(field => field.required)
-  const optionalFields = envVars.filter(field => !field.required && !fieldCopy(field, m).advanced)
-  const advancedFields = envVars.filter(field => !field.required && fieldCopy(field, m).advanced)
+  // Env vars driven by a dedicated control rather than a raw input field.
+  const hiddenKeys = platform.id === 'feishu' ? new Set(['FEISHU_DOMAIN']) : new Set<string>()
+  const isFeishu = platform.id === 'feishu'
+  const feishuDomain = envVars.find(field => field.key === 'FEISHU_DOMAIN')?.value ?? ''
+  const region: 'feishu' | 'lark' = feishuDomain.includes('larksuite') ? 'lark' : 'feishu'
+  const isSavingRegion = saving === `region:${platform.id}`
+  const requiredFields = envVars.filter(field => field.required && !hiddenKeys.has(field.key))
+  const optionalFields = envVars.filter(field => !field.required && !fieldCopy(field, m).advanced && !hiddenKeys.has(field.key))
+  const advancedFields = envVars.filter(field => !field.required && fieldCopy(field, m).advanced && !hiddenKeys.has(field.key))
   const hiddenCount = advancedFields.length
   const isSavingEnv = saving === `env:${platform.id}`
 
@@ -533,6 +578,29 @@ function PlatformDetail({
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>{platform.error_message}</span>
             </div>
+          )}
+
+          {isFeishu && (
+            <section>
+              <SectionTitle>{m.regionLabel}</SectionTitle>
+              <div className="mt-3 flex flex-col gap-2">
+                <SegmentedControl
+                  onChange={id => {
+                    if (!isSavingRegion) {
+                      onRegionChange(id as 'feishu' | 'lark')
+                    }
+                  }}
+                  options={[
+                    { id: 'feishu' as const, label: m.regionFeishu },
+                    { id: 'lark' as const, label: m.regionLark }
+                  ]}
+                  value={region}
+                />
+                <p className="text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+                  {m.regionHint}
+                </p>
+              </div>
+            </section>
           )}
 
           <section>

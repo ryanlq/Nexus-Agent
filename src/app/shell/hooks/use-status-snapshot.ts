@@ -21,7 +21,7 @@ export function useStatusSnapshot(gatewayState: string | undefined, requestGatew
       try {
         const [next, logs, inference] = await Promise.all([
           getStatus(),
-          getLogs({ file: 'gui', lines: LOG_TAIL }).catch(() => ({ lines: [] })),
+          getLogs({ file: 'agent', lines: LOG_TAIL }).catch(() => ({ lines: [] })),
           gatewayState === 'open'
             ? evaluateRuntimeReadiness(requestGateway).catch(error => ({
                 checksDisagree: false,

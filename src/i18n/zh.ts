@@ -407,6 +407,7 @@ export const zh: Translations = {
     providerSessions: '会话',
     refresh: '刷新',
     refreshing: '刷新中…',
+    clear: '清除',
     noResults: '未找到匹配结果。',
     pinSession: '置顶会话',
     unpinSession: '取消置顶',

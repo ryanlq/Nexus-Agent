@@ -9,6 +9,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
+  clearLogs,
   getLogs,
   getUsageAnalytics,
   searchSessions
@@ -251,6 +252,17 @@ export function CommandCenterView({
     }
   }, [])
 
+  const handleClearLogs = useCallback(async () => {
+    setSystemError('')
+
+    try {
+      await clearLogs({ file: 'agent' })
+      setLogs([])
+    } catch (error) {
+      setSystemError(error instanceof Error ? error.message : String(error))
+    }
+  }, [])
+
   const refreshUsage = useCallback(async (days: UsagePeriod) => {
     const requestId = usageRequestRef.current + 1
     usageRequestRef.current = requestId
@@ -388,10 +400,16 @@ export function CommandCenterView({
               <p className="text-xs text-muted-foreground">{cc.sectionDescriptions[section]}</p>
             </div>
             {section === 'logs' && (
-              <OverlayActionButton onClick={() => void refreshLogs()}>
-                <IconRefresh className="mr-1.5 size-3.5" />
-                {cc.refresh}
-              </OverlayActionButton>
+              <>
+                <OverlayActionButton onClick={() => void handleClearLogs()}>
+                  <IconTrash className="mr-1.5 size-3.5" />
+                  {cc.clear}
+                </OverlayActionButton>
+                <OverlayActionButton onClick={() => void refreshLogs()}>
+                  <IconRefresh className="mr-1.5 size-3.5" />
+                  {cc.refresh}
+                </OverlayActionButton>
+              </>
             )}
             {section === 'usage' && (
               <OverlayActionButton disabled={usageLoading} onClick={() => void refreshUsage(usagePeriod)}>

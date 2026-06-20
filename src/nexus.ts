@@ -276,6 +276,19 @@ export function getLogs(params: {
   })
 }
 
+export function clearLogs(params: { file?: string }): Promise<{ ok: boolean }> {
+  const query = new URLSearchParams()
+  if (params.file) {
+    query.set('file', params.file)
+  }
+  const suffix = query.toString()
+  return window.nexusAgent.api<{ ok: boolean }>({
+    ...profileScoped(),
+    method: 'DELETE',
+    path: suffix ? `/api/logs?${suffix}` : '/api/logs'
+  })
+}
+
 export async function getGatewayConfig(): Promise<GatewayConfig> {
   // GET /api/config returns { config: {...}, agents: [...] }.
   // Extract just the config dict so callers see { display: {...}, terminal: {...} }

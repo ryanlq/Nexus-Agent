@@ -325,6 +325,7 @@ export const en: Translations = {
     providerSessions: 'Sessions',
     refresh: 'Refresh',
     refreshing: 'Refreshing...',
+    clear: 'Clear',
     noResults: 'No matching results found.',
     pinSession: 'Pin session',
     unpinSession: 'Unpin session',

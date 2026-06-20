@@ -293,6 +293,7 @@ export interface Translations {
     providerSessions: string
     refresh: string
     refreshing: string
+    clear: string
     noResults: string
     pinSession: string
     unpinSession: string

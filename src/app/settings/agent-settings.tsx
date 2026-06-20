@@ -41,7 +41,7 @@ const DEFAULT_AGENTS: AgentInfo[] = [
       { key: 'model', label: 'Model', type: 'select', options: ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'], default: 'claude-sonnet-4-6', description: 'Claude model to use.' },
       { key: 'bare', label: 'Bare Mode', type: 'toggle', default: 'false', description: '极简模式：跳过工具、技能、上下文加载，节省 token。适合简单问答。' },
       { key: 'max_turns', label: 'Max Turns', type: 'number', default: '20', min: 1, max: 50, description: '最大 agentic 轮数。1=纯对话无工具，5-10=允许读文件/搜索等，50=复杂任务。' },
-      { key: 'permission_mode', label: 'Permission Mode', type: 'select', options: ['acceptEdits', 'default', 'auto', 'bypassPermissions'], default: 'acceptEdits', description: '工具授权模式。acceptEdits=自动批准编辑，default=每次询问，auto=自动批准大部分操作，bypassPermissions=跳过所有检查（仅限沙箱环境）。' },
+      { key: 'permission_mode', label: 'Permission Mode', type: 'select', options: ['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'], default: 'acceptEdits', description: '工具授权模式。default=每次询问；acceptEdits=自动批准编辑+常用文件命令；plan=只读分析不改文件；auto=自动批准大部分操作（后台安全检查，需 CLI v2.1.83+）；dontAsk=仅放行白名单工具，其余拒绝（适合非交互/CI）；bypassPermissions=跳过所有检查（仅限沙箱）。' },
       { key: 'allowed_tools', label: 'Allowed Tools', type: 'text', default: '', description: '允许免授权执行的工具白名单，逗号分隔。如: Bash(git *), Edit, Read。需配合 permission_mode 使用。' },
     ],
   },

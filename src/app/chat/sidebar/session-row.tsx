@@ -20,6 +20,20 @@ const AGENT_SHORT_NAMES: Record<string, string> = {
   'pi': 'Pi',
 }
 
+/** Brand colors for a small origin dot on platform-delivered sessions, so a
+ *  Feishu/Telegram conversation reads as distinct from a local one at a glance.
+ *  Matches the avatar tints in messaging/platform-icon.tsx where available. */
+const PLATFORM_DOT_COLOR: Record<string, string> = {
+  feishu: '#3370FF',
+  lark: '#3370FF',
+  telegram: '#26A5E4',
+  discord: '#5865F2',
+  email: '#EA4335',
+  slack: '#E01E5A',
+  whatsapp: '#25D366',
+  matrix: '#000000'
+}
+
 interface SidebarSessionRowProps extends React.ComponentProps<'div'> {
   session: SessionInfo
   isPinned: boolean
@@ -189,6 +203,13 @@ export function SidebarSessionRow({
           </span>
           )}
           <span className="min-w-0 flex-1 truncate text-[0.8125rem] font-normal text-(--ui-text-secondary) group-hover:text-foreground group-data-[working=true]:text-foreground/90">
+            {session.platform && (
+              <span
+                aria-hidden="true"
+                className="mr-1 inline-block size-1.5 shrink-0 translate-y-[-0.0625rem] rounded-full align-middle"
+                style={{ backgroundColor: PLATFORM_DOT_COLOR[session.platform] ?? 'var(--ui-text-quaternary)' }}
+              />
+            )}
             {title}
           </span>
           {showAgentBadge && (

@@ -286,6 +286,13 @@ export interface SessionInfo {
   output_tokens: number
   preview: null | string
   source: null | string
+  /** Origin platform for platform-delivered conversations (feishu, telegram,
+   *  email, ...). Null for local desktop sessions. */
+  platform?: null | string
+  chat_id?: null | string
+  thread_id?: null | string
+  /** "group" | "p2p" for IM platforms; null for local sessions. */
+  chat_type?: null | string
   started_at: number
   title: null | string
   tool_call_count: number

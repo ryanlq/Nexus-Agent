@@ -50,6 +50,7 @@ const {
   resolveTestWsUrl,
   tokenPreview,
 } = require("./connection-config.cjs");
+const { buildGatewayChildEnv } = require("./gateway-spawn.cjs");
 const {
   DATA_URL_READ_MAX_BYTES,
   DEFAULT_FETCH_TIMEOUT_MS,
@@ -1196,15 +1197,9 @@ function writeDefaultProjectDir(dir) {
 // shipped with this build (dev runs, or a package built without the gateway
 // checkout available). The spawn site re-chmods POSIX binaries on launch
 // because some installers / archive extractors strip the executable bit.
-function _sidecarFilename() {
-  const arch = process.arch === "arm64" ? "arm64" : "amd64";
-  if (process.platform === "win32") return `agent-gateway-windows-${arch}.exe`;
-  if (process.platform === "darwin") return `agent-gateway-macos-${arch}`;
-  return `agent-gateway-linux-${arch}`;
-}
 
 function resolveSidecarBinary() {
-  const filename = _sidecarFilename();
+  const filename = sidecarFilename();
 
   // 1. Packaged app: resources/gateway/<binary>
   const resourcesRoot =
@@ -1226,6 +1221,20 @@ function resolveSidecarBinary() {
   if (fileExists(devSidecar)) return devSidecar;
 
   return null;
+}
+
+// Re-apply the executable bit on a POSIX sidecar binary before spawn. The
+// before-pack hook sets +x at stage time, but some archive extractors /
+// installer round-trips (notably unpacking an NSIS payload on a non-NTFS
+// volume) strip it; Windows .exe needs no +x. Shared by the primary and pool
+// spawn paths so the two can't drift.
+function ensureSidecarExecutable(backend) {
+  if (backend.kind !== "sidecar" || process.platform === "win32") return;
+  try {
+    fs.chmodSync(backend.command, 0o755);
+  } catch (err) {
+    rememberLog(`[sidecar] chmod +x ${backend.command} failed: ${err.message}`);
+  }
 }
 
 function resolveGatewayBackend(port) {
@@ -3663,19 +3672,7 @@ async function spawnPoolBackend(profile, entry) {
   const gatewayCwd = resolveGatewayCwd();
   const webDist = resolveWebDist();
 
-  // Belt-and-braces: the before-pack hook sets +x at stage time, but some
-  // archive extractors / installer round-trips (notably unpacking an NSIS
-  // payload on a non-NTFS volume) strip the executable bit. Re-apply it on
-  // POSIX before spawn so the sidecar launches; Windows .exe needs no +x.
-  if (backend.kind === "sidecar" && process.platform !== "win32") {
-    try {
-      fs.chmodSync(backend.command, 0o755);
-    } catch (err) {
-      rememberLog(
-        `[sidecar] chmod +x ${backend.command} failed: ${err.message}`,
-      );
-    }
-  }
+  ensureSidecarExecutable(backend);
 
   rememberLog(
     `Starting Nexus Agent backend for profile "${profile}" via ${backend.label}`,
@@ -3683,13 +3680,13 @@ async function spawnPoolBackend(profile, entry) {
 
   const child = spawn(backend.command, backend.args, {
     cwd: backend.cwd || gatewayCwd,
-    env: {
-      ...process.env,
-      NEXUS_AGENT_HOME,
-      ...backend.env,
-      HERMES_DASHBOARD_SESSION_TOKEN: token,
-      HERMES_WEB_DIST: webDist,
-    },
+    env: buildGatewayChildEnv({
+      processEnv: process.env,
+      home: NEXUS_AGENT_HOME,
+      token,
+      webDist,
+      backendEnv: backend.env,
+    }),
     shell: backend.shell,
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -3844,19 +3841,7 @@ async function startGateway() {
     const gatewayCwd = resolveGatewayCwd();
     const webDist = resolveWebDist();
 
-    // Belt-and-braces: the before-pack hook sets +x at stage time, but some
-    // archive extractors / installer round-trips (notably unpacking an NSIS
-    // payload on a non-NTFS volume) strip the executable bit. Re-apply it on
-    // POSIX before spawn so the sidecar launches; Windows .exe needs no +x.
-    if (backend.kind === "sidecar" && process.platform !== "win32") {
-      try {
-        fs.chmodSync(backend.command, 0o755);
-      } catch (err) {
-        rememberLog(
-          `[sidecar] chmod +x ${backend.command} failed: ${err.message}`,
-        );
-      }
-    }
+    ensureSidecarExecutable(backend);
 
     await advanceBootProgress(
       "backend.spawn",
@@ -3867,26 +3852,13 @@ async function startGateway() {
 
     gatewayProcess = spawn(backend.command, backend.args, {
       cwd: backend.cwd || gatewayCwd,
-      env: {
-        ...process.env,
-        // Explicitly pin NEXUS_AGENT_HOME for the child so Python's get_hermes_home()
-        // resolves to the SAME location our resolveNexusHome() picked. Without
-        // this pin, Python falls back to ~/.hermes on every platform — fine on
-        // mac/linux (where our default matches), but on Windows our default is
-        // %LOCALAPPDATA%\hermes, which differs from C:\Users\<u>\.hermes.
-        // Mismatch would split config / sessions / .env / logs across two
-        // directories. install.ps1 sets NEXUS_AGENT_HOME via setx; the desktop
-        // can't reliably do that, so we set it inline for every spawn.
-        NEXUS_AGENT_HOME,
-        ...backend.env,
-        HERMES_DASHBOARD_SESSION_TOKEN: token,
-        AGENT_GATEWAY_SESSION_TOKEN: token,
-        HERMES_WEB_DIST: webDist,
-        // Force line-buffered output from Python — without this, the gateway's
-        // logger writes sit in a 4KB block buffer and never reach rememberLog
-        // while the child is alive (so devtools shows nothing even on errors).
-        PYTHONUNBUFFERED: "1",
-      },
+      env: buildGatewayChildEnv({
+        processEnv: process.env,
+        home: NEXUS_AGENT_HOME,
+        token,
+        webDist,
+        backendEnv: backend.env,
+      }),
       shell: backend.shell,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -4757,6 +4729,7 @@ const {
   checkForUpdate: sidecarCheckForUpdate,
   downloadAndUpdate: sidecarDownloadAndUpdate,
   readInstalledVersion: sidecarReadInstalledVersion,
+  sidecarFilename,
 } = require("./sidecar-manager.cjs");
 
 ipcMain.handle("nexus:sidecar:check-update", async () => {

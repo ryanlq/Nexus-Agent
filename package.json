@@ -1,7 +1,7 @@
 {
   "name": "nexus-agent",
   "private": true,
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Native desktop shell for Nexus Agent.",
   "author": "Nous Research",
   "homepage": "https://github.com/ryanlq/agent-gateway",
@@ -37,7 +37,7 @@
     "test:desktop:nsis": "node scripts/test-desktop.mjs nsis",
     "test:desktop:existing": "node scripts/test-desktop.mjs existing",
     "test:desktop:fresh": "node scripts/test-desktop.mjs fresh",
-    "test:desktop:platforms": "node --test electron/bootstrap-platform.test.cjs electron/hardening.test.cjs electron/connection-config.test.cjs electron/gateway-ws-probe.test.cjs electron/oauth-net-request.test.cjs electron/sidecar-manager.test.cjs electron/migrate-home.test.cjs",
+    "test:desktop:platforms": "node --test electron/bootstrap-platform.test.cjs electron/hardening.test.cjs electron/connection-config.test.cjs electron/gateway-ws-probe.test.cjs electron/gateway-spawn.test.cjs electron/oauth-net-request.test.cjs electron/sidecar-manager.test.cjs electron/migrate-home.test.cjs",
     "type-check": "tsc -b",
     "lint": "eslint src/ electron/",
     "lint:fix": "eslint src/ electron/ --fix",

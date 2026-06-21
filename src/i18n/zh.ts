@@ -823,6 +823,7 @@ export const zh: Translations = {
     checkUpdate: '检查更新',
     checking: '检查中…',
     upToDate: '已是最新',
+    checkFailed: '无法检查更新',
     updateAvailable: (version: string) => `更新到 ${version}`,
     updating: '更新中…',
     updateDone: '已更新！重启后生效。',

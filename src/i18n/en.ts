@@ -696,6 +696,7 @@ export const en: Translations = {
     checkUpdate: 'Check for updates',
     checking: 'Checking…',
     upToDate: 'Up to date',
+    checkFailed: "Couldn't check for updates",
     updateAvailable: (version: string) => `Update to ${version}`,
     updating: 'Updating…',
     updateDone: 'Updated! Restart to apply.',

@@ -57,6 +57,7 @@ test("coexist merge: moves user data, keeps caches behind, dedups cron/gateway",
   writeFile(path.join(legacy, "cron"), "stale.json", "{}");
   fs.mkdirSync(path.join(legacy, "gateway"), { recursive: true }); // dedup
   writeFile(path.join(legacy, "gateway"), "old-binary", "x");
+  writeFile(path.join(legacy, "gateway"), "sidecar-version.json", '{"version":"v0.3.1"}');
   fs.mkdirSync(path.join(legacy, "logs"), { recursive: true });
   writeFile(path.join(legacy, "logs"), "desktop.log", "old desktop log");
   writeFile(path.join(legacy, "logs"), "gateway.log", "legacy gw"); // keep new home's
@@ -107,6 +108,13 @@ test("coexist merge: moves user data, keeps caches behind, dedups cron/gateway",
   assert.equal(exists(path.join(legacy, "cron", "stale.json")), true);
   assert.equal(exists(path.join(home, "gateway", "old-binary")), false);
   assert.equal(exists(path.join(legacy, "gateway", "old-binary")), true);
+  // gateway/ is dedup, but the cheap sidecar version stamp is carried over.
+  assert.equal(exists(path.join(home, "gateway", "sidecar-version.json")), true);
+  assert.equal(
+    fs.readFileSync(path.join(home, "gateway", "sidecar-version.json"), "utf8"),
+    '{"version":"v0.3.1"}',
+  );
+  assert.equal(exists(path.join(legacy, "gateway", "sidecar-version.json")), false);
 
   // Logs merged: desktop.log moved, gateway.log kept (new home's), gui.log dropped.
   assert.equal(
@@ -124,6 +132,7 @@ test("coexist merge: moves user data, keeps caches behind, dedups cron/gateway",
   assert.equal(res.migrated, true);
   assert.ok(res.moved.includes(".env"));
   assert.ok(res.moved.includes("logs/desktop.log"));
+  assert.ok(res.moved.includes("gateway/sidecar-version.json"));
 
   fs.rmSync(tmp, { recursive: true, force: true });
 });
@@ -182,6 +191,34 @@ test("windows-style: drains two legacy sources into one home", () => {
   assert.equal(res.migrated, true);
   assert.equal(exists(path.join(home, "state.db")), true);
   assert.equal(exists(path.join(home, ".env")), true);
+
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test("sidecar version stamp: migrates when absent, keeps new home's on collision", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "migrate-"));
+  const home = path.join(tmp, "nexus-agent");
+  const legacy = path.join(tmp, "hermes");
+
+  makeTree(legacy);
+  writeFile(legacy, ".env", "SECRET=1");
+  writeFile(path.join(legacy, "gateway"), "sidecar-version.json", '{"version":"v0.3.1"}');
+  writeFile(path.join(legacy, "gateway"), "old-binary", "x");
+
+  // New home already carries its own version stamp -> legacy's must NOT overwrite.
+  writeFile(path.join(home, "gateway"), "sidecar-version.json", '{"version":"v0.4.7"}');
+
+  const res = migrateLegacyHermesHome({ home, legacySources: [legacy] });
+  assert.equal(
+    fs.readFileSync(path.join(home, "gateway", "sidecar-version.json"), "utf8"),
+    '{"version":"v0.4.7"}',
+  );
+  // Collision: legacy's stamp is left behind, not clobbered over the new home's.
+  assert.equal(exists(path.join(legacy, "gateway", "sidecar-version.json")), true);
+  // The binary is still left behind (gateway/ stays dedup).
+  assert.equal(exists(path.join(home, "gateway", "old-binary")), false);
+  assert.equal(exists(path.join(legacy, "gateway", "old-binary")), true);
+  assert.equal(res.migrated, true);
 
   fs.rmSync(tmp, { recursive: true, force: true });
 });

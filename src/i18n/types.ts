@@ -555,6 +555,7 @@ export interface Translations {
     checkUpdate: string
     checking: string
     upToDate: string
+    checkFailed: string
     updateAvailable: (version: string) => string
     updating: string
     updateDone: string

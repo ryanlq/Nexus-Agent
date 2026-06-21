@@ -79,9 +79,13 @@ export function GatewayMenuPanel({
   const platforms = Object.entries(statusSnapshot?.gateway_platforms || {}).sort(([l], [r]) => l.localeCompare(r))
   const recentLogs = logLines.slice(-5)
 
-  // Sidecar version + update state
-  const versionLabel = sidecarVersion
-    ? t.gateway.version(sidecarVersion.version)
+  // Sidecar version + update state. Prefer the running gateway's self-reported
+  // version (authoritative — it's what's actually executing); fall back to the
+  // installed sidecar stamp, then "未知".
+  const resolvedVersion = statusSnapshot?.version || sidecarVersion?.version
+
+  const versionLabel = resolvedVersion
+    ? t.gateway.version(resolvedVersion)
     : t.gateway.versionUnknown
 
   const updateAvailable = sidecarUpdateCheck?.updateAvailable === true
@@ -199,6 +203,12 @@ export function GatewayMenuPanel({
           </Button>
         </div>
       </div>
+
+      {sidecarUpdateCheck && !updateAvailable && (
+        <div className="px-3 pb-2 text-[0.66rem] text-muted-foreground/80">
+          {sidecarUpdateCheck.error ? t.gateway.checkFailed : t.gateway.upToDate}
+        </div>
+      )}
 
       {recentLogs.length > 0 && (
         <div className="border-t border-border/50 px-3 py-2">

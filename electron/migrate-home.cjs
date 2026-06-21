@@ -66,6 +66,25 @@ function drainLogs(srcLogs, dstLogs, moved) {
   }
 }
 
+// The gateway/ dir is owned by sidecar-manager (the binary is re-downloaded /
+// version-checked on its own), so the whole dir is DEDUP-skipped below. But
+// sidecar-version.json is the cheap installed-version stamp the desktop reads to
+// label "Gateway vX" — without it the panel shows "未知" until the running
+// gateway re-reports. Carry just that one file over; the binary itself stays put.
+function drainGatewayVersion(srcGateway, dstGateway, moved) {
+  const src = path.join(srcGateway, "sidecar-version.json");
+  try {
+    if (!fs.existsSync(src)) return;
+    const dst = path.join(dstGateway, "sidecar-version.json");
+    fs.mkdirSync(dstGateway, { recursive: true });
+    if (fs.existsSync(dst)) return;
+    fs.renameSync(src, dst);
+    moved.push("gateway/sidecar-version.json");
+  } catch (err) {
+    console.warn(`[nexus] migrate gateway/sidecar-version.json: ${err.message}`);
+  }
+}
+
 // opts.home          — the unified home to drain into (created if absent).
 // opts.legacySources — ordered array of legacy dirs to drain; the new home wins
 //                      any collision, so order only matters when two legacy dirs
@@ -89,6 +108,10 @@ function migrateLegacyHermesHome({ home, legacySources }) {
     }
     for (const ent of entries) {
       const name = ent.name;
+      if (name === "gateway") {
+        drainGatewayVersion(path.join(legacy, "gateway"), path.join(home, "gateway"), moved);
+        continue;
+      }
       if (DEDUP.has(name) || DISCARD.has(name)) continue;
       if (name === "logs") {
         drainLogs(path.join(legacy, "logs"), path.join(home, "logs"), moved);

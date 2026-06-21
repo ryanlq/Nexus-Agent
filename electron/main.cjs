@@ -134,39 +134,56 @@ const SOURCE_REPO_ROOT = path.resolve(APP_ROOT, "../..");
 
 // NOTE: install-stamp / loadInstallStamp / INSTALL_STAMP removed — legacy bootstrap path retired.
 
-// NEXUS_AGENT_HOME — the user-facing root for everything Hermes-related. Mirrors
-// scripts/install.ps1's $HermesHome and scripts/install.sh's $NEXUS_AGENT_HOME.
+// NEXUS_AGENT_HOME — the single user-facing root for all runtime data
+// (config, sessions, state.db, skills, logs, …). One home per user, shared with
+// the agent-gateway sidecar, which the desktop pins via NEXUS_AGENT_HOME at
+// spawn so both sides agree on the same directory.
 //
 // Defaults:
-//   Windows: %LOCALAPPDATA%\hermes (matches install.ps1)
-//   macOS / Linux: ~/.hermes (matches install.sh)
+//   Windows: %LOCALAPPDATA%\nexus-agent
+//   macOS / Linux: ~/.nexus-agent
 //
-// Special case for Windows: if the user has a legacy ~/.hermes directory
-// (e.g., from a prior pip install or a manual setup) AND no
-// %LOCALAPPDATA%\hermes yet, prefer the legacy path so we don't orphan their
-// existing config / sessions / .env. New installs go to %LOCALAPPDATA%.
+// Legacy ~/.hermes (upstream-Hermes residue) and, on Windows, %LOCALAPPDATA%\hermes
+// are NOT returned here — migrateLegacyHermesHome() drains them into the new home
+// once, so upgrading users keep their data and we never point at the old name again.
 //
 // NEXUS_AGENT_USER_DATA_DIR (used by test:desktop:fresh) puts the sandbox
 // NEXUS_AGENT_HOME beneath the throwaway userData dir so a fresh-install run never
-// touches the user's real ~/.hermes / %LOCALAPPDATA%\hermes.
+// touches the user's real ~/.nexus-agent / %LOCALAPPDATA%\nexus-agent.
 function resolveNexusHome() {
   if (process.env.NEXUS_AGENT_HOME)
     return path.resolve(process.env.NEXUS_AGENT_HOME);
   if (USER_DATA_OVERRIDE)
-    return path.join(path.resolve(USER_DATA_OVERRIDE), "hermes-home");
+    return path.join(path.resolve(USER_DATA_OVERRIDE), "nexus-home");
   if (IS_WINDOWS && process.env.LOCALAPPDATA) {
-    const localappdata = path.join(process.env.LOCALAPPDATA, "hermes");
-    const legacy = path.join(app.getPath("home"), ".hermes");
-    // Migrate transparently to LOCALAPPDATA, but honour an existing legacy
-    // ~/.hermes setup (no LOCALAPPDATA install yet) so users don't lose state.
-    if (!directoryExists(localappdata) && directoryExists(legacy))
-      return legacy;
-    return localappdata;
+    return path.join(process.env.LOCALAPPDATA, "nexus-agent");
   }
-  return path.join(app.getPath("home"), ".hermes");
+  return path.join(app.getPath("home"), ".nexus-agent");
+}
+
+// One-time, idempotent drain of legacy ~/.hermes (and, on Windows,
+// %LOCALAPPDATA%\hermes) into the unified home. Must run before any DB is opened,
+// a log is written, or the gateway is spawned — at that point nothing holds the
+// legacy files, so per-item fs.renameSync is atomic on the same filesystem. The
+// new home wins on every collision; legacy caches are left behind (not migrated).
+// The .migrated-from-hermes marker makes every subsequent launch a cheap no-op.
+const { migrateLegacyHermesHome: _drainLegacyHermesHome } = require("./migrate-home.cjs");
+// Compute the platform-aware legacy source list, then delegate to the pure,
+// unit-tested drainer in electron/migrate-home.cjs.
+function migrateLegacyHermesHome(home) {
+  const legacySources = [];
+  if (IS_WINDOWS && process.env.LOCALAPPDATA) {
+    legacySources.push(path.join(process.env.LOCALAPPDATA, "hermes"));
+  }
+  legacySources.push(path.join(app.getPath("home"), ".hermes"));
+  return _drainLegacyHermesHome({ home, legacySources });
 }
 
 const NEXUS_AGENT_HOME = resolveNexusHome();
+// Drain legacy ~/.hermes (and Windows %LOCALAPPDATA%\hermes) into the unified
+// home before anything opens a DB, writes desktop.log, or spawns the gateway.
+// Idempotent — the .migrated-from-hermes marker makes later launches a no-op.
+migrateLegacyHermesHome(NEXUS_AGENT_HOME);
 // NOTE: ACTIVE_NEXUS_ROOT, NEXUS_VENV_ROOT, BOOTSTRAP_COMPLETE_MARKER removed — legacy hermes_cli paths retired.
 
 const DESKTOP_CONNECTION_CONFIG_PATH = path.join(

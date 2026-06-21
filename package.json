@@ -37,7 +37,7 @@
     "test:desktop:nsis": "node scripts/test-desktop.mjs nsis",
     "test:desktop:existing": "node scripts/test-desktop.mjs existing",
     "test:desktop:fresh": "node scripts/test-desktop.mjs fresh",
-    "test:desktop:platforms": "node --test electron/bootstrap-platform.test.cjs electron/hardening.test.cjs electron/connection-config.test.cjs electron/gateway-ws-probe.test.cjs electron/oauth-net-request.test.cjs electron/sidecar-manager.test.cjs",
+    "test:desktop:platforms": "node --test electron/bootstrap-platform.test.cjs electron/hardening.test.cjs electron/connection-config.test.cjs electron/gateway-ws-probe.test.cjs electron/oauth-net-request.test.cjs electron/sidecar-manager.test.cjs electron/migrate-home.test.cjs",
     "type-check": "tsc -b",
     "lint": "eslint src/ electron/",
     "lint:fix": "eslint src/ electron/ --fix",

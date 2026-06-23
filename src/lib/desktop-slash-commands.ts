@@ -31,6 +31,7 @@ const DESKTOP_COMMAND_META = [
   ['/debug', 'Create a debug report'],
   ['/goal', 'Manage the standing goal for this session'],
   ['/help', 'Show desktop slash commands'],
+  ['/loop', 'Run a prompt on a recurring interval: /loop <interval> <prompt>'],
   ['/new', 'Start a new desktop chat'],
   ['/profile', 'Switch the active Nexus Agent profile'],
   ['/queue', 'Queue a prompt for the next turn'],

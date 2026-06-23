@@ -20,6 +20,12 @@ describe('desktop slash command curation', () => {
     expect(isDesktopSlashCommand('/yolo')).toBe(true)
   })
 
+  it('surfaces /loop as a recurring-task command', () => {
+    expect(isDesktopSlashSuggestion('/loop')).toBe(true)
+    expect(isDesktopSlashCommand('/loop')).toBe(true)
+    expect(desktopSlashDescription('/loop')).toContain('recurring')
+  })
+
   it('surfaces skill and quick commands (extensions) in suggestions and lets them run', () => {
     expect(isDesktopSlashSuggestion('/my-skill')).toBe(true)
     expect(isDesktopSlashSuggestion('/gif-search')).toBe(true)

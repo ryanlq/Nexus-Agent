@@ -16,6 +16,7 @@ import {
   filterDesktopCommandsCatalog,
   isDesktopSlashCommand
 } from '@/lib/desktop-slash-commands'
+import { openCreateLoopDialog } from '@/app/loops/create-loop-store'
 import { triggerHaptic } from '@/lib/haptics'
 import { setMutableRef } from '@/lib/mutable-ref'
 import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
@@ -431,6 +432,28 @@ export function usePromptActions({
 
         if (normalizedName === 'branch' || normalizedName === 'fork') {
           await branchCurrentSession()
+
+          return
+        }
+
+        // /loop opens the structured create-loop dialog (interval + task +
+        // max_runs + stop_condition) instead of forcing dense inline syntax.
+        // Any args the user already typed are pre-filled (`/loop 10m check`
+        // seeds interval=10m, task=check); the composer clears the box on send.
+        if (normalizedName === 'loop') {
+          const parts = arg.trim().split(/\s+/).filter(Boolean)
+          let interval = '10m'
+          let loopPrompt = ''
+          if (parts.length) {
+            if (parts[0].toLowerCase() === 'every' && parts.length >= 2) {
+              interval = `${parts[0]} ${parts[1]}`
+              loopPrompt = parts.slice(2).join(' ')
+            } else {
+              interval = parts[0]
+              loopPrompt = parts.slice(1).join(' ')
+            }
+          }
+          openCreateLoopDialog({ interval, prompt: loopPrompt })
 
           return
         }

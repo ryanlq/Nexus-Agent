@@ -513,6 +513,50 @@ export interface Translations {
     scriptOrPromptRequired: string
   }
 
+  loops: {
+    title: string
+    description: string
+    search: string
+    newLoop: string
+    interval: string
+    intervalHint: string
+    task: string
+    taskPlaceholder: string
+    name: string
+    namePlaceholder: string
+    maxRuns: string
+    maxRunsHint: string
+    maxRunsPlaceholder: string
+    stopCondition: string
+    stopConditionHint: string
+    stopConditionPlaceholder: string
+    iterations: (completed: number, max: number | null) => string
+    stopConditionBadge: string
+    create: string
+    cancel: string
+    creating: string
+    viewOutput: string
+    output: string
+    outputOf: (title: string) => string
+    noOutput: string
+    loadingOutput: string
+    runs: (count: number) => string
+    emptyTitle: string
+    emptyDesc: string
+    refresh: string
+    pause: string
+    resume: string
+    trigger: string
+    delete: string
+    created: string
+    failedCreate: string
+    failedLoad: string
+    failedLoadOutput: string
+    close: string
+    last: string
+    next: string
+  }
+
   artifacts: {
     search: string
     refresh: string

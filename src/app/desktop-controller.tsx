@@ -96,6 +96,12 @@ const AgentsView = lazy(async () => ({ default: (await import('./agents')).Agent
 const ArtifactsView = lazy(async () => ({ default: (await import('./artifacts')).ArtifactsView }))
 const CommandCenterView = lazy(async () => ({ default: (await import('./command-center')).CommandCenterView }))
 const CronView = lazy(async () => ({ default: (await import('./cron')).CronView }))
+const LoopsView = lazy(async () => ({ default: (await import('./loops')).LoopsView }))
+// Lightweight singleton (a closed Dialog most of the time) — opened by either
+// the Loops panel's "New loop" button or the `/loop` composer command.
+const CreateLoopDialog = lazy(async () => ({
+  default: (await import('./loops/create-loop-dialog')).CreateLoopDialog
+}))
 const MessagingView = lazy(async () => ({ default: (await import('./messaging')).MessagingView }))
 const ProfilesView = lazy(async () => ({ default: (await import('./profiles')).ProfilesView }))
 const PromptsView = lazy(async () => ({ default: (await import('./prompts')).PromptsView }))
@@ -718,6 +724,11 @@ export function DesktopController() {
         </Suspense>
       )}
 
+      {/* Always-mounted loop-creation dialog (opened by /loop or the panel). */}
+      <Suspense fallback={null}>
+        <CreateLoopDialog />
+      </Suspense>
+
       {profilesOpen && (
         <Suspense fallback={null}>
           <ProfilesView onClose={closeOverlayToPreviousRoute} />
@@ -854,6 +865,14 @@ export function DesktopController() {
             path="artifacts"
           />
           <Route element={null} path="cron" />
+          <Route
+            element={
+              <Suspense fallback={null}>
+                <LoopsView setStatusbarItemGroup={setStatusbarItemGroup} />
+              </Suspense>
+            }
+            path="loops"
+          />
           <Route element={null} path="profiles" />
           <Route element={null} path="settings" />
           <Route element={null} path="command-center" />

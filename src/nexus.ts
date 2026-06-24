@@ -10,6 +10,7 @@ import type {
   ConfigSchemaResponse,
   CronJob,
   CronJobCreatePayload,
+  CronJobOutput,
   CronJobUpdates,
   ElevenLabsVoicesResponse,
   EnvVarInfo,
@@ -58,6 +59,7 @@ export type {
   ConfigSchemaResponse,
   CronJob,
   CronJobCreatePayload,
+  CronJobOutput,
   CronJobSchedule,
   CronJobUpdates,
   ElevenLabsVoice,
@@ -557,6 +559,12 @@ export function getCronJobs(): Promise<CronJob[]> {
 export function getCronJob(jobId: string): Promise<CronJob> {
   return window.nexusAgent.api<CronJob>({
     path: `/api/cron/jobs/${encodeURIComponent(jobId)}`
+  })
+}
+
+export function getCronJobOutput(jobId: string): Promise<CronJobOutput[]> {
+  return window.nexusAgent.api<CronJobOutput[]>({
+    path: `/api/cron/jobs/${encodeURIComponent(jobId)}/output`
   })
 }
 

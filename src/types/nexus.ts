@@ -424,12 +424,14 @@ export interface AnalyticsTotals {
 }
 
 export interface CronJob {
+  completed?: number
   context_from?: string[]
   deliver?: null | string
   enabled: boolean
   id: string
   last_error?: null | string
   last_run_at?: null | string
+  max_runs?: null | number
   name?: null | string
   next_run_at?: null | string
   no_agent?: boolean
@@ -438,16 +440,24 @@ export interface CronJob {
   schedule_display?: null | string
   script?: null | string
   state?: null | string
+  stop_condition?: null | string
+}
+
+export interface CronJobOutput {
+  content: string
+  run_at: string
 }
 
 export interface CronJobCreatePayload {
   context_from?: string[]
   deliver?: string
+  max_runs?: number
   name?: string
   no_agent?: boolean
   prompt?: string
   schedule: string
   script?: string
+  stop_condition?: string
 }
 
 export interface CronJobSchedule {

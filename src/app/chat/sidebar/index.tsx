@@ -73,7 +73,7 @@ import {
   sessionPinId
 } from '@/store/session'
 
-import { type AppView, MESSAGING_ROUTE, PROMPTS_ROUTE, SKILLS_ROUTE } from '../../routes'
+import { type AppView, LOOPS_ROUTE, MESSAGING_ROUTE, PROMPTS_ROUTE, SKILLS_ROUTE } from '../../routes'
 import { SidebarPanelLabel } from '../../shell/sidebar-label'
 import type { SidebarNavItem } from '../../types'
 
@@ -108,7 +108,8 @@ const SIDEBAR_NAV: SidebarNavItem[] = [
     icon: props => <Codicon name="quote" {...props} />,
     route: PROMPTS_ROUTE
   },
-  { id: 'messaging', label: 'Messaging', icon: props => <Codicon name="comment" {...props} />, route: MESSAGING_ROUTE }
+  { id: 'messaging', label: 'Messaging', icon: props => <Codicon name="comment" {...props} />, route: MESSAGING_ROUTE },
+  { id: 'loops', label: 'Loops', icon: props => <Codicon name="clock" {...props} />, route: LOOPS_ROUTE }
   // agent-gateway: Artifacts route hidden — agent output renders inline in chat
 ]
 
@@ -574,6 +575,7 @@ export function ChatSidebar({
                 const active =
                   (item.id === 'skills' && currentView === 'skills') ||
                   (item.id === 'messaging' && currentView === 'messaging') ||
+                  (item.id === 'loops' && currentView === 'loops') ||
                   (item.id === 'artifacts' && currentView === 'artifacts')
 
                 const isNewSession = item.id === 'new-session'

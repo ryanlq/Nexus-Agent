@@ -30,13 +30,15 @@ import { $loopsNonce, openCreateLoopDialog } from './create-loop-store'
 // not loops, so they are filtered out.
 const isLoop = (job: CronJob): boolean => {
   const kind = typeof job.schedule?.kind === 'string' ? job.schedule.kind : ''
-  return kind === 'interval' || kind === 'cron'
+  // "continuous" = agent-paced loop; no fixed timer, the agent re-arms each run.
+  return kind === 'interval' || kind === 'cron' || kind === 'continuous'
 }
 
 const STATE_TONE: Record<string, 'good' | 'muted' | 'warn' | 'bad'> = {
   enabled: 'good',
   scheduled: 'good',
   running: 'good',
+  idle: 'muted',
   paused: 'warn',
   disabled: 'muted',
   error: 'bad',
@@ -274,9 +276,16 @@ export function LoopsView({
                         type="button"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium">{loopTitle(job)}</span>
+                          <span className="flex items-center gap-1.5 truncate">
+                            <span className="truncate text-sm font-medium">{loopTitle(job)}</span>
+                            {job.schedule?.kind === 'continuous' && (
+                              <span className="shrink-0 rounded bg-primary/10 px-1 py-0.5 text-[0.6rem] font-medium text-primary">
+                                {l.agentPacedBadge}
+                              </span>
+                            )}
+                          </span>
                           <span className={cn('rounded px-1.5 py-0.5 text-[0.65rem] font-medium', PILL_TONE[tone])}>
-                            {t.cron.states[loopState(job)] ?? loopState(job)}
+                            {loopState(job) === 'idle' ? l.idleLabel : (t.cron.states[loopState(job)] ?? loopState(job))}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 text-[0.7rem] text-muted-foreground">

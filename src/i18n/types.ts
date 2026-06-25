@@ -520,6 +520,12 @@ export interface Translations {
     newLoop: string
     interval: string
     intervalHint: string
+    mode: string
+    modeFixed: string
+    modeAgent: string
+    modeAgentHint: string
+    agentPacedBadge: string
+    idleLabel: string
     task: string
     taskPlaceholder: string
     name: string

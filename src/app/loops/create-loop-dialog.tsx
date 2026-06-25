@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { createCronJob } from '@/nexus'
 import { useI18n } from '@/i18n'
+import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
 
 import { $createLoop, bumpLoopsNonce, closeCreateLoopDialog } from './create-loop-store'
@@ -55,6 +56,7 @@ export function CreateLoopDialog(): React.ReactElement {
   const open = state.open
 
   const [interval, setInterval] = useState('10m')
+  const [agentPaced, setAgentPaced] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [name, setName] = useState('')
   const [maxRuns, setMaxRuns] = useState('')
@@ -68,6 +70,7 @@ export function CreateLoopDialog(): React.ReactElement {
       return
     }
     setInterval(state.prefill.interval)
+    setAgentPaced(false)
     setPrompt(state.prefill.prompt)
     setName('')
     setMaxRuns('')
@@ -75,7 +78,11 @@ export function CreateLoopDialog(): React.ReactElement {
   }, [open, state.prefill.interval, state.prefill.prompt])
 
   const submit = async (): Promise<void> => {
-    const schedule = normalizeLoopSchedule(interval)
+    // Agent-paced loops have no fixed interval: the agent decides when to run
+    // again via a schedule_next block. The gateway parses "continuous" →
+    // kind=continuous (run first iteration immediately, then idle until the
+    // agent re-arms it). max_runs is the only hard ceiling.
+    const schedule = agentPaced ? 'continuous' : normalizeLoopSchedule(interval)
     if (!schedule || !prompt.trim()) {
       return
     }
@@ -117,11 +124,41 @@ export function CreateLoopDialog(): React.ReactElement {
           <DialogDescription>{l.description}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3 py-2">
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium">{l.interval}</span>
-            <Input onChange={e => setInterval(e.target.value)} placeholder="10m" value={interval} />
-            <span className="text-[0.7rem] text-muted-foreground">{l.intervalHint}</span>
-          </label>
+          <div className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium">{l.mode}</span>
+            <div className="grid grid-cols-2 gap-1.5 rounded-md bg-muted/40 p-1">
+              <button
+                className={cn(
+                  'rounded px-2 py-1.5 text-xs font-medium transition-colors',
+                  !agentPaced ? 'bg-background shadow-sm' : 'text-muted-foreground'
+                )}
+                onClick={() => setAgentPaced(false)}
+                type="button"
+              >
+                {l.modeFixed}
+              </button>
+              <button
+                className={cn(
+                  'rounded px-2 py-1.5 text-xs font-medium transition-colors',
+                  agentPaced ? 'bg-background shadow-sm' : 'text-muted-foreground'
+                )}
+                onClick={() => setAgentPaced(true)}
+                type="button"
+              >
+                {l.modeAgent}
+              </button>
+            </div>
+            {agentPaced && (
+              <span className="text-[0.7rem] text-muted-foreground">{l.modeAgentHint}</span>
+            )}
+          </div>
+          {!agentPaced && (
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium">{l.interval}</span>
+              <Input onChange={e => setInterval(e.target.value)} placeholder="10m" value={interval} />
+              <span className="text-[0.7rem] text-muted-foreground">{l.intervalHint}</span>
+            </label>
+          )}
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium">{l.task}</span>
             <Textarea
@@ -158,7 +195,7 @@ export function CreateLoopDialog(): React.ReactElement {
         <DialogFooter>
           <Button onClick={() => closeCreateLoopDialog()} variant="ghost">{l.cancel}</Button>
           <Button
-            disabled={saving || !interval.trim() || !prompt.trim()}
+            disabled={saving || (!agentPaced && !interval.trim()) || !prompt.trim()}
             onClick={() => void submit()}
           >
             {saving ? l.creating : l.create}
